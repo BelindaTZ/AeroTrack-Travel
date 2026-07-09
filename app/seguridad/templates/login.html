@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Iniciar sesión — AeroTrack Travel{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-12 col-md-6 col-lg-4">
+        <h1 class="h4 mb-4">Iniciar sesión</h1>
+
+        {% if error %}
+        <div class="alert alert-danger d-flex align-items-center gap-2" role="alert">
+            <span aria-hidden="true">&#9888;</span>
+            <span>{{ error }}</span>
+        </div>
+        {% endif %}
+
+        <form method="post" action="/login" novalidate>
+            {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+            <div class="mb-3">
+                <label for="email" class="form-label">Correo electrónico</label>
+                <input
+                    type="email" class="form-control" id="email" name="email"
+                    required autocomplete="email" autofocus
+                >
+            </div>
+            <div class="mb-3">
+                <label for="password" class="form-label">Contraseña</label>
+                <input
+                    type="password" class="form-control" id="password" name="password"
+                    required autocomplete="current-password"
+                >
+            </div>
+            <button type="submit" class="btn btn-primary w-100">Iniciar sesión</button>
+        </form>
+
+        <div class="d-flex justify-content-between mt-3">
+            <a href="/recuperar-password">¿Olvidaste tu contraseña?</a>
+            <a href="/registro">Crear cuenta</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

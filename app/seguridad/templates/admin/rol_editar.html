@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Editar permisos: {{ rol.nombre }} — AeroTrack Travel{% endblock %}
+{% block content %}
+<h1 class="h4 mb-1">Editar permisos: {{ rol.nombre }}</h1>
+<p class="text-muted">
+    Nivel 1 autoriza módulos completos. Nivel 2, dentro de un módulo ya autorizado, restringe a
+    tablas específicas — nunca puede otorgar acceso a un módulo que Nivel 1 no autorizó.
+</p>
+
+<div id="mensaje-guardado" class="alert d-none" role="status"></div>
+
+<form id="form-permisos">
+    <input type="hidden" name="nombre" value="{{ rol.nombre }}">
+    <input type="hidden" name="descripcion" value="{{ rol.descripcion or '' }}">
+
+    {% for modulo in modulos %}
+    {% set permisos_modulo = permisos | selectattr('modulo_id', 'equalto', modulo.id) | list %}
+    {% set tablas_modulo = modulo_tablas | selectattr('modulo_id', 'equalto', modulo.id) | list %}
+    <div class="card mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <strong>{{ modulo.nombre_display }}</strong>
+            <span class="badge text-bg-light text-muted" data-alcance-modulo="{{ modulo.id }}">
+                {# REG-J6: el alcance vigente de Nivel 2 se muestra siempre, nunca se oculta #}
+                {% set tablas_restringidas = tablas_actuales | selectattr('0', 'equalto', modulo.id) | list %}
+                {% if tablas_restringidas %}
+                    Nivel 2 activo: {{ tablas_restringidas | length }} tabla(s) restringida(s)
+                {% else %}
+                    Sin restricción de Nivel 2 (módulo completo si Nivel 1 está marcado)
+                {% endif %}
+            </span>
+        </div>
+        <div class="card-body">
+            <div class="mb-2">
+                <span class="fw-semibold small">Nivel 1 — acciones autorizadas</span><br>
+                {% for permiso in permisos_modulo %}
+                <label class="form-check form-check-inline">
+                    <input
+                        class="form-check-input" type="checkbox" name="permiso_id" value="{{ permiso.id }}"
+                        {% if permiso.id in permiso_ids_actuales %}checked{% endif %}
+                    >
+                    <span class="form-check-label">{{ permiso.accion }}</span>
+                </label>
+                {% endfor %}
+            </div>
+            {% if tablas_modulo %}
+            <div>
+                <span class="fw-semibold small">Nivel 2 — restringir a tablas específicas (opcional)</span><br>
+                {% for mt in tablas_modulo %}
+                <label class="form-check form-check-inline">
+                    <input
+                        class="form-check-input" type="checkbox" name="tabla_nivel2"
+                        value="{{ modulo.id }}::{{ mt.tabla }}"
+                        {% if (modulo.id, mt.tabla) in tablas_actuales %}checked{% endif %}
+                    >
+                    <span class="form-check-label">{{ mt.tabla }}</span>
+                </label>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+
+    <button type="submit" class="btn btn-primary">Guardar matriz de permisos</button>
+    <a href="/admin/roles" class="btn btn-outline-secondary">Volver</a>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('form-permisos').addEventListener('submit', async function (ev) {
+    ev.preventDefault();
+    const body = new URLSearchParams(new FormData(ev.target));
+    const resp = await fetch(window.location.pathname.replace('/editar', ''), { method: 'PUT', body });
+    const mensaje = document.getElementById('mensaje-guardado');
+    mensaje.classList.remove('d-none', 'alert-success', 'alert-danger');
+    if (resp.ok) {
+        mensaje.classList.add('alert-success');
+        mensaje.textContent = 'Matriz de permisos guardada.';
+    } else {
+        const data = await resp.json();
+        mensaje.classList.add('alert-danger');
+        mensaje.textContent = data.detail;
+    }
+});
+</script>
+{% endblock %}

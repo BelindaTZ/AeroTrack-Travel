@@ -1,0 +1,180 @@
+version: '3.8'
+
+# ─────────────────────────────────────────
+#  AEROTRACK TRAVEL — infraestructura nueva y aislada
+#  Reutiliza la instancia de MinIO existente (proyecto minio-elt).
+#  PocketBase y Airflow son instancias NUEVAS con sus propios
+#  volúmenes y su propia base de datos de metadatos.
+# ─────────────────────────────────────────
+
+networks:
+  travel-network:
+    driver: bridge
+  # Red externa del proyecto anterior (minio-elt), SOLO para que los
+  # contenedores de Travel puedan resolver "minio" por DNS y llegar
+  # a la instancia de MinIO compartida. No se modifica ni se toca
+  # ningún contenedor del proyecto anterior.
+  elt-network:
+    external: true
+    name: minio-elt_elt-network
+
+volumes:
+  pocketbase-travel-data:
+  postgres-travel-data:
+
+services:
+
+  # ── POCKETBASE (Travel) — instancia y volumen propios ──────
+  pocketbase-travel:
+    image: ghcr.io/muchobien/pocketbase:0.22.4
+    container_name: pocketbase-travel
+    ports:
+      - "${PB_TRAVEL_PORT:-8091}:8090"   # UI en http://localhost:8091/_/
+    environment:
+      TZ: America/Guayaquil
+    volumes:
+      - pocketbase-travel-data:/pb_data
+    networks:
+      - travel-network
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8090/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ── APP FASTAPI (Travel) — módulos operativos (Seguridad, Vuelos, ...) ──
+  app-travel:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: app-travel
+    ports:
+      - "${APP_TRAVEL_PORT:-8001}:8000"
+    environment:
+      TZ: America/Guayaquil
+      PB_TRAVEL_URL: ${PB_TRAVEL_URL_DOCKER}
+      PB_TRAVEL_EMAIL: ${PB_TRAVEL_EMAIL}
+      PB_TRAVEL_PASSWORD: ${PB_TRAVEL_PASSWORD}
+      SECRET_KEY: ${SECRET_KEY}
+      ALGORITHM: ${ALGORITHM:-HS256}
+      TOKEN_EXPIRE_MINUTES: ${TOKEN_EXPIRE_MINUTES:-60}
+    depends_on:
+      pocketbase-travel:
+        condition: service_healthy
+    networks:
+      - travel-network
+    restart: unless-stopped
+
+  # ── POSTGRES (metadatos del Airflow de Travel) — dedicado ──
+  postgres-travel:
+    image: postgres:15
+    container_name: postgres-airflow-travel
+    environment:
+      POSTGRES_USER: ${POSTGRES_TRAVEL_USER:-airflow_travel}
+      POSTGRES_PASSWORD: ${POSTGRES_TRAVEL_PASSWORD:-airflow_travel}
+      POSTGRES_DB: airflow_travel
+    volumes:
+      - postgres-travel-data:/var/lib/postgresql/data
+    networks:
+      - travel-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_TRAVEL_USER:-airflow_travel}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── AIRFLOW INIT (Travel) — corre una sola vez ─────────────
+  airflow-init-travel:
+    image: apache/airflow:2.9.3-python3.12
+    container_name: airflow-init-travel
+    depends_on:
+      postgres-travel:
+        condition: service_healthy
+    environment:
+      TZ: America/Guayaquil
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_TRAVEL_USER:-airflow_travel}:${POSTGRES_TRAVEL_PASSWORD:-airflow_travel}@postgres-travel/airflow_travel
+      AIRFLOW__CORE__FERNET_KEY: ${FERNET_KEY_TRAVEL}
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+      AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session'
+      _AIRFLOW_WWW_USER_USERNAME: ${AIRFLOW_TRAVEL_ADMIN_USER:-admin}
+      _AIRFLOW_WWW_USER_PASSWORD: ${AIRFLOW_TRAVEL_ADMIN_PASSWORD:-admin1234}
+      PYTHONPATH: /opt/airflow
+    command: bash -c "airflow db migrate && airflow users create --username ${AIRFLOW_TRAVEL_ADMIN_USER:-admin} --password ${AIRFLOW_TRAVEL_ADMIN_PASSWORD:-admin1234} --firstname Belinda --lastname Toaquiza --role Admin --email ${PB_EMAIL} || true"
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+      - ./plugins:/opt/airflow/plugins
+    networks:
+      - travel-network
+    restart: "no"
+
+  # ── AIRFLOW WEBSERVER (Travel) ─────────────────────────────
+  airflow-webserver-travel:
+    image: apache/airflow:2.9.3-python3.12
+    container_name: airflow-webserver-travel
+    depends_on:
+      postgres-travel:
+        condition: service_healthy
+      airflow-init-travel:
+        condition: service_completed_successfully
+    ports:
+      - "${AIRFLOW_TRAVEL_PORT:-8081}:8080"   # UI en http://localhost:8081
+    environment:
+      TZ: America/Guayaquil
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_TRAVEL_USER:-airflow_travel}:${POSTGRES_TRAVEL_PASSWORD:-airflow_travel}@postgres-travel/airflow_travel
+      AIRFLOW__CORE__FERNET_KEY: ${FERNET_KEY_TRAVEL}
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+      AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session'
+      AIRFLOW__FAB__UPDATE_FAB_PERMS: 'true'
+      _PIP_ADDITIONAL_REQUIREMENTS: "requests pandas pyarrow minio python-dotenv"
+      PYTHONPATH: /opt/airflow
+    env_file:
+      - .env
+    command: webserver
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+      - ./plugins:/opt/airflow/plugins
+    networks:
+      - travel-network
+      - elt-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # ── AIRFLOW SCHEDULER (Travel) ─────────────────────────────
+  airflow-scheduler-travel:
+    image: apache/airflow:2.9.3-python3.12
+    container_name: airflow-scheduler-travel
+    depends_on:
+      postgres-travel:
+        condition: service_healthy
+      airflow-init-travel:
+        condition: service_completed_successfully
+    environment:
+      TZ: America/Guayaquil
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_TRAVEL_USER:-airflow_travel}:${POSTGRES_TRAVEL_PASSWORD:-airflow_travel}@postgres-travel/airflow_travel
+      AIRFLOW__CORE__FERNET_KEY: ${FERNET_KEY_TRAVEL}
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+      AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session'
+      _PIP_ADDITIONAL_REQUIREMENTS: "requests pandas pyarrow minio python-dotenv"
+      PYTHONPATH: /opt/airflow
+    env_file:
+      - .env
+    command: scheduler
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+      - ./plugins:/opt/airflow/plugins
+    networks:
+      - travel-network
+      - elt-network
+    restart: unless-stopped

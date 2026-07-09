@@ -1,0 +1,574 @@
+// ============================================================================
+// AeroTrack Travel — Propuesta de esquema PocketBase (pocketbase-travel)
+// ============================================================================
+// PROPUESTA DE DISEÑO — nada de esto está implementado todavía.
+// Generado a partir de: documento empresarial, catálogo de casos de uso
+// operativos (52 CU) y constitution.md (v1.2.0).
+//
+// Reglas de arquitectura aplicadas (ya decididas, no se cuestionan aquí):
+//   - Todas las tablas de este archivo viven en la instancia NUEVA de
+//     PocketBase (pocketbase-travel). Ninguna vive en MinIO.
+//   - MinIO (aerotrack-travel-dims) queda de solo lectura: fact_vuelo +
+//     10 dim_* + 10 agg_* heredados. No se crea ninguna tabla nueva ahí.
+//   - Las relaciones ENTRE tablas de este archivo son relation fields
+//     reales de PocketBase (Ref: más abajo).
+//   - Los campos marcado "// SOFT-REF ->" son texto simple (varchar),
+//     resueltos en la capa de aplicación contra el modelo dimensional
+//     heredado (Parquet en MinIO) — PocketBase NO puede tener una relation
+//     field apuntando a un Parquet, así que nunca se modelan como Ref.
+//   - Principio A1/A2 de la constitución: dominio operativo y dominio
+//     analítico separados; el heredado es siempre de solo lectura.
+// ============================================================================
+
+
+// ── ENUMS (campos "select" de PocketBase) ──────────────────────────────────
+
+Enum tipo_actor {
+  pasajero
+  agente
+  administrador
+}
+
+Enum genero_enum {
+  M
+  F
+  prefiero_no_decir
+}
+
+Enum accion_permiso {
+  ver
+  crear
+  editar
+  eliminar
+  exportar
+  ejecutar
+}
+
+Enum estado_vuelo {
+  programado
+  retrasado
+  cancelado
+  completado
+  desviado
+}
+
+Enum origen_generacion {
+  sistema
+  manual
+}
+
+Enum canal_reserva {
+  autoservicio
+  asistida
+}
+
+Enum estado_reserva {
+  pendiente_pago
+  confirmada
+  modificada
+  cancelada
+  completada
+}
+
+Enum tipo_pasajero_reserva {
+  adulto
+  nino
+  infante
+}
+
+Enum tipo_extra {
+  equipaje
+  asiento
+  seguro
+}
+
+Enum fuente_disrupcion {
+  simulador_estadistico
+  api_real
+  monitor_correo
+}
+
+Enum tipo_cambio_disrupcion {
+  retraso
+  cancelacion
+  cambio_horario
+  cambio_puerta
+  desvio
+}
+
+Enum estado_disrupcion {
+  activa
+  resuelta
+}
+
+Enum canal_notificacion {
+  email
+  sms
+}
+
+Enum estado_envio_notificacion {
+  pendiente
+  enviado
+  fallido
+}
+
+Enum estado_pago {
+  pendiente
+  exitoso
+  fallido
+  reembolsado
+}
+
+Enum estado_comision {
+  pendiente_cobro
+  cobrada
+}
+
+Enum estado_remesa {
+  pendiente
+  enviada
+  confirmada
+}
+
+Enum estado_reembolso {
+  pendiente
+  procesado
+  rechazado
+}
+
+
+// ── TI / SEGURIDAD — RBAC de dos niveles + auditoría (CU-O01..O24) ─────────
+
+Table roles {
+  id            varchar   [pk]
+  nombre        varchar   [not null]
+  descripcion   text
+  es_sistema    boolean   [default: false, note: 'true = rol protegido, p.ej. Administrador']
+  created       datetime
+  updated       datetime
+}
+
+// NUEVA — no la pidió el usuario explícitamente, pero permisos.modulo_id y
+// modulo_tablas.modulo_id necesitan un catálogo real de módulos para existir.
+// El proyecto anterior ya tenía esta tabla ("modulos"); como las instancias
+// de PocketBase NO se comparten, aquí se re-crea desde cero.
+Table modulos {
+  id              varchar   [pk]
+  clave           varchar   [not null, unique, note: 'seguridad, configuracion, pasajeros, vuelos_catalogo, reservas, disrupciones, facturacion']
+  nombre_display  varchar   [not null]
+  descripcion     text
+  orden           int
+  created         datetime
+  updated         datetime
+}
+
+Table permisos {
+  id          varchar         [pk]
+  modulo_id   varchar         [not null]
+  accion      accion_permiso  [not null]
+  created     datetime
+  updated     datetime
+}
+
+// Nivel 1 del RBAC (CU-O12): decide SI el rol puede actuar en un módulo.
+Table roles_permisos {
+  id          varchar   [pk]
+  rol_id      varchar   [not null]
+  permiso_id  varchar   [not null]
+  created     datetime
+}
+
+// Nivel 2 del RBAC (CU-O13): restringe, nunca amplía, a tablas específicas
+// dentro de un módulo ya autorizado en el Nivel 1.
+Table roles_permisos_tablas {
+  id          varchar   [pk]
+  rol_id      varchar   [not null]
+  modulo_id   varchar   [not null]
+  tabla       varchar   [not null, note: 'nombre exacto de la colección, ej. "pagos"']
+  created     datetime
+}
+
+// Catálogo de qué tablas pertenecen a cada módulo (CU-O13, punto 4) —
+// alimenta el checklist de la UI para el Nivel 2 de permisos.
+Table modulo_tablas {
+  id            varchar   [pk]
+  modulo_id     varchar   [not null]
+  tabla         varchar   [not null]
+  descripcion   text
+  created       datetime
+}
+
+// Colección AUTH de PocketBase (no "base"). Cubre CU-O01..O08: login,
+// logout, recuperar/restablecer contraseña, editar perfil propio, alta de
+// pasajero, gestión de usuarios internos. email/password son campos
+// reservados de PocketBase auth y no se listan aquí explícitamente.
+Table usuarios {
+  id                  varchar     [pk]
+  email               varchar     [not null, unique, note: 'campo reservado de PocketBase auth']
+  nombre_completo      varchar    [not null]
+  tipo_actor          tipo_actor  [not null]
+  rol_id              varchar    [note: 'nullable para pasajero; obligatorio para agente/administrador']
+  activo              boolean     [default: true]
+  created             datetime
+  updated             datetime
+}
+
+// Log de auditoría — solo inserción (constitución B4). Nunca se edita ni
+// se elimina desde la aplicación; no se modela campo "updated".
+Table auditoria {
+  id            varchar   [pk]
+  usuario_id    varchar   [note: 'nullable: acciones automáticas del sistema no tienen usuario']
+  accion        varchar   [not null, note: 'crear | editar | eliminar | login | login_fallido | ...']
+  tabla         varchar   [not null]
+  registro_id   varchar
+  detalle       json
+  ip            varchar
+  created       datetime
+}
+
+// Key-value de configuración del sistema (CU-O15..O22, O53, O56..O60).
+// FIX solicitado por el usuario: ninguna fila puede quedar sin trazar quién
+// hizo el último cambio -> modificado_por obligatorio (refuerza D2/B4).
+Table configuracion_sistema {
+  id                varchar   [pk]
+  clave             varchar   [not null, unique]
+  valor             text      [not null, note: 'JSON serializado si el valor es compuesto; nunca credenciales en claro (B3)']
+  categoria         varchar   [not null, note: 'smtp | api_estado_vuelo | gmail_api | stripe | tarifas_comisiones | politicas_reembolso | simulador_disrupciones | expiraciones | plantillas_documentos | canales_notificacion | pipeline_elt']
+  descripcion       text
+  modificado_por    varchar   [not null, note: 'quién hizo el último cambio']
+  created           datetime
+  updated           datetime
+}
+
+
+// ── VENTAS Y RESERVAS — Pasajeros (CU-O25..O27) ────────────────────────────
+
+// Perfil extendido del pasajero, 1:1 con usuarios (patrón: auth + perfil).
+Table pasajeros {
+  id                      varchar       [pk]
+  usuario_id              varchar       [not null, unique]
+  fecha_nacimiento        date          [not null]
+  telefono                varchar       [not null]
+  genero                  genero_enum
+  numero_documento        varchar       [note: 'opcional en registro, obligatorio al reservar; solo se declara, no se verifica']
+  direccion_facturacion   text
+  contacto_emergencia     varchar
+  created                 datetime
+  updated                 datetime
+}
+
+
+// ── VENTAS Y RESERVAS — Vuelos (catálogo) (CU-O28..O32, O53) ───────────────
+
+// NUEVA — catálogo operativo de aerolíneas con comisión pactada (CU-O53).
+// Distinta de dim_aerolinea (heredado, histórico BTS/FAA, solo lectura).
+Table aerolineas {
+  id                    varchar   [pk]
+  nombre                varchar   [not null]
+  codigo_iata           varchar   [not null, note: 'SOFT-REF -> dim_aerolinea.IATA_CODE_Reporting_Airline']
+  comision_pactada_pct  decimal   [not null]
+  contacto              varchar
+  fecha_contrato        date
+  activa                boolean   [default: true]
+  created               datetime
+  updated               datetime
+}
+
+// NUEVA — política de reembolso por nivel de tarifa (CU-O21).
+Table politicas_reembolso {
+  id                      varchar   [pk]
+  nombre                  varchar   [not null]
+  condiciones             text      [not null]
+  porcentaje_reembolso    decimal   [not null]
+  ventana_horas           int       [not null, note: 'horas antes del vuelo dentro de las cuales aplica la política']
+  created                 datetime
+  updated                 datetime
+}
+
+// NUEVA — catálogo Light/Standard/Flex (CU-O20, inspirado en KLM).
+Table niveles_tarifa {
+  id                      varchar   [pk]
+  nombre                  varchar   [not null, note: 'Light | Standard | Flex']
+  descripcion             text
+  equipaje_incluido       boolean   [default: false]
+  cambios_permitidos      boolean   [default: false]
+  politica_reembolso_id   varchar   [not null]
+  created                 datetime
+  updated                 datetime
+}
+
+Table vuelos_catalogo {
+  id                          varchar       [pk]
+  numero_vuelo                varchar       [not null]
+  aerolinea_id                varchar       [not null]
+  origen_codigo               varchar       [not null, note: 'SOFT-REF -> dim_aeropuerto.AirportCode']
+  destino_codigo               varchar      [not null, note: 'SOFT-REF -> dim_aeropuerto.AirportCode']
+  fecha_salida                date          [not null]
+  hora_salida_programada      varchar       [not null]
+  hora_llegada_programada     varchar       [not null]
+  duracion_min                int
+  avion_tail_number           varchar       [note: 'SOFT-REF -> dim_avion.Tail_Number (opcional)']
+  precio_base                 decimal       [not null]
+  estado                       estado_vuelo [not null, default: 'programado']
+  generado_por                origen_generacion [not null, default: 'sistema']
+  fecha_actualizacion_estado  datetime
+  created                      datetime
+  updated                      datetime
+}
+
+// Precio final por nivel de tarifa para un vuelo concreto (CU-O28, O29).
+Table tarifas_vuelo {
+  id                    varchar   [pk]
+  vuelo_id              varchar   [not null]
+  nivel_tarifa_id       varchar   [not null]
+  precio_final          decimal   [not null]
+  cupos_disponibles     int       [not null, default: 0]
+  created               datetime
+  updated               datetime
+}
+
+
+// ── VENTAS Y RESERVAS — Reservas (CU-O33..O38) ─────────────────────────────
+
+Table reservas {
+  id                        varchar         [pk]
+  codigo_reserva            varchar         [not null, unique, note: 'PNR']
+  pasajero_titular_id       varchar         [not null]
+  vuelo_id                  varchar         [not null]
+  tarifa_id                 varchar         [not null]
+  agente_id                 varchar         [note: 'nullable; solo si canal = asistida']
+  canal                     canal_reserva   [not null]
+  estado                    estado_reserva  [not null, default: 'pendiente_pago']
+  total_pagar               decimal         [not null]
+  fecha_reserva             datetime        [not null]
+  fecha_expiracion_pago     datetime        [note: 'ej. +15 min; libera el cupo si no se paga a tiempo']
+  created                   datetime
+  updated                   datetime
+}
+
+// Junction N:N — una reserva puede incluir varios pasajeros (CU-O33, FB2).
+Table reserva_pasajeros {
+  id              varchar                 [pk]
+  reserva_id      varchar                 [not null]
+  pasajero_id     varchar                 [not null]
+  tipo_pasajero   tipo_pasajero_reserva   [not null, default: 'adulto']
+  asiento         varchar
+  created         datetime
+}
+
+// Extras opcionales de una reserva: equipaje, asiento, seguro (CU-O33, FB2).
+Table reserva_extras {
+  id            varchar     [pk]
+  reserva_id    varchar     [not null]
+  tipo          tipo_extra  [not null]
+  descripcion   varchar
+  precio        decimal     [not null]
+  created       datetime
+}
+
+// Alerta de precio por ruta/fecha, no atada a una reserva (CU-O38).
+Table alertas_precio {
+  id                varchar   [pk]
+  pasajero_id       varchar   [not null]
+  origen_codigo     varchar   [not null, note: 'SOFT-REF -> dim_aeropuerto.AirportCode']
+  destino_codigo    varchar   [not null, note: 'SOFT-REF -> dim_aeropuerto.AirportCode']
+  fecha_objetivo    date      [not null]
+  precio_umbral     decimal   [not null]
+  activa            boolean   [default: true]
+  created           datetime
+  updated           datetime
+}
+
+
+// ── OPERACIONES — Disrupciones y Notificaciones (CU-O39..O45) ──────────────
+
+// Fuente y tipo de cambio detectado sobre un vuelo del catálogo. No lleva
+// SOFT-REF propio: hereda origen/destino/aerolínea vía vuelo_id.
+Table disrupciones {
+  id                  varchar                   [pk]
+  vuelo_id            varchar                   [not null]
+  fuente_deteccion    fuente_disrupcion         [not null]
+  tipo_cambio         tipo_cambio_disrupcion    [not null]
+  probabilidad        decimal                   [note: 'solo aplica cuando fuente_deteccion = simulador_estadistico']
+  detalle             text
+  estado              estado_disrupcion         [not null, default: 'activa']
+  fecha_deteccion      datetime                 [not null]
+  created              datetime
+  updated               datetime
+}
+
+Table notificaciones {
+  id                varchar                     [pk]
+  pasajero_id       varchar                     [not null]
+  reserva_id        varchar                     [not null]
+  disrupcion_id     varchar                     [note: 'nullable; ej. notificaciones informativas sin disrupción']
+  canal             canal_notificacion          [not null]
+  asunto            varchar                     [not null]
+  contenido         text                        [not null]
+  estado_envio      estado_envio_notificacion   [not null, default: 'pendiente']
+  leida             boolean                     [default: false]
+  fecha_envio       datetime
+  created           datetime
+}
+
+
+// ── FINANZAS — Facturación (CU-O46..O52, O54, O55) ─────────────────────────
+
+// NUEVA — catálogo de métodos de pago (FIX solicitado). Aunque el
+// procesador es siempre Stripe test mode, distinguir tarjeta de
+// crédito/débito evita que "metodo" sea un varchar libre y permite
+// activar/desactivar métodos desde Configuración (CU-O19).
+Table metodos_pago {
+  id            varchar   [pk]
+  nombre        varchar   [not null, note: 'Tarjeta de crédito | Tarjeta de débito']
+  tipo          varchar   [not null, note: 'tarjeta_credito | tarjeta_debito']
+  procesador    varchar   [not null, default: 'stripe']
+  activo        boolean   [default: true]
+  created       datetime
+  updated       datetime
+}
+
+Table pagos {
+  id                          varchar     [pk]
+  reserva_id                  varchar     [not null]
+  monto                       decimal     [not null]
+  moneda                      varchar     [not null, default: 'USD']
+  metodo_pago_id              varchar     [not null]
+  stripe_payment_intent_id    varchar
+  estado                      estado_pago [not null, default: 'pendiente']
+  fecha_pago                  datetime
+  created                     datetime
+  updated                     datetime
+}
+
+Table comisiones {
+  id                      varchar         [pk]
+  reserva_id              varchar         [not null]
+  aerolinea_id             varchar        [not null]
+  monto                    decimal        [not null]
+  estado                   estado_comision [not null, default: 'pendiente_cobro']
+  fecha_esperada_cobro     date
+  fecha_cobro_real         date
+  created                  datetime
+  updated                  datetime
+}
+
+Table remesas {
+  id                varchar         [pk]
+  aerolinea_id       varchar        [not null]
+  periodo            varchar        [not null, note: 'ej. "2026-07"']
+  monto_total        decimal        [not null]
+  estado             estado_remesa  [not null, default: 'pendiente']
+  fecha_generacion   datetime
+  created            datetime
+  updated            datetime
+}
+
+// Junction N:N — una remesa agrupa varias comisiones (CU-O49, O50).
+Table remesa_comisiones {
+  id            varchar   [pk]
+  remesa_id     varchar   [not null]
+  comision_id   varchar   [not null]
+  created       datetime
+}
+
+Table reembolsos {
+  id                    varchar           [pk]
+  pago_id               varchar           [not null]
+  reserva_id            varchar           [not null]
+  politica_aplicada_id  varchar           [not null]
+  motivo                text              [not null]
+  monto                 decimal           [not null]
+  estado                estado_reembolso  [not null, default: 'pendiente']
+  stripe_refund_id      varchar
+  fecha_solicitud       datetime          [not null]
+  fecha_procesado       datetime
+  created               datetime
+  updated                datetime
+}
+
+Table facturas {
+  id                varchar   [pk]
+  reserva_id        varchar   [not null]
+  pago_id           varchar   [not null]
+  numero_factura    varchar   [not null, unique]
+  total             decimal   [not null]
+  archivo_pdf       varchar   [note: 'file field de PocketBase; ruta/adjunto descargable, CU-O54']
+  fecha_emision     datetime  [not null]
+  created           datetime
+}
+
+
+// ============================================================================
+// RELACIONES ENTRE TABLAS NUEVAS (relation fields reales de PocketBase)
+// ============================================================================
+
+Ref: permisos.modulo_id > modulos.id
+Ref: roles_permisos.rol_id > roles.id
+Ref: roles_permisos.permiso_id > permisos.id
+Ref: roles_permisos_tablas.rol_id > roles.id
+Ref: roles_permisos_tablas.modulo_id > modulos.id
+Ref: modulo_tablas.modulo_id > modulos.id
+Ref: usuarios.rol_id > roles.id
+Ref: auditoria.usuario_id > usuarios.id
+Ref: configuracion_sistema.modificado_por > usuarios.id
+
+Ref: pasajeros.usuario_id - usuarios.id
+
+Ref: niveles_tarifa.politica_reembolso_id > politicas_reembolso.id
+Ref: vuelos_catalogo.aerolinea_id > aerolineas.id
+Ref: tarifas_vuelo.vuelo_id > vuelos_catalogo.id
+Ref: tarifas_vuelo.nivel_tarifa_id > niveles_tarifa.id
+
+Ref: reservas.pasajero_titular_id > pasajeros.id
+Ref: reservas.vuelo_id > vuelos_catalogo.id
+Ref: reservas.tarifa_id > tarifas_vuelo.id
+Ref: reservas.agente_id > usuarios.id
+Ref: reserva_pasajeros.reserva_id > reservas.id
+Ref: reserva_pasajeros.pasajero_id > pasajeros.id
+Ref: reserva_extras.reserva_id > reservas.id
+Ref: alertas_precio.pasajero_id > pasajeros.id
+
+Ref: disrupciones.vuelo_id > vuelos_catalogo.id
+Ref: notificaciones.pasajero_id > pasajeros.id
+Ref: notificaciones.reserva_id > reservas.id
+Ref: notificaciones.disrupcion_id > disrupciones.id
+
+Ref: pagos.reserva_id > reservas.id
+Ref: pagos.metodo_pago_id > metodos_pago.id
+Ref: comisiones.reserva_id > reservas.id
+Ref: comisiones.aerolinea_id > aerolineas.id
+Ref: remesas.aerolinea_id > aerolineas.id
+Ref: remesa_comisiones.remesa_id > remesas.id
+Ref: remesa_comisiones.comision_id > comisiones.id
+Ref: reembolsos.pago_id > pagos.id
+Ref: reembolsos.reserva_id > reservas.id
+Ref: reembolsos.politica_aplicada_id > politicas_reembolso.id
+Ref: facturas.reserva_id > reservas.id
+Ref: facturas.pago_id > pagos.id
+
+
+// ============================================================================
+// REFERENCIAS BLANDAS AL MODELO DIMENSIONAL HEREDADO (solo lectura, MinIO)
+// ============================================================================
+// Ninguno de estos campos es una relation field de PocketBase — son texto
+// simple, resuelto por la aplicación contra los Parquet de
+// aerotrack-travel-dims. Confirmado contra scripts/04_transformar_dimensiones.py
+// del proyecto anterior (nombres de columna reales, no supuestos):
+//
+//   aerolineas.codigo_iata          -> dim_aerolinea.IATA_CODE_Reporting_Airline
+//   vuelos_catalogo.origen_codigo   -> dim_aeropuerto.AirportCode
+//   vuelos_catalogo.destino_codigo  -> dim_aeropuerto.AirportCode
+//   vuelos_catalogo.avion_tail_number -> dim_avion.Tail_Number
+//   alertas_precio.origen_codigo    -> dim_aeropuerto.AirportCode
+//   alertas_precio.destino_codigo   -> dim_aeropuerto.AirportCode
+//
+// Complementarios, consultados directamente por la app (sin campo propio,
+// vía join en memoria origen_codigo+destino_codigo):
+//   - dim_ruta (OriginCode, DestCode)            -> CU-O32, tendencia por ruta
+//   - agg_rutas_eficiencia                        -> CU-O32
+//   - agg_otp_aerolinea_mes / agg_causas_retraso_mes -> CU-O39, simulador de disrupción
+//
+// disrupciones NO tiene SOFT-REF propio: hereda origen/destino/aerolínea
+// indirectamente a través de vuelo_id -> vuelos_catalogo (principio de no
+// duplicar la referencia blanda en más de una tabla).

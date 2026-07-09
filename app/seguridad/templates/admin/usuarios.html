@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Usuarios internos — AeroTrack Travel{% endblock %}
+{% block content %}
+<h1 class="h4 mb-4">Usuarios internos</h1>
+
+{% if mensaje %}<div class="alert alert-success toast-autodismiss" role="status">{{ mensaje }}</div>{% endif %}
+{% if error %}<div class="alert alert-danger" role="alert">{{ error }}</div>{% endif %}
+
+<div class="row g-4">
+    <div class="col-12 col-lg-7">
+        <table class="table table-sm align-middle">
+            <thead>
+                <tr><th>Nombre</th><th>Correo</th><th>Tipo</th><th>Rol</th><th>Activo</th><th></th></tr>
+            </thead>
+            <tbody>
+                {% for u in usuarios %}
+                <tr id="fila-{{ u.id }}">
+                    <td>{{ u.nombre_completo }}</td>
+                    <td>{{ u.email }}</td>
+                    <td>{{ u.tipo_actor }}</td>
+                    <td>
+                        <select class="form-select form-select-sm" data-usuario="{{ u.id }}" data-campo="rol_id">
+                            {% for r in roles %}
+                            <option value="{{ r.id }}" {% if u.rol_id == r.id %}selected{% endif %}>{{ r.nombre }}</option>
+                            {% endfor %}
+                        </select>
+                    </td>
+                    <td>
+                        <input
+                            type="checkbox" class="form-check-input" data-usuario="{{ u.id }}" data-campo="activo"
+                            {% if u.activo %}checked{% endif %}
+                        >
+                    </td>
+                    <td><span class="text-muted small">guardado</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="col-12 col-lg-5">
+        <h2 class="h6">Crear usuario interno</h2>
+        <form method="post" action="/admin/usuarios" novalidate>
+            <div class="mb-2">
+                <label class="form-label">Nombre completo</label>
+                <input type="text" class="form-control" name="nombre_completo" required>
+            </div>
+            <div class="mb-2">
+                <label class="form-label">Correo</label>
+                <input type="email" class="form-control" name="email" required>
+            </div>
+            <div class="mb-2">
+                <label class="form-label">Contraseña temporal</label>
+                <input type="password" class="form-control" name="password" required>
+            </div>
+            <div class="mb-2">
+                <label class="form-label">Tipo</label>
+                <select class="form-select" name="tipo_actor" required>
+                    <option value="agente">Agente</option>
+                    <option value="administrador">Administrador</option>
+                </select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Rol</label>
+                <select class="form-select" name="rol_id" required>
+                    {% for r in roles %}<option value="{{ r.id }}">{{ r.nombre }}</option>{% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary w-100">Crear</button>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Edición inline: cada select/checkbox de la tabla dispara PUT al cambiar
+// (feedback inmediato, J11) sin recargar la página completa.
+document.querySelectorAll('[data-usuario]').forEach(function (el) {
+    el.addEventListener('change', async function () {
+        const usuarioId = el.dataset.usuario;
+        const campo = el.dataset.campo;
+        const valor = el.type === 'checkbox' ? el.checked : el.value;
+        const body = new URLSearchParams();
+        body.append(campo, valor);
+        const resp = await fetch(`/admin/usuarios/${usuarioId}`, { method: 'PUT', body });
+        const fila = document.getElementById(`fila-${usuarioId}`);
+        const estado = fila.querySelector('td:last-child span');
+        estado.textContent = resp.ok ? 'guardado' : 'error';
+        estado.className = resp.ok ? 'text-success small' : 'text-danger small';
+    });
+});
+</script>
+{% endblock %}
