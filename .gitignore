@@ -2,6 +2,7 @@ logs/
 __pycache__/
 *.pyc
 .env
+scripts/client_secret.json
 *.egg-info/
 dist/
 build/
