@@ -113,6 +113,27 @@ class PocketBaseClient:
             self._raise_for_status(resp)
             return resp.json()
 
+    async def update_record_con_archivo(
+        self,
+        collection: str,
+        record_id: str,
+        data: dict[str, Any],
+        archivos: dict[str, tuple[str, bytes, str]],
+        token: str | None = None,
+    ) -> dict[str, Any]:
+        """Como `update_record`, pero como multipart/form-data — necesario
+        para escribir campos `file` (PocketBase no acepta binarios en JSON)."""
+        headers = await self._headers(token)
+        async with httpx.AsyncClient(base_url=self._base_url) as client:
+            resp = await client.patch(
+                f"/api/collections/{collection}/records/{record_id}",
+                data=data,
+                files=archivos,
+                headers=headers,
+            )
+            self._raise_for_status(resp)
+            return resp.json()
+
     async def delete_record(
         self, collection: str, record_id: str, token: str | None = None
     ) -> None:
@@ -122,6 +143,20 @@ class PocketBaseClient:
                 f"/api/collections/{collection}/records/{record_id}", headers=headers
             )
             self._raise_for_status(resp)
+
+    async def descargar_archivo(
+        self, collection: str, record_id: str, filename: str, token: str | None = None
+    ) -> bytes:
+        """Trae los bytes crudos de un campo `file` — las colecciones de
+        Facturación no tienen viewRule pública, así que esto siempre pasa
+        por el token admin (igual que el resto del cliente)."""
+        headers = await self._headers(token)
+        async with httpx.AsyncClient(base_url=self._base_url) as client:
+            resp = await client.get(
+                f"/api/files/{collection}/{record_id}/{filename}", headers=headers
+            )
+            self._raise_for_status(resp)
+            return resp.content
 
     async def auth_with_password(
         self, collection: str, identity: str, password: str

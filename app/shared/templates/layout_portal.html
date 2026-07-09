@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block body %}
+<header id="at-topbar" style="position:static;padding:0 28px">
+    <a href="/" class="d-flex align-items-center gap-2 text-decoration-none">
+        <img src="/static/assets/images/LogoAeroTrackTravel.png" alt="" height="28">
+        <span class="font-display fw-semibold" style="color:var(--at-text)">AeroTrack Travel</span>
+    </a>
+    <div class="d-flex align-items-center gap-3" style="font-size:13.5px">
+        <a href="/vuelos/buscar" style="color:var(--at-muted);text-decoration:none">Buscar vuelos</a>
+        {% if usuario %}
+        <a href="/reservas" style="color:var(--at-muted);text-decoration:none">Mis reservas</a>
+        <div class="dropdown">
+            <a class="avatar-chip dropdown-toggle" href="#" data-bs-toggle="dropdown" aria-expanded="false">
+                <span class="avatar" aria-hidden="true">{{ (usuario.nombre_completo or usuario.email)[:1] | upper }}</span>
+            </a>
+            <ul class="dropdown-menu dropdown-menu-end" style="font-size:13px;border-radius:12px;border:1px solid var(--at-border);box-shadow:var(--at-shadow-lg);padding:6px;min-width:180px">
+                <li><a class="dropdown-item" style="border-radius:8px;padding:8px 12px" href="/mi-perfil"><i class="bi bi-person me-2"></i>Mi perfil</a></li>
+                <li><hr class="dropdown-divider" style="margin:4px 0"></li>
+                <li>
+                    <form method="post" action="/logout" class="m-0">
+                        <button type="submit" class="dropdown-item text-danger" style="border-radius:8px;padding:8px 12px;border:none;background:none;width:100%;text-align:left">
+                            <i class="bi bi-box-arrow-right me-2"></i>Cerrar sesión
+                        </button>
+                    </form>
+                </li>
+            </ul>
+        </div>
+        {% else %}
+        <a href="/login" class="btn-at-ghost">Iniciar sesión</a>
+        {% endif %}
+    </div>
+</header>
+<main style="max-width:1080px;margin:0 auto;padding:28px 20px">
+    {% if request.query_params.get('mensaje') %}
+    <div class="flash-bar"><div class="flash-success toast-autodismiss"><i class="bi bi-check-circle-fill"></i>{{ request.query_params.get('mensaje') }}</div></div>
+    {% endif %}
+    {% block content %}{% endblock %}
+</main>
+{% endblock %}

@@ -1,0 +1,63 @@
+{% extends "layout_portal.html" %}
+{% block title %}Alertas de precio — AeroTrack Travel{% endblock %}
+{% block content %}
+<h1 class="h5 mb-3" style="font-family:var(--font-display)">Alertas de precio</h1>
+
+{% if error %}
+<div class="flash-bar" role="alert"><div class="flash-error"><i class="bi bi-exclamation-triangle-fill"></i>{{ error }}</div></div>
+{% endif %}
+
+<div class="row g-4">
+    <div class="col-12 col-lg-5">
+        <div class="at-card">
+            <h2 style="font-size:14.5px;margin-bottom:12px">Nueva alerta</h2>
+            <form method="post" action="/alertas-precio">
+                <div class="row g-2">
+                    <div class="col-6">
+                        <label class="form-label-at" for="origen">Origen</label>
+                        <input type="text" class="form-control-at text-uppercase" id="origen" name="origen" maxlength="3" required>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label-at" for="destino">Destino</label>
+                        <input type="text" class="form-control-at text-uppercase" id="destino" name="destino" maxlength="3" required>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label-at" for="fecha_objetivo">Fecha objetivo</label>
+                        <input type="date" class="form-control-at" id="fecha_objetivo" name="fecha_objetivo" required>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label-at" for="precio_umbral">Avisarme si el precio baja de</label>
+                        <input type="number" step="0.01" min="0" class="form-control-at" id="precio_umbral" name="precio_umbral" required>
+                    </div>
+                </div>
+                <button type="submit" class="btn-at-primary w-100 justify-content-center mt-3">Crear alerta</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-7">
+        {% if alertas %}
+        <div class="at-table-wrapper">
+            <table class="at-table">
+                <thead><tr><th>Ruta</th><th>Fecha objetivo</th><th>Umbral</th><th>Estado</th></tr></thead>
+                <tbody>
+                    {% for a in alertas %}
+                    <tr>
+                        <td>{{ a.origen_codigo }} → {{ a.destino_codigo }}</td>
+                        <td>{{ a.fecha_objetivo[:10] }}</td>
+                        <td class="at-mono">${{ "%.2f"|format(a.precio_umbral) }}</td>
+                        <td>{% if a.activa %}<span class="badge-sistema" style="background:var(--at-success-bg);color:var(--at-success-fg)">activa</span>{% else %}<span class="badge-sistema">inactiva</span>{% endif %}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="at-empty">
+            <i class="bi bi-bell at-empty-icon" aria-hidden="true"></i>
+            <strong>Sin alertas todavía</strong>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

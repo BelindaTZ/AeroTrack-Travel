@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block body %}
+{% if usuario.tipo_actor != 'pasajero' %}
+<nav id="at-sidebar" aria-label="Navegación principal">
+    <a class="sidebar-brand" href="/">
+        <img src="/static/assets/images/LogoAeroTrackTravel.png" alt="">
+        <div>
+            <div class="name">AeroTrack</div>
+            <div class="suite">Travel</div>
+        </div>
+    </a>
+
+    <div class="sidebar-nav">
+        {% for modulo in nav_modulos %}
+        <div class="nav-label">{{ modulo.nombre }}</div>
+        {% if modulo['items'] %}
+            {% for item in modulo['items'] %}
+            <a class="nav-item-link {% if request.url.path.startswith(item.href) %}active{% endif %}" href="{{ item.href }}">
+                <i class="bi {{ item.icono }}" aria-hidden="true"></i>
+                <span>{{ item.label }}</span>
+            </a>
+            {% endfor %}
+        {% else %}
+            <span class="nav-item-link disabled-soon" aria-disabled="true">
+                <i class="bi {{ modulo.icono }}" aria-hidden="true"></i>
+                <span>{{ modulo.nombre }}</span>
+                <span class="badge-proximamente">Próximamente</span>
+            </span>
+        {% endif %}
+        {% endfor %}
+    </div>
+
+    <div class="sidebar-footer">
+        <a class="nav-item-link {% if request.url.path == '/mi-perfil' %}active{% endif %}" href="/mi-perfil">
+            <i class="bi bi-person-circle" aria-hidden="true"></i>
+            <span>Mi perfil</span>
+        </a>
+    </div>
+</nav>
+{% endif %}
+
+<div id="at-main" {% if usuario.tipo_actor == 'pasajero' %}style="margin-left:0"{% endif %}>
+    <header id="at-topbar">
+        <div class="d-flex align-items-center gap-2">
+            {% if usuario.tipo_actor != 'pasajero' %}
+            <button class="btn-icon btn-toggle-sidebar" type="button" id="btn-toggle-sidebar" aria-label="Abrir menú" aria-expanded="false">
+                <i class="bi bi-list fs-5" aria-hidden="true"></i>
+            </button>
+            {% else %}
+            <a href="/" class="d-flex align-items-center gap-2 text-decoration-none">
+                <img src="/static/assets/images/LogoAeroTrackTravel.png" alt="" height="26">
+                <span class="font-display fw-semibold" style="color:var(--at-text)">AeroTrack Travel</span>
+            </a>
+            {% endif %}
+        </div>
+        <div class="dropdown">
+            <a class="avatar-chip dropdown-toggle" href="#" data-bs-toggle="dropdown" aria-expanded="false">
+                <span class="avatar" aria-hidden="true">{{ (usuario.nombre_completo or usuario.email)[:1] | upper }}</span>
+                <span class="d-none d-sm-inline" style="font-size:13px;font-weight:500">{{ usuario.nombre_completo }}</span>
+            </a>
+            <ul class="dropdown-menu dropdown-menu-end" style="font-size:13px;border-radius:12px;border:1px solid var(--at-border);box-shadow:var(--at-shadow-lg);padding:6px;min-width:190px">
+                <li><a class="dropdown-item" style="border-radius:8px;padding:8px 12px" href="/mi-perfil"><i class="bi bi-person me-2"></i>Mi perfil</a></li>
+                <li><hr class="dropdown-divider" style="margin:4px 0"></li>
+                <li>
+                    <form method="post" action="/logout" class="m-0">
+                        <button type="submit" class="dropdown-item text-danger" style="border-radius:8px;padding:8px 12px;border:none;background:none;width:100%;text-align:left">
+                            <i class="bi bi-box-arrow-right me-2"></i>Cerrar sesión
+                        </button>
+                    </form>
+                </li>
+            </ul>
+        </div>
+    </header>
+
+    <main id="at-content">
+        {% set _msg = mensaje or request.query_params.get('mensaje') %}
+        {% if _msg %}
+        <div class="flash-bar" role="status">
+            <div class="flash-success toast-autodismiss"><i class="bi bi-check-circle-fill" aria-hidden="true"></i>{{ _msg }}</div>
+        </div>
+        {% endif %}
+        {% block content %}{% endblock %}
+    </main>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const btnToggle = document.getElementById('btn-toggle-sidebar');
+const sidebar = document.getElementById('at-sidebar');
+if (btnToggle && sidebar) {
+    btnToggle.addEventListener('click', function () {
+        const abierto = sidebar.classList.toggle('open');
+        btnToggle.setAttribute('aria-expanded', abierto ? 'true' : 'false');
+    });
+}
+</script>
+{% endblock %}

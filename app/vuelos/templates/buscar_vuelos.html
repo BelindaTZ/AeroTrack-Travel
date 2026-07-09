@@ -1,0 +1,105 @@
+{% extends "layout_portal.html" %}
+{% block title %}Buscar vuelos — AeroTrack Travel{% endblock %}
+{% block content %}
+<h1 class="h4 mb-3" style="font-family:var(--font-display)">Buscar vuelos</h1>
+
+<datalist id="lista-aeropuertos">
+    {% for a in aeropuertos %}<option value="{{ a.codigo }}">{{ a.legible }}</option>{% endfor %}
+</datalist>
+
+<form method="get" action="/vuelos/buscar" id="form-busqueda" class="at-card mb-4">
+    <div class="row g-3 align-items-end">
+        <div class="col-6 col-md-3">
+            <label class="form-label-at" for="origen">Origen</label>
+            <input type="text" class="form-control-at text-uppercase" id="origen" name="origen"
+                   list="lista-aeropuertos" maxlength="3" placeholder="JFK"
+                   value="{{ filtros.origen }}" required>
+        </div>
+        <div class="col-6 col-md-3">
+            <label class="form-label-at" for="destino">Destino</label>
+            <input type="text" class="form-control-at text-uppercase" id="destino" name="destino"
+                   list="lista-aeropuertos" maxlength="3" placeholder="LAX"
+                   value="{{ filtros.destino }}" required>
+        </div>
+        <div class="col-6 col-md-3">
+            <label class="form-label-at" for="fecha">Fecha</label>
+            <input type="date" class="form-control-at" id="fecha" name="fecha" value="{{ filtros.fecha }}" required>
+        </div>
+        <div class="col-6 col-md-2">
+            <label class="form-label-at" for="pasajeros">Pasajeros</label>
+            <input type="number" class="form-control-at" id="pasajeros" name="pasajeros" min="1" max="9"
+                   value="{{ filtros.pasajeros }}" required>
+        </div>
+        <div class="col-12 col-md-1">
+            <button type="submit" class="btn-at-primary w-100 justify-content-center"><i class="bi bi-search"></i></button>
+        </div>
+    </div>
+</form>
+
+{% if resultados is not none %}
+<div class="d-flex flex-wrap gap-2 align-items-center mb-3" id="filtros-secundarios">
+    <form method="get" action="/vuelos/buscar" id="form-filtros" class="d-flex flex-wrap gap-2 align-items-center">
+        <input type="hidden" name="origen" value="{{ filtros.origen }}">
+        <input type="hidden" name="destino" value="{{ filtros.destino }}">
+        <input type="hidden" name="fecha" value="{{ filtros.fecha }}">
+        <input type="hidden" name="pasajeros" value="{{ filtros.pasajeros }}">
+
+        <select class="form-control-at" style="width:auto" name="aerolinea_id">
+            <option value="">Todas las aerolíneas</option>
+            {% for a in aerolineas %}
+            <option value="{{ a.id }}" {% if filtros.aerolinea_id == a.id %}selected{% endif %}>{{ a.nombre }}</option>
+            {% endfor %}
+        </select>
+        <select class="form-control-at" style="width:auto" name="horario">
+            <option value="">Cualquier horario</option>
+            <option value="manana" {% if filtros.horario == 'manana' %}selected{% endif %}>Mañana (00-12h)</option>
+            <option value="tarde" {% if filtros.horario == 'tarde' %}selected{% endif %}>Tarde (12-18h)</option>
+            <option value="noche" {% if filtros.horario == 'noche' %}selected{% endif %}>Noche (18-24h)</option>
+        </select>
+        <select class="form-control-at" style="width:auto" name="orden">
+            <option value="precio" {% if filtros.orden == 'precio' %}selected{% endif %}>Ordenar: precio</option>
+            <option value="duracion" {% if filtros.orden == 'duracion' %}selected{% endif %}>Ordenar: duración</option>
+        </select>
+        <span class="text-muted" style="font-size:12.5px">{{ resultados | length }} resultado(s)</span>
+    </form>
+</div>
+
+{% if resultados %}
+<div class="d-flex flex-column gap-2">
+    {% for v in resultados %}
+    <a href="/vuelos/{{ v.id }}" class="at-card d-flex align-items-center justify-content-between text-decoration-none" style="color:var(--at-text)">
+        <div class="d-flex align-items-center gap-3">
+            <div class="type-chip">{{ v.aerolinea_nombre }}</div>
+            <div>
+                <div style="font-weight:600">{{ v.origen_legible }} → {{ v.destino_legible }}</div>
+                <div style="font-size:12.5px;color:var(--at-muted)">
+                    {{ v.hora_salida_programada }} – {{ v.hora_llegada_programada }}
+                    {% if v.duracion_min %}· {{ (v.duracion_min // 60) }}h {{ v.duracion_min % 60 }}m{% endif %}
+                    · Vuelo {{ v.numero_vuelo }}
+                </div>
+            </div>
+        </div>
+        <div class="text-end">
+            <div style="font-size:11px;color:var(--at-sub)">desde</div>
+            <div class="at-mono" style="font-size:18px;font-weight:700;color:var(--at-primary)">${{ "%.2f"|format(v.precio_desde) }}</div>
+        </div>
+    </a>
+    {% endfor %}
+</div>
+{% else %}
+<div class="at-empty">
+    <i class="bi bi-airplane at-empty-icon" aria-hidden="true"></i>
+    <strong>No hay vuelos para esos criterios</strong>
+    <p>Prueba con otra fecha u otro par de aeropuertos.</p>
+</div>
+{% endif %}
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.querySelectorAll('#form-filtros select').forEach(function (el) {
+    el.addEventListener('change', function () { document.getElementById('form-filtros').requestSubmit(); });
+});
+</script>
+{% endblock %}

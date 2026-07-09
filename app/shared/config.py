@@ -21,6 +21,20 @@ class Settings:
         self.algorithm = os.environ.get("ALGORITHM", "HS256")
         self.token_expire_minutes = int(os.environ.get("TOKEN_EXPIRE_MINUTES", "60"))
 
+        # MinIO (modelo dimensional heredado, REG-A2 solo lectura) — mismos
+        # defaults de desarrollo que dags/config.py, no secretos de producción.
+        in_docker = os.path.exists("/.dockerenv")
+        self.minio_endpoint = (
+            os.environ.get("MINIO_URL_DOCKER", "minio:9000")
+            if in_docker
+            else os.environ.get("MINIO_URL", "localhost:9000")
+        )
+        self.minio_access = os.environ.get("MINIO_ACCESS", "admin")
+        self.minio_secret = os.environ.get("MINIO_SECRET", "admin1234")
+        self.minio_bucket_travel_dims = os.environ.get(
+            "MINIO_BUCKET_TRAVEL_DIMS", "aerotrack-travel-dims"
+        )
+
     @staticmethod
     def _require(name: str) -> str:
         value = os.environ.get(name)

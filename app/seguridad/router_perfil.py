@@ -8,21 +8,32 @@ implemente Pasajeros.
 """
 
 from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import RedirectResponse
 
 from app.seguridad.repositories.seguridad_repo import SeguridadRepository
 from app.seguridad.services.audit_service import AuditService
 from app.seguridad.services.auth_service import AuthService, CredencialesInvalidas, CuentaInactiva
 from app.seguridad.services.password_service import PasswordDebil, PasswordService
 from app.seguridad.services.session_service import verificar_sesion
+from app.shared.nav import nav_context
 from app.shared.templating import templates
 
 router = APIRouter()
 
 
+async def _contexto_perfil(usuario: dict, **extra) -> dict:
+    contexto = await nav_context(usuario)
+    rol_nombre = None
+    if usuario.get("rol_id"):
+        rol = await SeguridadRepository()._client.get_record("roles", usuario["rol_id"])
+        rol_nombre = rol["nombre"]
+    contexto["rol_nombre"] = rol_nombre
+    contexto.update(extra)
+    return contexto
+
+
 @router.get("/mi-perfil")
 async def mi_perfil(request: Request, usuario: dict = Depends(verificar_sesion)):
-    return templates.TemplateResponse(request, "mi_perfil.html", {"usuario": usuario})
+    return templates.TemplateResponse(request, "mi_perfil.html", await _contexto_perfil(usuario))
 
 
 @router.post("/mi-perfil")
@@ -38,7 +49,7 @@ async def mi_perfil_editar(
         detalle={"campos": ["nombre_completo"]},
     )
     return templates.TemplateResponse(
-        request, "mi_perfil.html", {"usuario": actualizado, "mensaje": "Perfil actualizado"}
+        request, "mi_perfil.html", await _contexto_perfil(actualizado, mensaje="Perfil actualizado")
     )
 
 
@@ -57,7 +68,7 @@ async def cambiar_password(
         return templates.TemplateResponse(
             request,
             "mi_perfil.html",
-            {"usuario": usuario, "error_password": "La contraseña actual no es correcta"},
+            await _contexto_perfil(usuario, error_password="La contraseña actual no es correcta"),
             status_code=400,
         )
 
@@ -65,7 +76,7 @@ async def cambiar_password(
         return templates.TemplateResponse(
             request,
             "mi_perfil.html",
-            {"usuario": usuario, "error_password": "Las contraseñas no coinciden"},
+            await _contexto_perfil(usuario, error_password="Las contraseñas no coinciden"),
             status_code=400,
         )
 
@@ -74,7 +85,8 @@ async def cambiar_password(
         password_service.validar_fortaleza(password_nueva)
     except PasswordDebil as exc:
         return templates.TemplateResponse(
-            request, "mi_perfil.html", {"usuario": usuario, "error_password": exc.motivo}, status_code=400
+            request, "mi_perfil.html", await _contexto_perfil(usuario, error_password=exc.motivo),
+            status_code=400,
         )
 
     repo = SeguridadRepository()
@@ -85,7 +97,7 @@ async def cambiar_password(
         "cambiar_password", "usuarios", usuario_id=usuario["id"], registro_id=usuario["id"]
     )
     return templates.TemplateResponse(
-        request, "mi_perfil.html", {"usuario": usuario, "mensaje": "Contraseña actualizada"}
+        request, "mi_perfil.html", await _contexto_perfil(usuario, mensaje="Contraseña actualizada")
     )
 
 
@@ -105,11 +117,11 @@ async def solicitar_eliminacion(request: Request, usuario: dict = Depends(verifi
     return templates.TemplateResponse(
         request,
         "mi_perfil.html",
-        {
-            "usuario": usuario,
-            "mensaje": (
+        await _contexto_perfil(
+            usuario,
+            mensaje=(
                 "Tu solicitud de eliminación fue registrada. Se ejecutará una vez verificada "
                 "la ausencia de reservas o pagos en curso."
             ),
-        },
+        ),
     )

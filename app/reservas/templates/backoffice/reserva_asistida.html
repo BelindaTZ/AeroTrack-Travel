@@ -1,0 +1,50 @@
+{% extends "layout_app.html" %}
+{% block title %}Reserva asistida — AeroTrack Travel{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <h1><span class="heading-icon"><i class="bi bi-headset"></i></span>Reserva asistida</h1>
+    <p>Crea una reserva en nombre de un pasajero ya registrado (canal asistida, RF-RES-002).</p>
+</div>
+
+{% if error %}
+<div class="flash-bar" role="alert"><div class="flash-error"><i class="bi bi-exclamation-triangle-fill"></i>{{ error }}</div></div>
+{% endif %}
+
+{% if not tarifa %}
+<div class="at-empty">
+    <i class="bi bi-airplane at-empty-icon" aria-hidden="true"></i>
+    <strong>Ningún vuelo seleccionado</strong>
+    <p>Busca el vuelo del pasajero primero y vuelve con la tarifa elegida.</p>
+    <a href="/vuelos/buscar" class="btn-at-primary mt-2">Buscar vuelos</a>
+</div>
+{% else %}
+<div class="row g-4">
+    <div class="col-12 col-lg-7">
+        <div class="at-card mb-3">
+            <div class="type-chip mb-2">{{ aerolinea.nombre }}</div>
+            <div style="font-weight:600">{{ origen_legible }} → {{ destino_legible }}</div>
+            <div style="font-size:13px;color:var(--at-muted)">
+                Vuelo {{ vuelo.numero_vuelo }} · {{ vuelo.fecha_salida[:10] }} · {{ vuelo.hora_salida_programada }}
+                · Tarifa {{ nivel.nombre }} · <span class="at-mono">${{ "%.2f"|format(tarifa.precio_final) }}</span>
+            </div>
+        </div>
+
+        <div class="at-card">
+            <form method="post" action="/backoffice/reservas">
+                <input type="hidden" name="tarifa_id" value="{{ tarifa.id }}">
+                <input type="hidden" name="precio_esperado" value="{{ tarifa.precio_final }}">
+                <div class="mb-3">
+                    <label class="form-label-at" for="email_pasajero">Correo del pasajero</label>
+                    <input type="email" class="form-control-at" id="email_pasajero" name="email_pasajero" required
+                           placeholder="pasajero@ejemplo.com">
+                    <div style="font-size:11.5px;color:var(--at-sub);margin-top:4px">
+                        Debe ser una cuenta de pasajero ya registrada en el sistema.
+                    </div>
+                </div>
+                <button type="submit" class="btn-at-primary"><i class="bi bi-check2-circle"></i>Crear reserva asistida</button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

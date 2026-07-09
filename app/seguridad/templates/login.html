@@ -1,40 +1,33 @@
-{% extends "base.html" %}
+{% extends "layout_publico.html" %}
 {% block title %}Iniciar sesión — AeroTrack Travel{% endblock %}
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-12 col-md-6 col-lg-4">
-        <h1 class="h4 mb-4">Iniciar sesión</h1>
+<div class="login-form-icon"><i class="bi bi-person-fill" aria-hidden="true"></i></div>
+<h2 class="login-form-title">Iniciar sesión</h2>
+<p class="login-form-sub">Ingresa tus credenciales para acceder a tu cuenta.</p>
 
-        {% if error %}
-        <div class="alert alert-danger d-flex align-items-center gap-2" role="alert">
-            <span aria-hidden="true">&#9888;</span>
-            <span>{{ error }}</span>
-        </div>
-        {% endif %}
+{% if error %}
+<div class="flash-bar" role="alert">
+    <div class="flash-error"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i>{{ error }}</div>
+</div>
+{% endif %}
 
-        <form method="post" action="/login" novalidate>
-            {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
-            <div class="mb-3">
-                <label for="email" class="form-label">Correo electrónico</label>
-                <input
-                    type="email" class="form-control" id="email" name="email"
-                    required autocomplete="email" autofocus
-                >
-            </div>
-            <div class="mb-3">
-                <label for="password" class="form-label">Contraseña</label>
-                <input
-                    type="password" class="form-control" id="password" name="password"
-                    required autocomplete="current-password"
-                >
-            </div>
-            <button type="submit" class="btn btn-primary w-100">Iniciar sesión</button>
-        </form>
-
-        <div class="d-flex justify-content-between mt-3">
-            <a href="/recuperar-password">¿Olvidaste tu contraseña?</a>
-            <a href="/registro">Crear cuenta</a>
-        </div>
+<form method="post" action="/login" novalidate>
+    {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+    <div class="mb-3">
+        <label for="email" class="form-label-at">Correo electrónico</label>
+        <input type="email" class="form-control-at" id="email" name="email" required autocomplete="email" autofocus>
     </div>
+    <div class="mb-3">
+        <label for="password" class="form-label-at">Contraseña</label>
+        <input type="password" class="form-control-at" id="password" name="password" required autocomplete="current-password">
+    </div>
+    <button type="submit" class="btn-at-primary w-100 justify-content-center mt-2" style="padding:11px 16px">
+        Iniciar sesión <i class="bi bi-arrow-right" aria-hidden="true"></i>
+    </button>
+</form>
+
+<div class="d-flex justify-content-between mt-4" style="font-size:13px">
+    <a href="/recuperar-password" style="color:var(--at-muted)">¿Olvidaste tu contraseña?</a>
+    <a href="/registro">Crear cuenta</a>
 </div>
 {% endblock %}

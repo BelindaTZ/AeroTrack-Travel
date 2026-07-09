@@ -58,14 +58,15 @@ def test_audit_service_no_expone_update_ni_delete():
 
 async def test_vista_auditoria_no_tiene_controles_de_edicion(admin_client):
     # "editar"/"eliminar" SÍ pueden aparecer como valor de dato (acción
-    # auditada de otro módulo) — lo que se prueba es la ausencia de
-    # controles interactivos que permitan mutar un registro de auditoría
-    # desde esta vista: ningún botón con fetch PUT/DELETE contra
-    # /admin/auditoría/{id}.
+    # auditada de otro módulo), y la plantilla base SÍ tiene botones propios
+    # del shell (menú, cerrar sesión) — lo que se prueba es la ausencia de
+    # controles interactivos DENTRO DE LA TABLA de auditoría: ningún botón
+    # ni fetch PUT/DELETE contra /admin/auditoria/{id}.
     resp = await admin_client.get("/admin/auditoria")
     assert resp.status_code == 200
     html = resp.text
-    assert "<button" not in html
+    tabla = html[html.index("<table") : html.index("</table>")]
+    assert "<button" not in tabla
     assert "method: 'PUT'" not in html
     assert "method: 'DELETE'" not in html
 

@@ -1,0 +1,45 @@
+{% extends "layout_portal.html" %}
+{% block title %}Mis pagos — AeroTrack Travel{% endblock %}
+{% block content %}
+<h1 class="h5 mb-3" style="font-family:var(--font-display)">Mis pagos</h1>
+
+{% if pagos %}
+<div class="at-table-wrapper">
+    <div class="at-table-scroll">
+        <table class="at-table">
+            <thead><tr><th>Fecha</th><th>Reserva</th><th>Vuelo</th><th>Método</th><th>Estado</th><th>Monto</th><th>Documentos</th></tr></thead>
+            <tbody>
+                {% for p in pagos %}
+                <tr>
+                    <td class="at-mono" style="font-size:12px">{{ p.pago.created[:10] if p.pago.created else "" }}</td>
+                    <td><a href="/reservas/{{ p.reserva_id }}">{{ p.codigo_reserva }}</a></td>
+                    <td>{{ p.numero_vuelo }}</td>
+                    <td>{{ p.pago.moneda }}</td>
+                    <td>
+                        {% if p.pago.estado == "exitoso" %}
+                        <span class="badge-sistema" style="background:var(--at-success-bg);color:var(--at-success-fg)">exitoso</span>
+                        {% elif p.pago.estado == "fallido" %}
+                        <span class="badge-sistema" style="background:var(--at-failed-bg);color:var(--at-danger)">fallido</span>
+                        {% else %}
+                        <span class="badge-sistema">{{ p.pago.estado }}</span>
+                        {% endif %}
+                    </td>
+                    <td class="at-mono">${{ "%.2f"|format(p.pago.monto) }}</td>
+                    <td>
+                        {% if p.factura_id %}
+                        <a href="/facturas/{{ p.factura_id }}/pdf" style="font-size:12.5px"><i class="bi bi-file-earmark-pdf"></i> Factura</a>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="at-empty">
+    <i class="bi bi-receipt at-empty-icon" aria-hidden="true"></i>
+    <strong>Todavía no tienes pagos</strong>
+</div>
+{% endif %}
+{% endblock %}

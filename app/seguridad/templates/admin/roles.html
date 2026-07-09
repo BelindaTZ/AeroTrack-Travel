@@ -1,51 +1,80 @@
-{% extends "base.html" %}
+{% extends "layout_app.html" %}
 {% block title %}Roles — AeroTrack Travel{% endblock %}
 {% block content %}
-<h1 class="h4 mb-4">Roles</h1>
+<div class="page-heading">
+    <h1><span class="heading-icon"><i class="bi bi-diagram-3-fill"></i></span>Roles</h1>
+    <p>
+        Cada rol define qué módulos (Nivel 1) y, opcionalmente, qué tablas específicas (Nivel 2) puede usar
+        quien lo tenga asignado.
+    </p>
+</div>
 
-{% if mensaje %}<div class="alert alert-success toast-autodismiss" role="status">{{ mensaje }}</div>{% endif %}
+<div class="at-table-wrapper">
+    <div class="at-table-header">
+        <span class="at-table-title">{{ roles | length }} roles</span>
+        <button class="btn-at-primary" data-bs-toggle="modal" data-bs-target="#modalNuevoRol">
+            <i class="bi bi-plus-lg" aria-hidden="true"></i>Nuevo rol
+        </button>
+    </div>
 
-<div class="row g-4">
-    <div class="col-12 col-lg-7">
-        <table class="table table-sm align-middle" id="tabla-roles">
-            <thead>
-                <tr><th>Nombre</th><th>Descripción</th><th>Sistema</th><th></th></tr>
-            </thead>
+    <div class="at-table-scroll">
+        <table class="at-table" id="tabla-roles">
+            <thead><tr><th>Nombre</th><th>Descripción</th><th></th><th class="actions-col">Acciones</th></tr></thead>
             <tbody>
                 {% for r in roles %}
                 <tr id="fila-rol-{{ r.id }}">
-                    <td>{{ r.nombre }}</td>
-                    <td>{{ r.descripcion }}</td>
-                    <td>{% if r.es_sistema %}<span class="badge text-bg-secondary">protegido</span>{% endif %}</td>
-                    <td class="text-end">
-                        <a class="btn btn-sm btn-outline-primary" href="/admin/roles/{{ r.id }}/editar">Permisos</a>
+                    <td style="font-weight:600">{{ r.nombre }}</td>
+                    <td style="color:var(--at-muted)">{{ r.descripcion }}</td>
+                    <td>{% if r.es_sistema %}<span class="badge-sistema">Protegido</span>{% endif %}</td>
+                    <td class="actions-col">
+                        <a class="btn-icon" href="/admin/roles/{{ r.id }}/editar" title="Editar permisos">
+                            <i class="bi bi-sliders"></i>
+                        </a>
                         {% if not r.es_sistema %}
-                        <button
-                            class="btn btn-sm btn-outline-danger btn-eliminar-rol"
-                            data-rol="{{ r.id }}"
-                        >Eliminar</button>
+                        <button class="btn-icon danger btn-eliminar-rol" data-rol="{{ r.id }}" title="Eliminar">
+                            <i class="bi bi-trash"></i>
+                        </button>
                         {% endif %}
                     </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
-        <div id="mensaje-eliminar" class="alert alert-danger d-none" role="alert"></div>
     </div>
+</div>
+<div id="mensaje-eliminar" class="flash-bar mt-3 d-none"><div class="flash-error"><i class="bi bi-exclamation-triangle-fill"></i><span id="mensaje-eliminar-texto"></span></div></div>
 
-    <div class="col-12 col-lg-5">
-        <h2 class="h6">Crear rol</h2>
-        <form method="post" action="/admin/roles" novalidate>
-            <div class="mb-2">
-                <label class="form-label">Nombre</label>
-                <input type="text" class="form-control" name="nombre" required>
+<!-- Modal: nuevo rol -->
+<div class="modal fade" id="modalNuevoRol" tabindex="-1" aria-labelledby="modalNuevoRolTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width:420px">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title d-flex align-items-center gap-2" id="modalNuevoRolTitle" style="font-size:16px;font-weight:700">
+                    <span class="modal-icon-title"><i class="bi bi-diagram-3-fill" aria-hidden="true"></i></span>
+                    Nuevo rol
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
-            <div class="mb-3">
-                <label class="form-label">Descripción</label>
-                <textarea class="form-control" name="descripcion" rows="2"></textarea>
-            </div>
-            <button type="submit" class="btn btn-primary w-100">Crear (sin permisos)</button>
-        </form>
+            <form method="post" action="/admin/roles">
+                <div class="modal-body d-flex flex-column gap-3">
+                    <div>
+                        <label class="form-label-at" for="nr-nombre">Nombre</label>
+                        <input type="text" id="nr-nombre" name="nombre" class="form-control-at" required>
+                    </div>
+                    <div>
+                        <label class="form-label-at" for="nr-descripcion">Descripción</label>
+                        <textarea id="nr-descripcion" name="descripcion" class="form-control-at" rows="2"></textarea>
+                    </div>
+                    <p style="font-size:12px;color:var(--at-muted);margin:0">
+                        <i class="bi bi-info-circle me-1"></i>Se crea sin permisos — los agregas después en "Permisos".
+                    </p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-at-ghost" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn-at-primary"><i class="bi bi-check2"></i>Crear rol</button>
+                </div>
+            </form>
+        </div>
     </div>
 </div>
 {% endblock %}
@@ -56,15 +85,15 @@ document.querySelectorAll('.btn-eliminar-rol').forEach(function (btn) {
     btn.addEventListener('click', async function () {
         if (!confirm('¿Eliminar este rol? Esta acción no se puede deshacer.')) return;
         const rolId = btn.dataset.rol;
-        const resp = await fetch(`/admin/roles/${rolId}`, { method: 'DELETE' });
-        const contenedorMensaje = document.getElementById('mensaje-eliminar');
+        const resp = await fetch(`/admin/roles/${rolId}`, { method: 'DELETE', headers: { 'Accept': 'application/json' } });
+        const contenedor = document.getElementById('mensaje-eliminar');
         if (resp.ok) {
             document.getElementById(`fila-rol-${rolId}`).remove();
-            contenedorMensaje.classList.add('d-none');
+            contenedor.classList.add('d-none');
         } else {
             const data = await resp.json();
-            contenedorMensaje.textContent = data.detail;
-            contenedorMensaje.classList.remove('d-none');
+            document.getElementById('mensaje-eliminar-texto').textContent = data.detail;
+            contenedor.classList.remove('d-none');
         }
     });
 });

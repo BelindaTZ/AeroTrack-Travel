@@ -133,6 +133,15 @@ app/reservas/
 
 ---
 
+## Ajuste de alcance tras inspección del repo (Pasajeros y Facturación no existen todavía)
+
+Este plan asume Pasajeros y Facturación completas (`facturacion-spec.md` para CU-O32/O37/O47, gestión completa de pasajeros para CU-O22). Ninguna de las dos existe en esta sesión — están deliberadamente fuera de alcance. Las 9 colecciones de este módulo (`reservas`, `reserva_pasajeros`, `reserva_extras`, `alertas_precio`) ya existen en PocketBase (creadas en una sesión anterior, mismo patrón que Vuelos/Seguridad). Ajustes concretos:
+
+- **Pasajero titular, no acompañantes.** `reserva_pasajeros.pasajero_id` es una relación a `pasajeros` (no datos inline) — cada pasajero en una reserva debe ya tener cuenta propia. Sin una pantalla de búsqueda de pasajeros (pertenece a Pasajeros), esta sesión resuelve el titular como el propio `pasajeros` del usuario autenticado (autoservicio) o del pasajero que el Agente identifica por correo (asistida). Agregar acompañantes adicionales (varios `reserva_pasajeros` por reserva) queda fuera de esta sesión — se retoma cuando exista una búsqueda de pasajeros real.
+- **Pago real no existe.** RF-RES-001 termina en "dirige al pasajero al pago" — sin Facturación, el destino es la propia pantalla de detalle de la reserva (`GET /reservas/{id}`), que muestra `pendiente_pago` con una nota explícita de que el cobro real se conecta cuando exista Facturación. Se introduce `services/pago_stub_service.py` (no estaba en el plan original): expone `confirmar_pago_reserva(reserva_id)`, el punto de integración que el futuro webhook de Stripe de Facturación invocará. Permite implementar y probar de verdad RN-RES-005 (QP-04, la condición de carrera pago-vs-expiración) sin necesitar Stripe — es el mecanismo real, con un disparador simulado en vez de uno real.
+- **CU-O47 (diferencia de tarifa) y el reembolso de CU-O24 quedan como puntos de integración documentados, no simulados.** Igual que Vuelos documentó `"notificacion": "pendiente_de_modulo_disrupciones"` en vez de fingir un disparo real, `modificar_reserva_service`/`cancelar_reserva_service` calculan el monto exacto de la diferencia/reembolso y lo registran en el detalle de auditoría como `"pendiente_de_modulo_facturacion"`, sin inventar una llamada a un servicio que no existe.
+- **Scheduler de CU-O44:** se usa Airflow (ya en el stack, mismo patrón que Vuelos), no APScheduler — un DAG delgado en `dags/` llama por HTTP a `POST /internal/reservas/expirar-pendientes`, cuya lógica real vive y se prueba dentro de `app/reservas/services/expiracion_service.py`.
+
 ## Complexity Tracking
 
 *No aplica.*

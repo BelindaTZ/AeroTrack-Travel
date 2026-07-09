@@ -146,6 +146,16 @@ app/facturacion/
 
 ---
 
+## Ajuste de alcance tras inspección del repo
+
+Las 7 colecciones de este módulo ya existen en PocketBase (mismo patrón que los 3 módulos anteriores), igual que las credenciales reales de Stripe test mode en `configuracion_sistema` (`stripe.secret_key`, `stripe.publishable_key`, `stripe.mode=test`) y los 2 `metodos_pago` (tarjeta de crédito/débito). Ajustes concretos antes de implementar:
+
+- **Checkout sin Stripe.js Elements.** Integrar el SDK de cliente de Stripe (Elements/Checkout) requiere JS de captura de tarjeta en el navegador + verificación de firma de webhook — alcance real de una sesión aparte. En vez de eso, el checkout ofrece un selector de "escenario de prueba" (Pago exitoso / Pago rechazado) que mapea a los *PaymentMethod ID* de prueba que Stripe documenta oficialmente para probar sin tokenizar una tarjeta real (`pm_card_visa`, `pm_card_visa_chargeDeclined`) — la llamada a Stripe es 100% real (mismo `sk_test_...` sembrado), solo el paso de "capturar la tarjeta" está simplificado. Cumple REG-C1 igual: el backend nunca ve un número de tarjeta, ni siquiera de prueba.
+- **PDF con ReportLab, no WeasyPrint.** WeasyPrint necesita librerías de sistema (Cairo/Pango) que implicarían tocar el `Dockerfile` con `apt-get`. ReportLab es Python puro, cero dependencias de sistema — más simple para esta sesión, mismo resultado (PDF descargable).
+- **`pagos.monto` = `reservas.total_pagar` completo** (no se modela un "cargo de servicio" separado del precio de tarifa — ese desglose no existe como campo en el modelo de datos actual). La comisión de aerolínea (RF-FAC-003) se calcula sobre ese mismo monto. RN-FAC-004 (cargo inmediato vs. comisión diferida) se respeta en el *momento* de cada registro (pago inmediato, comisión `pendiente_cobro`), no en una partición contable del monto que el modelo no soporta hoy.
+- **Cierre real de los 3 puntos de integración que Reservas dejó documentados como `"pendiente_de_modulo_facturacion"`:** cuando cada fase de Facturación queda lista, se actualiza el código de Reservas (no solo Facturación) para que llame de verdad en vez de solo auditar la intención — y se actualiza `reservas/checklist.md`/`errores-conocidos.md` para cerrar esos ítems. Ver Fases 1, 4 y 5.
+- **Disrupciones sigue sin existir** — CU-O30 → CU-O37 (reembolso disparado por una disrupción) quedará como punto de integración documentado, igual que los demás módulos han hecho con Disrupciones.
+
 ## Complexity Tracking
 
 *No aplica.*

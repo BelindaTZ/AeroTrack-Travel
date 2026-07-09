@@ -35,6 +35,13 @@ PB_TRAVEL_URL = (
 PB_TRAVEL_EMAIL = os.getenv("PB_TRAVEL_EMAIL", "")
 PB_TRAVEL_PASSWORD = os.getenv("PB_TRAVEL_PASSWORD", "")
 
+# ── App FastAPI Travel: mismo travel-network, nombre de servicio Docker ────
+APP_TRAVEL_URL = (
+    "http://app-travel:8000"
+    if IN_DOCKER
+    else f"http://localhost:{os.getenv('APP_TRAVEL_PORT', '8001')}"
+)
+
 # ── Parámetros de negocio con valor por defecto (se sobreescriben con
 #    configuracion_sistema vía get_config(), ver pocketbase_client.py) ──────
 DEFAULT_UMBRAL_API_REAL_HORAS = 72

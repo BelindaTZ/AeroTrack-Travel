@@ -1,81 +1,180 @@
-{% extends "base.html" %}
+{% extends "layout_app.html" %}
 {% block title %}Usuarios internos — AeroTrack Travel{% endblock %}
 {% block content %}
-<h1 class="h4 mb-4">Usuarios internos</h1>
+<div class="page-heading">
+    <h1><span class="heading-icon"><i class="bi bi-people-fill"></i></span>Usuarios internos</h1>
+    <p>
+        Gestión de cuentas de Agente y Administrador ({{ usuarios | length }} en total).
+        <i class="bi bi-info-circle ms-1" aria-hidden="true"></i>
+        <strong>Tipo</strong> clasifica la cuenta; <strong>Rol</strong> define sus permisos y puede ser uno
+        personalizado creado en <a href="/admin/roles">Roles</a> — no son el mismo dato.
+        Las cuentas de Pasajero no aparecen aquí: son autoservicio y se gestionan desde su propio perfil,
+        no desde este backoffice.
+    </p>
+</div>
 
-{% if mensaje %}<div class="alert alert-success toast-autodismiss" role="status">{{ mensaje }}</div>{% endif %}
-{% if error %}<div class="alert alert-danger" role="alert">{{ error }}</div>{% endif %}
+{% if error %}
+<div class="flash-bar" role="alert"><div class="flash-error"><i class="bi bi-exclamation-triangle-fill"></i>{{ error }}</div></div>
+{% endif %}
+<div id="mensaje-accion" class="flash-bar d-none"></div>
 
-<div class="row g-4">
-    <div class="col-12 col-lg-7">
-        <table class="table table-sm align-middle">
+<div class="at-table-wrapper">
+    <div class="at-table-header">
+        <span class="at-table-title">Lista de usuarios</span>
+        <button class="btn-at-primary" data-bs-toggle="modal" data-bs-target="#modalNuevoUsuario">
+            <i class="bi bi-plus-lg" aria-hidden="true"></i>Nuevo usuario
+        </button>
+    </div>
+
+    {% if usuarios %}
+    <div class="at-table-scroll">
+        <table class="at-table">
             <thead>
-                <tr><th>Nombre</th><th>Correo</th><th>Tipo</th><th>Rol</th><th>Activo</th><th></th></tr>
+                <tr><th>Usuario</th><th>Tipo</th><th>Rol</th><th>Activo</th><th>Creado</th><th class="actions-col">Acciones</th></tr>
             </thead>
             <tbody>
                 {% for u in usuarios %}
                 <tr id="fila-{{ u.id }}">
-                    <td>{{ u.nombre_completo }}</td>
-                    <td>{{ u.email }}</td>
-                    <td>{{ u.tipo_actor }}</td>
+                    <td style="min-width:220px">
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="avatar-initials" aria-hidden="true">{{ u.nombre_completo[:1] | upper }}</span>
+                            <div>
+                                <div style="font-weight:600" class="nombre-usuario">{{ u.nombre_completo }}</div>
+                                <div style="font-size:11.5px;color:var(--at-sub)">{{ u.email }}</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td><span class="type-chip">{{ u.tipo_actor }}</span></td>
                     <td>
-                        <select class="form-select form-select-sm" data-usuario="{{ u.id }}" data-campo="rol_id">
+                        <select class="form-control-at" style="width:auto;min-width:150px;padding:6px 10px;font-size:13px"
+                                data-usuario="{{ u.id }}" data-campo="rol_id">
                             {% for r in roles %}
                             <option value="{{ r.id }}" {% if u.rol_id == r.id %}selected{% endif %}>{{ r.nombre }}</option>
                             {% endfor %}
                         </select>
                     </td>
                     <td>
-                        <input
-                            type="checkbox" class="form-check-input" data-usuario="{{ u.id }}" data-campo="activo"
-                            {% if u.activo %}checked{% endif %}
-                        >
+                        <label class="toggle-switch">
+                            <input type="checkbox" data-usuario="{{ u.id }}" data-campo="activo" {% if u.activo %}checked{% endif %}>
+                            <span class="toggle-track"></span>
+                        </label>
                     </td>
-                    <td><span class="text-muted small">guardado</span></td>
+                    <td class="at-mono" style="font-size:12px;color:var(--at-muted);white-space:nowrap">{{ u.created[:10] if u.created else "" }}</td>
+                    <td class="actions-col">
+                        <button class="btn-icon btn-editar-usuario" title="Editar nombre"
+                                data-id="{{ u.id }}" data-nombre="{{ u.nombre_completo }}" data-email="{{ u.email }}">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                        <button class="btn-icon btn-resetear-password" title="Enviar enlace para restablecer contraseña"
+                                data-id="{{ u.id }}" data-email="{{ u.email }}">
+                            <i class="bi bi-key"></i>
+                        </button>
+                        <span class="fila-estado ms-1" style="font-size:11.5px;color:var(--at-sub)"></span>
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
+    {% else %}
+    <div class="at-empty">
+        <i class="bi bi-people at-empty-icon" aria-hidden="true"></i>
+        <strong>Todavía no hay usuarios internos</strong>
+        <p>Crea el primero con el botón "Nuevo usuario".</p>
+    </div>
+    {% endif %}
+</div>
 
-    <div class="col-12 col-lg-5">
-        <h2 class="h6">Crear usuario interno</h2>
-        <form method="post" action="/admin/usuarios" novalidate>
-            <div class="mb-2">
-                <label class="form-label">Nombre completo</label>
-                <input type="text" class="form-control" name="nombre_completo" required>
+<!-- Modal: nuevo usuario -->
+<div class="modal fade" id="modalNuevoUsuario" tabindex="-1" aria-labelledby="modalNuevoUsuarioTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width:440px">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title d-flex align-items-center gap-2" id="modalNuevoUsuarioTitle" style="font-size:16px;font-weight:700">
+                    <span class="modal-icon-title"><i class="bi bi-person-plus-fill" aria-hidden="true"></i></span>
+                    Nuevo usuario interno
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
-            <div class="mb-2">
-                <label class="form-label">Correo</label>
-                <input type="email" class="form-control" name="email" required>
+            <form method="post" action="/admin/usuarios">
+                <div class="modal-body d-flex flex-column gap-3">
+                    <div>
+                        <label class="form-label-at" for="nu-nombre">Nombre completo</label>
+                        <input type="text" id="nu-nombre" name="nombre_completo" class="form-control-at" required autocomplete="name">
+                    </div>
+                    <div>
+                        <label class="form-label-at" for="nu-email">Correo electrónico</label>
+                        <input type="email" id="nu-email" name="email" class="form-control-at" required autocomplete="email">
+                    </div>
+                    <div>
+                        <label class="form-label-at" for="nu-password">Contraseña temporal</label>
+                        <input type="password" id="nu-password" name="password" class="form-control-at" required autocomplete="new-password">
+                    </div>
+                    <div>
+                        <label class="form-label-at" for="nu-tipo">Tipo</label>
+                        <select id="nu-tipo" name="tipo_actor" class="form-control-at" required>
+                            <option value="agente">Agente</option>
+                            <option value="administrador">Administrador</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label-at" for="nu-rol">Rol</label>
+                        <select id="nu-rol" name="rol_id" class="form-control-at" required>
+                            <option value="" disabled selected>Selecciona un rol…</option>
+                            {% for r in roles %}<option value="{{ r.id }}">{{ r.nombre }}</option>{% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-at-ghost" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn-at-primary"><i class="bi bi-person-check-fill" aria-hidden="true"></i>Crear usuario</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: editar usuario (reutilizado, poblado por JS al hacer clic en el lápiz) -->
+<div class="modal fade" id="modalEditarUsuario" tabindex="-1" aria-labelledby="modalEditarUsuarioTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width:420px">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title d-flex align-items-center gap-2" id="modalEditarUsuarioTitle" style="font-size:16px;font-weight:700">
+                    <span class="modal-icon-title"><i class="bi bi-pencil-fill" aria-hidden="true"></i></span>
+                    Editar usuario
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
-            <div class="mb-2">
-                <label class="form-label">Contraseña temporal</label>
-                <input type="password" class="form-control" name="password" required>
+            <div class="modal-body d-flex flex-column gap-3">
+                <div>
+                    <label class="form-label-at">Correo electrónico</label>
+                    <input type="email" class="form-control-at" id="eu-email" disabled style="background:var(--slate-50)">
+                    <div style="font-size:11.5px;color:var(--at-sub);margin-top:4px">El cambio de correo no está disponible en esta versión.</div>
+                </div>
+                <div>
+                    <label class="form-label-at" for="eu-nombre">Nombre completo</label>
+                    <input type="text" id="eu-nombre" class="form-control-at" required>
+                </div>
             </div>
-            <div class="mb-2">
-                <label class="form-label">Tipo</label>
-                <select class="form-select" name="tipo_actor" required>
-                    <option value="agente">Agente</option>
-                    <option value="administrador">Administrador</option>
-                </select>
+            <div class="modal-footer">
+                <button type="button" class="btn-at-ghost" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn-at-primary" id="btn-guardar-edicion"><i class="bi bi-check2"></i>Guardar</button>
             </div>
-            <div class="mb-3">
-                <label class="form-label">Rol</label>
-                <select class="form-select" name="rol_id" required>
-                    {% for r in roles %}<option value="{{ r.id }}">{{ r.nombre }}</option>{% endfor %}
-                </select>
-            </div>
-            <button type="submit" class="btn btn-primary w-100">Crear</button>
-        </form>
+        </div>
     </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-// Edición inline: cada select/checkbox de la tabla dispara PUT al cambiar
-// (feedback inmediato, J11) sin recargar la página completa.
+function mostrarMensaje(ok, texto) {
+    const contenedor = document.getElementById('mensaje-accion');
+    contenedor.classList.remove('d-none');
+    contenedor.innerHTML = ok
+        ? `<div class="flash-success toast-autodismiss"><i class="bi bi-check-circle-fill"></i>${texto}</div>`
+        : `<div class="flash-error"><i class="bi bi-exclamation-triangle-fill"></i>${texto}</div>`;
+}
+
 document.querySelectorAll('[data-usuario]').forEach(function (el) {
     el.addEventListener('change', async function () {
         const usuarioId = el.dataset.usuario;
@@ -83,11 +182,57 @@ document.querySelectorAll('[data-usuario]').forEach(function (el) {
         const valor = el.type === 'checkbox' ? el.checked : el.value;
         const body = new URLSearchParams();
         body.append(campo, valor);
-        const resp = await fetch(`/admin/usuarios/${usuarioId}`, { method: 'PUT', body });
-        const fila = document.getElementById(`fila-${usuarioId}`);
-        const estado = fila.querySelector('td:last-child span');
-        estado.textContent = resp.ok ? 'guardado' : 'error';
-        estado.className = resp.ok ? 'text-success small' : 'text-danger small';
+        const resp = await fetch(`/admin/usuarios/${usuarioId}`, {
+            method: 'PUT', body, headers: { 'Accept': 'application/json' },
+        });
+        const estado = document.getElementById(`fila-${usuarioId}`).querySelector('.fila-estado');
+        estado.textContent = resp.ok ? 'Guardado' : 'Error';
+        estado.style.color = resp.ok ? 'var(--at-success)' : 'var(--at-danger)';
+        estado.classList.remove('toast-autodismiss');
+        void estado.offsetWidth;
+        estado.classList.add('toast-autodismiss');
+    });
+});
+
+// Editar nombre (modal reutilizado)
+const modalEditar = new bootstrap.Modal(document.getElementById('modalEditarUsuario'));
+let editarUsuarioId = null;
+document.querySelectorAll('.btn-editar-usuario').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+        editarUsuarioId = btn.dataset.id;
+        document.getElementById('eu-email').value = btn.dataset.email;
+        document.getElementById('eu-nombre').value = btn.dataset.nombre;
+        modalEditar.show();
+    });
+});
+document.getElementById('btn-guardar-edicion').addEventListener('click', async function () {
+    const nuevoNombre = document.getElementById('eu-nombre').value.trim();
+    if (!nuevoNombre) return;
+    const body = new URLSearchParams();
+    body.append('nombre_completo', nuevoNombre);
+    const resp = await fetch(`/admin/usuarios/${editarUsuarioId}`, {
+        method: 'PUT', body, headers: { 'Accept': 'application/json' },
+    });
+    modalEditar.hide();
+    if (resp.ok) {
+        const fila = document.getElementById(`fila-${editarUsuarioId}`);
+        fila.querySelector('.nombre-usuario').textContent = nuevoNombre;
+        const btn = fila.querySelector('.btn-editar-usuario');
+        btn.dataset.nombre = nuevoNombre;
+        mostrarMensaje(true, 'Usuario actualizado.');
+    } else {
+        mostrarMensaje(false, 'No se pudo guardar el cambio.');
+    }
+});
+
+// Resetear contraseña
+document.querySelectorAll('.btn-resetear-password').forEach(function (btn) {
+    btn.addEventListener('click', async function () {
+        if (!confirm(`¿Enviar un enlace de restablecimiento de contraseña a ${btn.dataset.email}?`)) return;
+        const resp = await fetch(`/admin/usuarios/${btn.dataset.id}/resetear-password`, {
+            method: 'POST', headers: { 'Accept': 'application/json' },
+        });
+        mostrarMensaje(resp.ok, resp.ok ? 'Enlace de restablecimiento enviado.' : 'No se pudo enviar el enlace.');
     });
 });
 </script>

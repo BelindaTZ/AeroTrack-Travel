@@ -1,0 +1,9 @@
+# Dependencias adicionales solo para desarrollo local / suite de tests —
+# NO se instalan en la imagen Docker de app-travel (ver Dockerfile).
+# Necesarias porque app/vuelos/tests/test_catalogo_service.py importa
+# dags/catalogo_vuelos_tasks.py (que corre en el contenedor de Airflow,
+# con estas mismas libs vía _PIP_ADDITIONAL_REQUIREMENTS en docker-compose.yml)
+# para verificar sus invariantes contra datos reales, sin reescribirlo.
+-r requirements.txt
+requests
+pandas

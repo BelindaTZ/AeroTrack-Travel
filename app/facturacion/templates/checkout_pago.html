@@ -1,0 +1,51 @@
+{% extends "layout_portal.html" %}
+{% block title %}Pagar reserva — AeroTrack Travel{% endblock %}
+{% block content %}
+<a href="/reservas/{{ reserva.id }}" class="d-inline-flex align-items-center gap-1 mb-3" style="font-size:13px;color:var(--at-muted);text-decoration:none">
+    <i class="bi bi-arrow-left"></i>Volver a la reserva
+</a>
+<h1 class="h5 mb-3" style="font-family:var(--font-display)">Pagar reserva {{ reserva.codigo_reserva }}</h1>
+
+{% if error %}
+<div class="flash-bar" role="alert"><div class="flash-error"><i class="bi bi-exclamation-triangle-fill"></i>Pago rechazado: {{ error }}</div></div>
+{% endif %}
+
+<div class="row g-4">
+    <div class="col-12 col-lg-7">
+        <div class="at-card">
+            <h2 style="font-size:14.5px;margin-bottom:10px">Método de pago</h2>
+            <form method="post" action="/reservas/{{ reserva.id }}/pagar">
+                <div class="alert" style="background:var(--at-running-bg);border:1px solid var(--navy-100);font-size:12.5px;color:var(--at-primary)">
+                    <i class="bi bi-info-circle me-1"></i>
+                    Stripe test mode — sin Stripe Elements en esta versión, elige un escenario de prueba
+                    (la llamada a Stripe es real, ninguna tarjeta se captura ni se almacena).
+                </div>
+                <div class="mb-3">
+                    <label class="d-flex align-items-center gap-2 py-2" style="cursor:pointer">
+                        <input type="radio" name="escenario" value="exitoso" checked>
+                        <span><strong>Pago exitoso</strong> — tarjeta de prueba aprobada por Stripe</span>
+                    </label>
+                    <label class="d-flex align-items-center gap-2 py-2" style="cursor:pointer">
+                        <input type="radio" name="escenario" value="rechazado">
+                        <span><strong>Pago rechazado</strong> — tarjeta de prueba declinada por Stripe</span>
+                    </label>
+                </div>
+                <button type="submit" class="btn-at-accent w-100 justify-content-center" style="padding:12px">
+                    <i class="bi bi-lock-fill"></i>Pagar ${{ "%.2f"|format(reserva.total_pagar) }}
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-5">
+        <div class="at-card">
+            <h2 style="font-size:14.5px;margin-bottom:10px">Resumen</h2>
+            <div class="d-flex justify-content-between mt-2 pt-2" style="font-weight:700">
+                <span>Total a pagar</span>
+                <span class="at-mono" style="color:var(--at-primary)">${{ "%.2f"|format(reserva.total_pagar) }}</span>
+            </div>
+            <div style="font-size:11.5px;color:var(--at-sub);margin-top:4px">Incluye tarifa y extras seleccionados.</div>
+        </div>
+    </div>
+</div>
+{% endblock %}

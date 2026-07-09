@@ -50,3 +50,41 @@ async def test_usuario_desactivado_no_puede_iniciar_sesion(admin_client, client,
         "/login", data={"email": usuario["email"], "password": usuario["_password"]}
     )
     assert resp.status_code == 403
+
+
+async def test_editar_usuario_interno_cambia_nombre(admin_client, pb, rol_agente, usuario_factory):
+    usuario = await usuario_factory(tipo_actor="agente", rol_id=rol_agente["id"])
+
+    resp = await admin_client.put(
+        f"/admin/usuarios/{usuario['id']}",
+        data={"nombre_completo": "Nombre Editado Por Admin"},
+        headers={"Accept": "application/json"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["nombre_completo"] == "Nombre Editado Por Admin"
+
+    actualizado = await pb.get_record("usuarios", usuario["id"])
+    assert actualizado["nombre_completo"] == "Nombre Editado Por Admin"
+
+
+# ── Reseteo de contraseña iniciado por Administrador ─────────────────────
+
+async def test_admin_resetea_password_genera_token_y_audita(admin_client, pb, rol_agente, usuario_factory):
+    usuario = await usuario_factory(tipo_actor="agente", rol_id=rol_agente["id"])
+
+    resp = await admin_client.post(
+        f"/admin/usuarios/{usuario['id']}/resetear-password",
+        headers={"Accept": "application/json"},
+    )
+    assert resp.status_code == 200
+
+    actualizado = await pb.get_record("usuarios", usuario["id"])
+    assert actualizado["reset_token_hash"]
+    assert actualizado["reset_token_expira"]
+
+    registro = await pb.get_first(
+        "auditoria", f'accion="resetear_password" && registro_id="{usuario["id"]}"'
+    )
+    assert registro is not None
+    assert registro["detalle"]["iniciado_por_admin"] is True
+    await pb.delete_record("auditoria", registro["id"])

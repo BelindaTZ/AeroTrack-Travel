@@ -1,0 +1,80 @@
+{% extends "layout_portal.html" %}
+{% block title %}Confirmar reserva — AeroTrack Travel{% endblock %}
+{% block content %}
+<a href="/vuelos/{{ vuelo.id }}" class="d-inline-flex align-items-center gap-1 mb-3" style="font-size:13px;color:var(--at-muted);text-decoration:none">
+    <i class="bi bi-arrow-left"></i>Volver al vuelo
+</a>
+<h1 class="h5 mb-3" style="font-family:var(--font-display)">Confirmar reserva</h1>
+
+{% if error %}
+<div class="flash-bar" role="alert"><div class="flash-error"><i class="bi bi-exclamation-triangle-fill"></i>{{ error }}</div></div>
+{% endif %}
+
+<div class="row g-4">
+    <div class="col-12 col-lg-7">
+        <div class="at-card mb-3">
+            <div class="type-chip mb-2">{{ aerolinea.nombre }}</div>
+            <div style="font-weight:600">{{ origen_legible }} → {{ destino_legible }}</div>
+            <div style="font-size:13px;color:var(--at-muted)">
+                Vuelo {{ vuelo.numero_vuelo }} · {{ vuelo.fecha_salida[:10] }} · {{ vuelo.hora_salida_programada }}
+                · Tarifa {{ nivel.nombre }}
+            </div>
+        </div>
+
+        <form method="post" action="/reservas" id="form-checkout">
+            <input type="hidden" name="tarifa_id" value="{{ tarifa.id }}">
+            <input type="hidden" name="precio_esperado" value="{{ tarifa.precio_final }}">
+            <div class="at-card">
+                <h2 style="font-size:14.5px;margin-bottom:10px">Extras opcionales</h2>
+                {% for e in extras_disponibles %}
+                <label class="d-flex align-items-center justify-content-between py-2" style="border-bottom:1px solid var(--slate-100);cursor:pointer">
+                    <span class="d-flex align-items-center gap-2">
+                        <input type="checkbox" class="perm-toggle" name="extras" value="{{ e.tipo }}" data-precio="{{ e.precio }}">
+                        {{ e.descripcion }}
+                    </span>
+                    <span class="at-mono">${{ "%.2f"|format(e.precio) }}</span>
+                </label>
+                {% endfor %}
+            </div>
+            <button type="submit" class="btn-at-accent w-100 justify-content-center mt-3" style="padding:12px">
+                <i class="bi bi-check2-circle"></i>Confirmar reserva
+            </button>
+        </form>
+    </div>
+
+    <div class="col-12 col-lg-5">
+        <div class="at-card">
+            <h2 style="font-size:14.5px;margin-bottom:10px">Resumen de precio</h2>
+            <div class="d-flex justify-content-between mb-1" style="font-size:13.5px">
+                <span>Tarifa {{ nivel.nombre }}</span>
+                <span class="at-mono">${{ "%.2f"|format(tarifa.precio_final) }}</span>
+            </div>
+            <div id="resumen-extras"></div>
+            <div class="d-flex justify-content-between mt-2 pt-2" style="border-top:1px solid var(--at-border);font-weight:700">
+                <span>Total</span>
+                <span class="at-mono" id="resumen-total" style="color:var(--at-primary)">${{ "%.2f"|format(tarifa.precio_final) }}</span>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const precioBase = {{ tarifa.precio_final }};
+function actualizarResumen() {
+    let total = precioBase;
+    const filas = [];
+    document.querySelectorAll('input[name="extras"]:checked').forEach(function (el) {
+        const precio = parseFloat(el.dataset.precio);
+        total += precio;
+        filas.push(`<div class="d-flex justify-content-between mb-1" style="font-size:13.5px"><span>${el.parentElement.textContent.trim()}</span><span class="at-mono">$${precio.toFixed(2)}</span></div>`);
+    });
+    document.getElementById('resumen-extras').innerHTML = filas.join('');
+    document.getElementById('resumen-total').textContent = '$' + total.toFixed(2);
+}
+document.querySelectorAll('input[name="extras"]').forEach(function (el) {
+    el.addEventListener('change', actualizarResumen);
+});
+</script>
+{% endblock %}

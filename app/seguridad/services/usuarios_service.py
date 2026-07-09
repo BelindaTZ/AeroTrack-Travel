@@ -3,6 +3,7 @@
 from datetime import date
 
 from app.seguridad.repositories.seguridad_repo import SeguridadRepository
+from app.seguridad.services.password_service import PasswordService
 from app.shared.pocketbase_client import PocketBaseError, get_pocketbase_client
 
 
@@ -115,6 +116,13 @@ class UsuariosService:
         if activo is not None:
             campos["activo"] = activo
         return await self._repo.update_usuario(usuario_id, campos)
+
+    async def resetear_password(self, usuario_id: str) -> str:
+        """Genera un enlace de recuperación de un solo uso para un usuario
+        interno, iniciado por un Administrador (p. ej. cuenta bloqueada sin
+        acceso a autoservicio). Reutiliza el mismo mecanismo de token que
+        RF-SEG-004 — nunca fija una contraseña en texto plano directamente."""
+        return await PasswordService(self._repo).generar_token_recuperacion(usuario_id)
 
     async def listar_usuarios_internos(self) -> list[dict]:
         result = await self._repo.list_usuarios(

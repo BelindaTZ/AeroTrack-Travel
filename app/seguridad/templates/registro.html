@@ -1,70 +1,70 @@
-{% extends "base.html" %}
+{% extends "layout_publico.html" %}
 {% block title %}Crear cuenta — AeroTrack Travel{% endblock %}
+{% block portal_card_class %}portal-card-wide{% endblock %}
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-12 col-md-8 col-lg-6">
-        <h1 class="h4 mb-4">Crear cuenta de pasajero</h1>
+<div class="login-form-icon"><i class="bi bi-person-plus-fill" aria-hidden="true"></i></div>
+<h2 class="login-form-title">Crear cuenta de pasajero</h2>
+<p class="login-form-sub">Solo lo necesario para reservar — nada de verificación documental.</p>
 
-        {% if error %}
-        <div class="alert alert-danger" role="alert">{{ error }}</div>
-        {% endif %}
-
-        <form method="post" action="/registro" novalidate>
-            <div class="row g-3">
-                <div class="col-12">
-                    <label for="nombre_completo" class="form-label">Nombre completo *</label>
-                    <input type="text" class="form-control" id="nombre_completo" name="nombre_completo"
-                           value="{{ nombre_completo or '' }}" required autofocus>
-                </div>
-                <div class="col-md-6">
-                    <label for="email" class="form-label">Correo electrónico *</label>
-                    <input type="email" class="form-control" id="email" name="email"
-                           value="{{ email or '' }}" required>
-                </div>
-                <div class="col-md-6">
-                    <label for="telefono" class="form-label">Teléfono *</label>
-                    <input type="tel" class="form-control" id="telefono" name="telefono"
-                           value="{{ telefono or '' }}" required>
-                </div>
-                <div class="col-md-6">
-                    <label for="fecha_nacimiento" class="form-label">Fecha de nacimiento *</label>
-                    <input type="date" class="form-control" id="fecha_nacimiento" name="fecha_nacimiento" required>
-                </div>
-                <div class="col-md-6">
-                    <label for="genero" class="form-label">Género</label>
-                    <select class="form-select" id="genero" name="genero">
-                        <option value="">Prefiero no decir</option>
-                        <option value="M">Masculino</option>
-                        <option value="F">Femenino</option>
-                        <option value="prefiero_no_decir">Prefiero no decir (explícito)</option>
-                    </select>
-                </div>
-                <div class="col-md-6">
-                    <label for="numero_documento" class="form-label">Número de documento</label>
-                    <input type="text" class="form-control" id="numero_documento" name="numero_documento">
-                    <div class="form-text">Solo se declara como texto; no se solicita ninguna imagen.</div>
-                </div>
-                <div class="col-md-6">
-                    <label for="contacto_emergencia" class="form-label">Contacto de emergencia</label>
-                    <input type="text" class="form-control" id="contacto_emergencia" name="contacto_emergencia">
-                </div>
-                <div class="col-12">
-                    <label for="direccion_facturacion" class="form-label">Dirección de facturación</label>
-                    <input type="text" class="form-control" id="direccion_facturacion" name="direccion_facturacion">
-                </div>
-                <div class="col-md-6">
-                    <label for="password" class="form-label">Contraseña *</label>
-                    <input type="password" class="form-control" id="password" name="password" required>
-                </div>
-                <div class="col-md-6">
-                    <label for="confirmacion" class="form-label">Confirmar contraseña *</label>
-                    <input type="password" class="form-control" id="confirmacion" name="confirmacion" required>
-                </div>
-            </div>
-            <button type="submit" class="btn btn-primary w-100 mt-4">Crear cuenta</button>
-        </form>
-
-        <a href="/login" class="d-inline-block mt-3">Ya tengo cuenta</a>
-    </div>
+{% if error %}
+<div class="flash-bar" role="alert">
+    <div class="flash-error"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i>{{ error }}</div>
 </div>
+{% endif %}
+
+<form method="post" action="/registro" novalidate>
+    <div class="row g-3">
+        <div class="col-12">
+            <label for="nombre_completo" class="form-label-at">Nombre completo *</label>
+            <input type="text" class="form-control-at" id="nombre_completo" name="nombre_completo"
+                   value="{{ nombre_completo or '' }}" required autofocus>
+        </div>
+        <div class="col-md-6">
+            <label for="email" class="form-label-at">Correo electrónico *</label>
+            <input type="email" class="form-control-at" id="email" name="email" value="{{ email or '' }}" required>
+        </div>
+        <div class="col-md-6">
+            <label for="telefono" class="form-label-at">Teléfono *</label>
+            <input type="tel" class="form-control-at" id="telefono" name="telefono" value="{{ telefono or '' }}" required>
+        </div>
+        <div class="col-md-6">
+            <label for="fecha_nacimiento" class="form-label-at">Fecha de nacimiento *</label>
+            <input type="date" class="form-control-at" id="fecha_nacimiento" name="fecha_nacimiento" required>
+        </div>
+        <div class="col-md-6">
+            <label for="genero" class="form-label-at">Género</label>
+            <select class="form-control-at" id="genero" name="genero">
+                <option value="">Prefiero no decir</option>
+                <option value="M">Masculino</option>
+                <option value="F">Femenino</option>
+                <option value="prefiero_no_decir">Prefiero no decir (explícito)</option>
+            </select>
+        </div>
+        <div class="col-md-6">
+            <label for="numero_documento" class="form-label-at">Número de documento</label>
+            <input type="text" class="form-control-at" id="numero_documento" name="numero_documento">
+        </div>
+        <div class="col-md-6">
+            <label for="contacto_emergencia" class="form-label-at">Contacto de emergencia</label>
+            <input type="text" class="form-control-at" id="contacto_emergencia" name="contacto_emergencia">
+        </div>
+        <div class="col-12">
+            <label for="direccion_facturacion" class="form-label-at">Dirección de facturación</label>
+            <input type="text" class="form-control-at" id="direccion_facturacion" name="direccion_facturacion">
+        </div>
+        <div class="col-md-6">
+            <label for="password" class="form-label-at">Contraseña *</label>
+            <input type="password" class="form-control-at" id="password" name="password" required>
+        </div>
+        <div class="col-md-6">
+            <label for="confirmacion" class="form-label-at">Confirmar contraseña *</label>
+            <input type="password" class="form-control-at" id="confirmacion" name="confirmacion" required>
+        </div>
+    </div>
+    <button type="submit" class="btn-at-primary w-100 justify-content-center mt-4" style="padding:11px 16px">
+        Crear cuenta
+    </button>
+</form>
+
+<a href="/login" class="d-inline-block mt-4" style="font-size:13px;color:var(--at-muted)">Ya tengo cuenta</a>
 {% endblock %}

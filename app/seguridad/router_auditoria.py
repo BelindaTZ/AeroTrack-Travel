@@ -8,6 +8,7 @@ from fastapi.responses import Response
 
 from app.seguridad.repositories.seguridad_repo import SeguridadRepository
 from app.seguridad.services.rbac_service import requiere_permiso
+from app.shared.nav import nav_context
 from app.shared.templating import templates
 
 router = APIRouter(prefix="/admin/auditoria")
@@ -43,20 +44,18 @@ async def listar(
     repo = SeguridadRepository()
     filtro = _construir_filtro(usuario_id, accion, tabla, desde, hasta)
     resultado = await repo.list_auditoria(filtro=filtro, per_page=100)
-    return templates.TemplateResponse(
-        request,
-        "admin/auditoria.html",
-        {
-            "registros": resultado["items"],
-            "filtros": {
-                "usuario_id": usuario_id or "",
-                "accion": accion or "",
-                "tabla": tabla or "",
-                "desde": desde or "",
-                "hasta": hasta or "",
-            },
+    contexto = await nav_context(usuario)
+    contexto.update({
+        "registros": resultado["items"],
+        "filtros": {
+            "usuario_id": usuario_id or "",
+            "accion": accion or "",
+            "tabla": tabla or "",
+            "desde": desde or "",
+            "hasta": hasta or "",
         },
-    )
+    })
+    return templates.TemplateResponse(request, "admin/auditoria.html", contexto)
 
 
 @router.get("/exportar")

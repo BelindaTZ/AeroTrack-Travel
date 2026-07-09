@@ -1,0 +1,71 @@
+{% extends "layout_app.html" %}
+{% block title %}Comisiones — AeroTrack Travel{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <h1><span class="heading-icon"><i class="bi bi-percent"></i></span>Comisiones</h1>
+    <p>Comisión pactada por aerolínea sobre cada pago exitoso. Una comisión marcada como cobrada no puede revertirse.</p>
+</div>
+
+<div class="at-table-wrapper">
+    <div class="at-table-header">
+        <form method="get" action="/backoffice/comisiones" id="form-filtros" class="d-flex gap-2 align-items-center flex-wrap">
+            <select class="form-control-at" name="estado" style="width:190px">
+                <option value="">Todos los estados</option>
+                <option value="pendiente_cobro" {% if filtros.estado == "pendiente_cobro" %}selected{% endif %}>Pendiente de cobro</option>
+                <option value="cobrada" {% if filtros.estado == "cobrada" %}selected{% endif %}>Cobrada</option>
+            </select>
+            <select class="form-control-at" name="aerolinea_id" style="width:220px">
+                <option value="">Todas las aerolíneas</option>
+                {% for a in aerolineas %}
+                <option value="{{ a.id }}" {% if filtros.aerolinea_id == a.id %}selected{% endif %}>{{ a.nombre }}</option>
+                {% endfor %}
+            </select>
+        </form>
+    </div>
+
+    {% if comisiones %}
+    <div class="at-table-scroll">
+        <table class="at-table">
+            <thead><tr><th>Fecha</th><th>Aerolínea</th><th>Monto</th><th>Estado</th><th></th></tr></thead>
+            <tbody>
+                {% for c in comisiones %}
+                <tr>
+                    <td class="at-mono" style="font-size:12px">{{ c.created[:10] if c.created else "" }}</td>
+                    <td>{{ c.aerolinea_nombre }}</td>
+                    <td class="at-mono">${{ "%.2f"|format(c.monto) }}</td>
+                    <td>
+                        {% if c.estado == "cobrada" %}
+                        <span class="badge-sistema" style="background:var(--at-success-bg);color:var(--at-success-fg)">cobrada</span>
+                        {% else %}
+                        <span class="badge-sistema" style="background:var(--at-warning-bg);color:var(--at-warning-fg)">pendiente de cobro</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if c.estado != "cobrada" %}
+                        <form method="post" action="/backoffice/comisiones/{{ c.id }}/marcar-cobrada"
+                              onsubmit="return confirm('¿Marcar esta comisión como cobrada? No podrás revertirlo.');">
+                            <button type="submit" class="btn-at-ghost" style="font-size:12.5px"><i class="bi bi-check2"></i>Marcar cobrada</button>
+                        </form>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="at-empty">
+        <i class="bi bi-percent at-empty-icon" aria-hidden="true"></i>
+        <strong>Sin comisiones para el filtro actual</strong>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.querySelectorAll('#form-filtros select').forEach(function (el) {
+    el.addEventListener('change', function () { document.getElementById('form-filtros').requestSubmit(); });
+});
+</script>
+{% endblock %}

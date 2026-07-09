@@ -11,13 +11,14 @@ from app.seguridad.services.roles_service import (
     RolesService,
     RolProtegido,
 )
+from app.shared.nav import nav_context
 from app.shared.pocketbase_client import get_pocketbase_client
 from app.shared.templating import templates
 
 router = APIRouter(prefix="/admin/roles")
 
 
-async def _contexto_matriz(rol_id: str):
+async def _contexto_matriz(usuario: dict, rol_id: str):
     client = get_pocketbase_client()
     roles_service = RolesService(client=client)
     rol = await roles_service.obtener_rol(rol_id)
@@ -25,14 +26,16 @@ async def _contexto_matriz(rol_id: str):
     modulos = (await client.list_records("modulos", {"perPage": 200, "sort": "orden"}))["items"]
     permisos = (await client.list_records("permisos", {"perPage": 500}))["items"]
     modulo_tablas = (await client.list_records("modulo_tablas", {"perPage": 500}))["items"]
-    return {
+    contexto = await nav_context(usuario)
+    contexto.update({
         "rol": rol,
         "modulos": modulos,
         "permisos": permisos,
         "modulo_tablas": modulo_tablas,
         "permiso_ids_actuales": matriz["permiso_ids"],
         "tablas_actuales": matriz["tablas"],
-    }
+    })
+    return contexto
 
 
 @router.get("")
@@ -40,7 +43,9 @@ async def listar(
     request: Request, usuario: dict = Depends(requiere_permiso("seguridad", "ver", "roles"))
 ):
     roles = await RolesService().listar_roles()
-    return templates.TemplateResponse(request, "admin/roles.html", {"roles": roles})
+    contexto = await nav_context(usuario)
+    contexto["roles"] = roles
+    return templates.TemplateResponse(request, "admin/roles.html", contexto)
 
 
 @router.post("")
@@ -53,9 +58,9 @@ async def crear(
     creado = await RolesService().crear_rol(nombre, descripcion)
     await AuditService().insertar("crear", "roles", usuario_id=usuario["id"], registro_id=creado["id"])
     roles = await RolesService().listar_roles()
-    return templates.TemplateResponse(
-        request, "admin/roles.html", {"roles": roles, "mensaje": "Rol creado"}
-    )
+    contexto = await nav_context(usuario)
+    contexto.update({"roles": roles, "mensaje": "Rol creado"})
+    return templates.TemplateResponse(request, "admin/roles.html", contexto)
 
 
 @router.get("/{rol_id}/editar")
@@ -64,7 +69,9 @@ async def editar_form(
     rol_id: str,
     usuario: dict = Depends(requiere_permiso("seguridad", "editar", "roles")),
 ):
-    return templates.TemplateResponse(request, "admin/rol_editar.html", await _contexto_matriz(rol_id))
+    return templates.TemplateResponse(
+        request, "admin/rol_editar.html", await _contexto_matriz(usuario, rol_id)
+    )
 
 
 @router.put("/{rol_id}")

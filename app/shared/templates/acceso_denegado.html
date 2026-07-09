@@ -1,0 +1,14 @@
+{% extends "layout_app.html" %}
+{% block title %}Sin permiso — AeroTrack Travel{% endblock %}
+{% block content %}
+<div class="d-flex flex-column align-items-center text-center" style="padding:64px 24px">
+    <i class="bi bi-shield-x" style="font-size:3rem;color:var(--at-danger)" aria-hidden="true"></i>
+    <h1 style="font-size:19px;margin-top:14px">No tienes permiso para esta sección</h1>
+    <p style="color:var(--at-muted);max-width:480px;font-size:13.5px">
+        Tu rol actual no tiene autorización sobre
+        <strong>{{ modulo }}{% if tabla %}.{{ tabla }}{% endif %}</strong>.
+        Si crees que deberías tener acceso, contacta a un Administrador.
+    </p>
+    <a href="/mi-perfil" class="btn-at-primary mt-2">Ir a mi perfil</a>
+</div>
+{% endblock %}

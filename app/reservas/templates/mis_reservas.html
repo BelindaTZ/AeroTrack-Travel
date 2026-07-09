@@ -1,0 +1,33 @@
+{% extends "layout_portal.html" %}
+{% block title %}Mis reservas — AeroTrack Travel{% endblock %}
+{% block content %}
+<h1 class="h5 mb-3" style="font-family:var(--font-display)">Mis reservas</h1>
+
+{% if reservas %}
+<div class="d-flex flex-column gap-2">
+    {% for r in reservas %}
+    <a href="/reservas/{{ r.id }}" class="at-card d-flex align-items-center justify-content-between text-decoration-none" style="color:var(--at-text)">
+        <div class="d-flex align-items-center gap-3">
+            <div class="type-chip">{{ r.aerolinea_nombre }}</div>
+            <div>
+                <div style="font-weight:600">{{ r.origen_legible }} → {{ r.destino_legible }}</div>
+                <div style="font-size:12.5px;color:var(--at-muted)">
+                    {{ r.codigo_reserva }} · {{ r.fecha_salida }} · {{ r.nivel_tarifa }}
+                </div>
+            </div>
+        </div>
+        <div class="text-end">
+            <span class="badge-sistema">{{ r.estado.replace('_', ' ') }}</span>
+            <div class="at-mono" style="font-size:15px;font-weight:700;color:var(--at-primary)">${{ "%.2f"|format(r.total_pagar) }}</div>
+        </div>
+    </a>
+    {% endfor %}
+</div>
+{% else %}
+<div class="at-empty">
+    <i class="bi bi-ticket-perforated at-empty-icon" aria-hidden="true"></i>
+    <strong>Todavía no tienes reservas</strong>
+    <p><a href="/vuelos/buscar">Buscar vuelos</a></p>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,66 +1,65 @@
-{% extends "base.html" %}
+{% extends "layout_app.html" %}
 {% block title %}Mi perfil — AeroTrack Travel{% endblock %}
 {% block content %}
-<h1 class="h4 mb-4">Mi perfil</h1>
+<div class="page-heading">
+    <h1><span class="heading-icon"><i class="bi bi-person-circle"></i></span>Mi perfil</h1>
+    <p>Cuenta: {{ usuario.tipo_actor }}{% if rol_nombre %} · Rol: {{ rol_nombre }}{% endif %}</p>
+</div>
 
-{% if mensaje %}
-<div class="alert alert-success toast-autodismiss" role="status">{{ mensaje }}</div>
-{% endif %}
-
-<div class="row g-4">
+<div class="row g-3">
     <div class="col-12 col-lg-6">
-        <h2 class="h6">Datos personales</h2>
-        <form method="post" action="/mi-perfil" novalidate>
-            <div class="mb-3">
-                <label class="form-label">Correo electrónico</label>
-                <input type="email" class="form-control" value="{{ usuario.email }}" disabled>
-                <div class="form-text">El cambio de correo no está disponible en esta versión.</div>
-            </div>
-            <div class="mb-3">
-                <label for="nombre_completo" class="form-label">Nombre completo</label>
-                <input
-                    type="text" class="form-control" id="nombre_completo" name="nombre_completo"
-                    value="{{ usuario.nombre_completo }}" required
-                >
-            </div>
-            <button type="submit" class="btn btn-primary">Guardar cambios</button>
-        </form>
+        <div class="at-card">
+            <h2 style="font-size:14.5px;margin-bottom:14px">Datos personales</h2>
+            <form method="post" action="/mi-perfil" novalidate>
+                <div class="mb-3">
+                    <label class="form-label-at">Correo electrónico</label>
+                    <input type="email" class="form-control-at" value="{{ usuario.email }}" disabled style="background:var(--slate-50)">
+                    <div style="font-size:11.5px;color:var(--at-sub);margin-top:4px">El cambio de correo no está disponible en esta versión.</div>
+                </div>
+                <div class="mb-3">
+                    <label for="nombre_completo" class="form-label-at">Nombre completo</label>
+                    <input type="text" class="form-control-at" id="nombre_completo" name="nombre_completo"
+                           value="{{ usuario.nombre_completo }}" required>
+                </div>
+                <button type="submit" class="btn-at-primary">Guardar cambios</button>
+            </form>
+        </div>
     </div>
 
     <div class="col-12 col-lg-6">
-        <h2 class="h6">Cambiar contraseña</h2>
-        {% if error_password %}
-        <div class="alert alert-danger" role="alert">{{ error_password }}</div>
-        {% endif %}
-        <form method="post" action="/mi-perfil/cambiar-password" novalidate>
-            <div class="mb-3">
-                <label for="password_actual" class="form-label">Contraseña actual</label>
-                <input type="password" class="form-control" id="password_actual" name="password_actual" required>
-            </div>
-            <div class="mb-3">
-                <label for="password_nueva" class="form-label">Contraseña nueva</label>
-                <input type="password" class="form-control" id="password_nueva" name="password_nueva" required>
-            </div>
-            <div class="mb-3">
-                <label for="confirmacion" class="form-label">Confirmar contraseña nueva</label>
-                <input type="password" class="form-control" id="confirmacion" name="confirmacion" required>
-            </div>
-            <button type="submit" class="btn btn-primary">Cambiar contraseña</button>
-        </form>
+        <div class="at-card">
+            <h2 style="font-size:14.5px;margin-bottom:14px">Cambiar contraseña</h2>
+            {% if error_password %}
+            <div class="flash-bar" role="alert"><div class="flash-error"><i class="bi bi-exclamation-triangle-fill"></i>{{ error_password }}</div></div>
+            {% endif %}
+            <form method="post" action="/mi-perfil/cambiar-password" novalidate>
+                <div class="mb-3">
+                    <label for="password_actual" class="form-label-at">Contraseña actual</label>
+                    <input type="password" class="form-control-at" id="password_actual" name="password_actual" required>
+                </div>
+                <div class="mb-3">
+                    <label for="password_nueva" class="form-label-at">Contraseña nueva</label>
+                    <input type="password" class="form-control-at" id="password_nueva" name="password_nueva" required>
+                </div>
+                <div class="mb-3">
+                    <label for="confirmacion" class="form-label-at">Confirmar contraseña nueva</label>
+                    <input type="password" class="form-control-at" id="confirmacion" name="confirmacion" required>
+                </div>
+                <button type="submit" class="btn-at-primary">Cambiar contraseña</button>
+            </form>
+        </div>
     </div>
 </div>
 
-<hr class="my-4">
-
-<div>
-    <h2 class="h6 text-danger">Eliminar mis datos</h2>
-    <p class="text-muted">
-        Puedes solicitar la eliminación de tus datos personales. Si tienes reservas o pagos en
-        curso, esos datos se retienen hasta que se resuelvan (política de retención).
+<div class="danger-zone mt-3">
+    <h2 style="font-size:14.5px;color:var(--at-danger);margin-bottom:8px">Eliminar mis datos</h2>
+    <p style="font-size:13px;color:var(--at-muted);margin-bottom:14px">
+        Puedes solicitar la eliminación de tus datos personales. Si tienes reservas o pagos en curso,
+        esos datos se retienen hasta que se resuelvan (política de retención).
     </p>
     <form method="post" action="/mi-perfil/solicitar-eliminacion"
           onsubmit="return confirm('¿Confirmas que quieres solicitar la eliminación de tus datos?');">
-        <button type="submit" class="btn btn-outline-danger">Solicitar eliminación de mis datos</button>
+        <button type="submit" class="btn-at-danger"><i class="bi bi-trash"></i>Solicitar eliminación de mis datos</button>
     </form>
 </div>
 {% endblock %}

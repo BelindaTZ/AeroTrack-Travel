@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block body %}
+<div class="login-split">
+    <div class="login-dark-panel">
+        <a href="/" class="login-brand text-decoration-none text-white">
+            <img src="/static/assets/images/LogoAeroTrackTravel.png" alt="">
+            <div>
+                <div class="name">AeroTrack</div>
+                <div class="suite">Travel</div>
+            </div>
+        </a>
+
+        <div>
+            <h1 class="login-headline">Reserva vuelos.<br><span class="accent">Sin fricción.</span></h1>
+            <p class="login-tagline">
+                Busca, compara y gestiona tus reservas de vuelo con transparencia total de precio,
+                desde una sola cuenta.
+            </p>
+            <div class="login-pills">
+                <div class="login-pill"><i class="bi bi-shield-check"></i> Acceso auditado</div>
+                <div class="login-pill"><i class="bi bi-cash-coin"></i> Precio transparente</div>
+                <div class="login-pill"><i class="bi bi-bell"></i> Alertas de vuelo</div>
+            </div>
+        </div>
+
+        <div class="login-foot">© 2026 AeroTrack Travel</div>
+    </div>
+
+    <div class="login-light-panel">
+        <div class="login-form-card {% block portal_card_class %}{% endblock %}">
+            {% if request.query_params.get('mensaje') %}
+            <div class="flash-bar" role="status">
+                <div class="flash-success toast-autodismiss"><i class="bi bi-check-circle-fill" aria-hidden="true"></i>{{ request.query_params.get('mensaje') }}</div>
+            </div>
+            {% endif %}
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+</div>
+{% endblock %}

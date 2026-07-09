@@ -1,56 +1,54 @@
-{% extends "base.html" %}
+{% extends "layout_app.html" %}
 {% block title %}Auditoría — AeroTrack Travel{% endblock %}
 {% block content %}
-<h1 class="h4 mb-4">Log de auditoría</h1>
+<div class="page-heading">
+    <h1><span class="heading-icon"><i class="bi bi-journal-text"></i></span>Log de auditoría</h1>
+    <p>Registro inmutable de toda mutación del sistema — solo lectura.</p>
+</div>
 
-{# REG-J6: ninguna acción de edición/eliminación en esta vista — su ausencia
-   es la señal de que el registro es de solo inserción. #}
-<form method="get" action="/admin/auditoria" id="form-filtros" class="row g-2 mb-3">
-    <div class="col-auto">
-        <input type="text" class="form-control form-control-sm" name="accion" placeholder="Acción"
-               value="{{ filtros.accion }}">
+<div class="at-table-wrapper">
+    <div class="at-table-header">
+        <form method="get" action="/admin/auditoria" id="form-filtros" class="d-flex gap-2 align-items-center flex-wrap">
+            <div class="at-search-wrap">
+                <i class="bi bi-search"></i>
+                <input type="text" class="at-search" name="accion" placeholder="Acción (login, crear...)" value="{{ filtros.accion }}">
+            </div>
+            <input type="text" class="form-control-at" style="width:150px" name="tabla" placeholder="Tabla" value="{{ filtros.tabla }}">
+            <input type="datetime-local" class="form-control-at" style="width:180px" name="desde" value="{{ filtros.desde }}">
+            <input type="datetime-local" class="form-control-at" style="width:180px" name="hasta" value="{{ filtros.hasta }}">
+        </form>
+        <a class="btn-at-ghost" id="link-exportar" href="#"><i class="bi bi-download"></i>Exportar CSV</a>
     </div>
-    <div class="col-auto">
-        <input type="text" class="form-control form-control-sm" name="tabla" placeholder="Tabla"
-               value="{{ filtros.tabla }}">
-    </div>
-    <div class="col-auto">
-        <input type="datetime-local" class="form-control form-control-sm" name="desde" value="{{ filtros.desde }}">
-    </div>
-    <div class="col-auto">
-        <input type="datetime-local" class="form-control form-control-sm" name="hasta" value="{{ filtros.hasta }}">
-    </div>
-    <div class="col-auto">
-        <a class="btn btn-sm btn-outline-secondary" id="link-exportar" href="#">Exportar CSV</a>
-    </div>
-</form>
 
-<div class="table-responsive">
-    <table class="table table-sm">
-        <thead>
-            <tr><th>Fecha</th><th>Usuario</th><th>Acción</th><th>Tabla</th><th>Registro</th><th>IP</th></tr>
-        </thead>
-        <tbody>
-            {% for r in registros %}
-            <tr>
-                <td class="text-nowrap font-monospace">{{ r.created }}</td>
-                <td>{{ r.usuario_id or "sistema" }}</td>
-                <td>{{ r.accion }}</td>
-                <td>{{ r.tabla }}</td>
-                <td class="font-monospace">{{ r.registro_id or "" }}</td>
-                <td>{{ r.ip or "" }}</td>
-            </tr>
-            {% else %}
-            <tr><td colspan="6" class="text-muted">Sin registros para el filtro actual.</td></tr>
-            {% endfor %}
-        </tbody>
-    </table>
+    {% if registros %}
+    <div class="at-table-scroll">
+        <table class="at-table">
+            <thead><tr><th>Fecha</th><th>Usuario</th><th>Acción</th><th>Tabla</th><th>Registro</th><th>IP</th></tr></thead>
+            <tbody>
+                {% for r in registros %}
+                <tr>
+                    <td class="at-mono" style="white-space:nowrap;font-size:12.5px">{{ r.created }}</td>
+                    <td style="font-size:12.5px">{{ r.usuario_id or "sistema" }}</td>
+                    <td>{{ r.accion }}</td>
+                    <td>{{ r.tabla }}</td>
+                    <td class="at-mono" style="font-size:12.5px">{{ r.registro_id or "" }}</td>
+                    <td style="font-size:12.5px">{{ r.ip or "" }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="at-empty">
+        <i class="bi bi-journal-x at-empty-icon" aria-hidden="true"></i>
+        <strong>Sin registros para el filtro actual</strong>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-// REG-J9: cada filtro se aplica solo al cambiar, sin botón "Aplicar".
 document.querySelectorAll('#form-filtros input').forEach(function (el) {
     el.addEventListener('change', function () { document.getElementById('form-filtros').requestSubmit(); });
 });

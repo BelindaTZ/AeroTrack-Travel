@@ -1,0 +1,67 @@
+{% extends "layout_portal.html" %}
+{% block title %}Detalle de vuelo — AeroTrack Travel{% endblock %}
+{% block content %}
+{% if vuelo is none %}
+<div class="at-empty">
+    <i class="bi bi-airplane at-empty-icon" aria-hidden="true"></i>
+    <strong>Vuelo no encontrado</strong>
+    <p><a href="/vuelos/buscar">Volver a la búsqueda</a></p>
+</div>
+{% else %}
+<a href="/vuelos/buscar" class="d-inline-flex align-items-center gap-1 mb-3" style="font-size:13px;color:var(--at-muted);text-decoration:none">
+    <i class="bi bi-arrow-left"></i>Volver a resultados
+</a>
+
+<div class="at-card mb-4">
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <div>
+            <div class="type-chip mb-2">{{ aerolinea.nombre }}</div>
+            <h1 class="h5 mb-1" style="font-family:var(--font-display)">{{ origen_legible }} → {{ destino_legible }}</h1>
+            <div style="font-size:13px;color:var(--at-muted)">
+                Vuelo {{ vuelo.numero_vuelo }} · {{ vuelo.fecha_salida[:10] }} ·
+                {{ vuelo.hora_salida_programada }} – {{ vuelo.hora_llegada_programada }}
+                {% if vuelo.duracion_min %}· {{ (vuelo.duracion_min // 60) }}h {{ vuelo.duracion_min % 60 }}m{% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<h2 class="h6 mb-3">Niveles de tarifa</h2>
+<div class="row g-3">
+    {% for n in niveles %}
+    <div class="col-12 col-md-4">
+        <div class="at-card h-100 d-flex flex-column">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+                <strong style="font-size:15px">{{ n.nombre }}</strong>
+                {% if n.cupos_disponibles > 0 %}
+                <span class="badge-sistema" style="background:var(--at-success-bg);color:var(--at-success-fg)">{{ n.cupos_disponibles }} cupos</span>
+                {% else %}
+                <span class="badge-sistema" style="background:var(--at-failed-bg);color:var(--at-danger)">Agotado</span>
+                {% endif %}
+            </div>
+            {% if n.descripcion %}<p style="font-size:13px;color:var(--at-muted)">{{ n.descripcion }}</p>{% endif %}
+            <ul class="list-unstyled" style="font-size:13px;flex:1">
+                <li class="mb-1"><i class="bi bi-{{ 'check-circle text-success' if n.equipaje_incluido else 'x-circle text-muted' }} me-1"></i>Equipaje facturado {{ 'incluido' if n.equipaje_incluido else 'no incluido' }}</li>
+                <li class="mb-1"><i class="bi bi-{{ 'check-circle text-success' if n.cambios_permitidos else 'x-circle text-muted' }} me-1"></i>Cambios {{ 'permitidos' if n.cambios_permitidos else 'no permitidos' }}</li>
+                <li class="mb-1"><i class="bi bi-shield-check me-1"></i>{{ n.politica_nombre }}: {{ n.politica_condiciones }}</li>
+                {% if n.politica_porcentaje_reembolso > 0 %}
+                <li class="mb-1"><i class="bi bi-cash-coin me-1"></i>{{ n.politica_porcentaje_reembolso }}% de reembolso hasta {{ n.politica_ventana_horas }}h antes</li>
+                {% endif %}
+            </ul>
+            <div class="mt-2 pt-2" style="border-top:1px solid var(--at-border)">
+                <div class="at-mono" style="font-size:22px;font-weight:700;color:var(--at-primary)">${{ "%.2f"|format(n.precio_final) }}</div>
+                <div style="font-size:11px;color:var(--at-sub);margin-bottom:10px">precio final por pasajero</div>
+                {% if n.cupos_disponibles > 0 %}
+                <a href="/reservas/nueva?tarifa_id={{ n.id }}" class="btn-at-accent w-100 justify-content-center">
+                    <i class="bi bi-ticket-perforated"></i>Reservar
+                </a>
+                {% else %}
+                <button class="btn-at-ghost w-100 justify-content-center" disabled>Sin cupo</button>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

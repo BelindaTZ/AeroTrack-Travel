@@ -59,11 +59,16 @@ services:
       SECRET_KEY: ${SECRET_KEY}
       ALGORITHM: ${ALGORITHM:-HS256}
       TOKEN_EXPIRE_MINUTES: ${TOKEN_EXPIRE_MINUTES:-60}
+      MINIO_URL_DOCKER: ${MINIO_URL_DOCKER:-minio:9000}
+      MINIO_ACCESS: ${MINIO_ACCESS}
+      MINIO_SECRET: ${MINIO_SECRET}
+      MINIO_BUCKET_TRAVEL_DIMS: ${MINIO_BUCKET_TRAVEL_DIMS:-aerotrack-travel-dims}
     depends_on:
       pocketbase-travel:
         condition: service_healthy
     networks:
       - travel-network
+      - elt-network
     restart: unless-stopped
 
   # ── POSTGRES (metadatos del Airflow de Travel) — dedicado ──

@@ -14,6 +14,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 templates = Jinja2Templates(
     directory=[
         str(BASE_DIR / "app" / "seguridad" / "templates"),
+        str(BASE_DIR / "app" / "vuelos" / "templates"),
+        str(BASE_DIR / "app" / "reservas" / "templates"),
+        str(BASE_DIR / "app" / "facturacion" / "templates"),
         str(BASE_DIR / "app" / "shared" / "templates"),
     ]
 )
