@@ -11,7 +11,7 @@
 
 ## Resumen
 
-Implementar el módulo base de identidad, control de acceso (RBAC de dos niveles) y auditoría inmutable sobre PocketBase, del que dependen los 5 módulos operativos restantes. Cubre 16 RF/RNF y 11 RN sobre 16 CU (CU-O01–O13, O41–O43), organizados en 9 funcionalidades: autenticación, verificación de sesión, recuperación de contraseña, perfil propio, alta de pasajero, gestión de usuarios internos, gestión de roles, verificación RBAC, y auditoría.
+Implementar el módulo base de identidad, control de acceso (RBAC de dos niveles) y auditoría inmutable sobre PocketBase, del que dependen los demás módulos operativos. Cubre 16 RF/RNF y 11 RN sobre 18 CU (CU-O01–O13, O41–O43, O112, O113 — estos 2 últimos ya cubiertos por RF-SEG-011, sin RF propio), organizados en 9 funcionalidades: autenticación, verificación de sesión, recuperación de contraseña, perfil propio, alta de pasajero, gestión de usuarios internos, gestión de roles, verificación RBAC, y auditoría. **Pendiente v3, no implementado:** `usuarios.foto_perfil` (RF-SEG-006).
 
 ---
 

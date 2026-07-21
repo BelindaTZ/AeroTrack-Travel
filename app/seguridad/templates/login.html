@@ -1,33 +1,79 @@
 {% extends "layout_publico.html" %}
 {% block title %}Iniciar sesión — AeroTrack Travel{% endblock %}
 {% block content %}
-<div class="login-form-icon"><i class="bi bi-person-fill" aria-hidden="true"></i></div>
-<h2 class="login-form-title">Iniciar sesión</h2>
+
+<div class="login-form-icon">
+    <i class="bi bi-person-fill" aria-hidden="true"></i>
+</div>
+<h1 class="login-form-title">Bienvenido de vuelta</h1>
 <p class="login-form-sub">Ingresa tus credenciales para acceder a tu cuenta.</p>
 
 {% if error %}
 <div class="flash-bar" role="alert">
-    <div class="flash-error"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i>{{ error }}</div>
+    <div class="flash-error">
+        <i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i>{{ error }}
+    </div>
 </div>
 {% endif %}
 
 <form method="post" action="/login" novalidate>
     {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+
     <div class="mb-3">
         <label for="email" class="form-label-at">Correo electrónico</label>
-        <input type="email" class="form-control-at" id="email" name="email" required autocomplete="email" autofocus>
+        <input type="email" class="form-control-at" id="email" name="email"
+               required autocomplete="email" autofocus placeholder="tu@correo.com">
     </div>
     <div class="mb-3">
         <label for="password" class="form-label-at">Contraseña</label>
-        <input type="password" class="form-control-at" id="password" name="password" required autocomplete="current-password">
+        <div style="position:relative">
+            <input type="password" class="form-control-at" id="password" name="password"
+                   required autocomplete="current-password" placeholder="••••••••">
+            <button type="button" id="toggle-pwd"
+                    style="position:absolute;right:11px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--at-muted);padding:0;line-height:1"
+                    aria-label="Mostrar/ocultar contraseña">
+                <i class="bi bi-eye" id="pwd-icon" aria-hidden="true"></i>
+            </button>
+        </div>
     </div>
-    <button type="submit" class="btn-at-primary w-100 justify-content-center mt-2" style="padding:11px 16px">
+
+    <button type="submit" id="btn-login"
+            class="btn-at-primary w-100 justify-content-center mt-2"
+            style="padding:12px 16px;font-size:14.5px;font-weight:700;border-radius:var(--at-r-md)">
         Iniciar sesión <i class="bi bi-arrow-right" aria-hidden="true"></i>
     </button>
 </form>
 
 <div class="d-flex justify-content-between mt-4" style="font-size:13px">
-    <a href="/recuperar-password" style="color:var(--at-muted)">¿Olvidaste tu contraseña?</a>
-    <a href="/registro">Crear cuenta</a>
+    <a href="/recuperar-password" style="color:var(--at-muted)">
+        ¿Olvidaste tu contraseña?
+    </a>
+    <a href="/registro" style="font-weight:600">Crear cuenta</a>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+/* Toggle de contraseña */
+var btn  = document.getElementById('toggle-pwd');
+var inp  = document.getElementById('password');
+var icon = document.getElementById('pwd-icon');
+if (btn && inp) {
+    btn.addEventListener('click', function () {
+        var visible = inp.type === 'text';
+        inp.type = visible ? 'password' : 'text';
+        icon.className = visible ? 'bi bi-eye' : 'bi bi-eye-slash';
+        btn.setAttribute('aria-label', visible ? 'Mostrar contraseña' : 'Ocultar contraseña');
+    });
+}
+/* Loading en submit */
+var form = document.getElementById('btn-login');
+if (form) {
+    form.closest('form').addEventListener('submit', function () {
+        var b = document.getElementById('btn-login');
+        b.disabled = true;
+        b.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Ingresando…';
+    });
+}
+</script>
 {% endblock %}

@@ -1,81 +1,168 @@
 {% extends "layout_portal.html" %}
-{% block title %}Reserva — AeroTrack Travel{% endblock %}
+{% block title %}Reserva {{ reserva.codigo_reserva if reserva else '' }} — AeroTrack Travel{% endblock %}
+
 {% block content %}
 {% if reserva is none %}
-<div class="at-empty">
+<div class="at-empty" style="border:1px solid var(--at-border);border-radius:var(--at-r-lg);background:var(--at-surface)">
     <i class="bi bi-ticket-perforated at-empty-icon" aria-hidden="true"></i>
     <strong>Reserva no encontrada</strong>
-    <p><a href="/reservas">Ver mis reservas</a></p>
+    <p>Es posible que haya expirado o no exista.</p>
+    <a href="/mis-reservas" class="btn-at-ghost mt-2"><i class="bi bi-arrow-left"></i> Mis reservas</a>
 </div>
+
 {% else %}
-<a href="/reservas" class="d-inline-flex align-items-center gap-1 mb-3" style="font-size:13px;color:var(--at-muted);text-decoration:none">
+<a href="/mis-reservas" class="d-inline-flex align-items-center gap-2 mb-4"
+   style="font-size:13px;color:var(--at-muted);text-decoration:none;font-weight:500">
     <i class="bi bi-arrow-left"></i>Mis reservas
 </a>
 
-<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
-    <h1 class="h5 mb-0" style="font-family:var(--font-display)">Reserva {{ reserva.codigo_reserva }}</h1>
-    {% set estado_estilo = {
-        "pendiente_pago": ("at-warning-bg", "at-warning-fg"),
-        "confirmada": ("at-success-bg", "at-success-fg"),
-        "modificada": ("at-running-bg", "at-primary"),
-        "cancelada": ("at-failed-bg", "at-danger"),
-        "completada": ("slate-100", "at-muted"),
+<!-- Header de reserva -->
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-4">
+    <div>
+        <h1 style="font-size:22px;font-weight:800;letter-spacing:-.03em;margin-bottom:4px">
+            Reserva <span class="at-mono" style="color:var(--at-primary)">{{ reserva.codigo_reserva }}</span>
+        </h1>
+        <div style="font-size:13px;color:var(--at-muted)">
+            {% if reserva.es_multiproducto %}
+            {{ reserva.items | length }} producto(s)
+            {% else %}
+            {{ reserva.origen_legible }} → {{ reserva.destino_legible }} ·
+            <strong>{{ reserva.aerolinea_nombre }}</strong>
+            {% endif %}
+        </div>
+    </div>
+    {% set estado_map = {
+        "pendiente_pago": ("warning", "Pendiente de pago"),
+        "confirmada":     ("success", "Confirmada"),
+        "modificada":     ("running", "Modificada"),
+        "cancelada":      ("failed",  "Cancelada"),
+        "completada":     ("pending", "Completada"),
     } %}
-    {% set colores = estado_estilo.get(reserva.estado, ("slate-100", "at-muted")) %}
-    <span class="badge-sistema" style="background:var(--{{ colores[0] }});color:var(--{{ colores[1] }});font-size:12px">{{ reserva.estado.replace('_', ' ') }}</span>
+    {% set badge = estado_map.get(reserva.estado, ("pending", reserva.estado.replace("_"," "))) %}
+    <span class="badge-status {{ badge[0] }}" style="font-size:12.5px;padding:6px 14px">
+        {{ badge[1] }}
+    </span>
 </div>
 
+<!-- Alerta pendiente de pago -->
 {% if reserva.estado == "pendiente_pago" %}
 <div class="flash-bar">
-    <div class="flash-error" style="background:var(--at-warning-bg);border-color:var(--amber-100);color:var(--at-warning-fg)">
+    <div class="flash-error"
+         style="background:var(--at-warning-bg);border-color:var(--amber-100);color:var(--at-warning-fg)">
         <i class="bi bi-hourglass-split"></i>
-        Pago pendiente — vence {{ reserva.fecha_expiracion_pago[:16] if reserva.fecha_expiracion_pago else "" }}.
-        Si no se paga a tiempo, esta reserva se libera automáticamente.
+        <span>
+            <strong>Pago pendiente</strong> — vence
+            {{ reserva.fecha_expiracion_pago[:16] if reserva.fecha_expiracion_pago else "" }}.
+            Si no se paga a tiempo, esta reserva se libera automáticamente.
+        </span>
     </div>
 </div>
-<a href="/reservas/{{ reserva.id }}/pagar" class="btn-at-accent mb-3"><i class="bi bi-lock-fill"></i>Pagar ahora</a>
+<a href="/reservas/{{ reserva.id }}/pagar" class="btn-at-accent mb-4" style="padding:11px 20px;font-size:14px;font-weight:700">
+    <i class="bi bi-lock-fill" aria-hidden="true"></i>Pagar ahora
+</a>
 {% endif %}
 
+<!-- Contenido 2 columnas -->
 <div class="row g-4">
+    <!-- Izquierda: detalle vuelo (o ítems, si es multi-producto) + acciones -->
     <div class="col-12 col-lg-7">
-        <div class="at-card mb-3">
-            <div class="type-chip mb-2">{{ reserva.aerolinea_nombre }}</div>
-            <div style="font-weight:600">{{ reserva.origen_legible }} → {{ reserva.destino_legible }}</div>
-            <div style="font-size:13px;color:var(--at-muted)">
-                Vuelo {{ reserva.numero_vuelo }} · {{ reserva.fecha_salida }} · {{ reserva.hora_salida_programada }}
-                · Tarifa {{ reserva.nivel_tarifa }} · Canal: {{ reserva.canal }}
+        {% if reserva.es_multiproducto %}
+        <div class="at-card mb-4" style="border-left:4px solid var(--navy-600)">
+            <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--at-muted);font-weight:700;margin-bottom:10px">
+                Productos de esta reserva
+            </div>
+            <div class="d-flex flex-column gap-2">
+                {% for item in reserva.items %}
+                <div class="d-flex justify-content-between align-items-center" style="border-top:1px solid var(--at-border);padding-top:8px">
+                    <div>
+                        <div style="font-size:10px;text-transform:uppercase;color:var(--at-sub);font-weight:700">{{ item.tipo_producto }}</div>
+                        {% if item.href %}
+                        <a href="{{ item.href }}" style="font-size:13.5px;font-weight:600;color:var(--at-text);text-decoration:none">{{ item.titulo }}</a>
+                        {% else %}
+                        <span style="font-size:13.5px;font-weight:600">{{ item.titulo }}</span>
+                        {% endif %}
+                        {% if item.cantidad and item.cantidad > 1 %}
+                        <span style="font-size:11.5px;color:var(--at-muted)"> · x{{ item.cantidad | int }}</span>
+                        {% endif %}
+                    </div>
+                    <span class="at-mono" style="font-size:13.5px">${{ "%.2f"|format(item.precio_final) }}</span>
+                </div>
+                {% endfor %}
+            </div>
+            <div style="font-size:12px;color:var(--at-muted);margin-top:10px;text-transform:capitalize">Canal: {{ reserva.canal }}</div>
+        </div>
+        {% else %}
+        <div class="at-card mb-4" style="border-left:4px solid var(--navy-600)">
+            <div class="flight-airline-chip mb-3">
+                <i class="bi bi-airplane" aria-hidden="true"></i>
+                {{ reserva.aerolinea_nombre }}
+            </div>
+            <div class="flight-route mb-1">
+                {{ reserva.origen_legible }}<span class="arrow">→</span>{{ reserva.destino_legible }}
+            </div>
+            <div class="flight-meta">
+                <span>Vuelo {{ reserva.numero_vuelo }}</span>
+                <span class="sep">·</span>
+                <span>{{ reserva.fecha_salida }}</span>
+                <span class="sep">·</span>
+                <span>{{ reserva.hora_salida_programada }}</span>
+                <span class="sep">·</span>
+                <span class="flight-duration-badge">Tarifa {{ reserva.nivel_tarifa }}</span>
+                <span class="sep">·</span>
+                <span style="text-transform:capitalize">Canal: {{ reserva.canal }}</span>
             </div>
         </div>
+        {% endif %}
 
+        <!-- Acciones -->
         <div class="d-flex gap-2 flex-wrap">
-            {% if reserva.estado in ("confirmada", "modificada", "completada") %}
-            <a href="/reservas/{{ reserva.id }}/itinerario-pdf" class="btn-at-ghost"><i class="bi bi-file-earmark-pdf"></i>Descargar itinerario</a>
+            {% if not reserva.es_multiproducto and reserva.estado in ("confirmada", "modificada", "completada") %}
+            <a href="/reservas/{{ reserva.id }}/itinerario-pdf" class="btn-at-ghost">
+                <i class="bi bi-file-earmark-pdf" aria-hidden="true"></i>Descargar itinerario
+            </a>
             {% endif %}
             {% if reserva.estado not in ("cancelada", "completada") %}
             <form method="post" action="/reservas/{{ reserva.id }}/cancelar"
                   onsubmit="return confirm('¿Confirmas cancelar esta reserva? Esta acción no se puede deshacer.');">
-                <button type="submit" class="btn-at-danger"><i class="bi bi-x-circle"></i>Cancelar reserva</button>
+                <button type="submit" class="btn-at-danger">
+                    <i class="bi bi-x-circle" aria-hidden="true"></i>Cancelar reserva
+                </button>
             </form>
             {% endif %}
         </div>
     </div>
 
+    <!-- Derecha: desglose de precio -->
     <div class="col-12 col-lg-5">
         <div class="at-card">
-            <h2 style="font-size:14.5px;margin-bottom:10px">Desglose de precio</h2>
-            <div class="d-flex justify-content-between mb-1" style="font-size:13.5px">
-                <span>Tarifa {{ reserva.nivel_tarifa }}</span>
+            <h2 style="font-size:15px;font-weight:700;margin-bottom:16px;letter-spacing:-.01em">
+                Desglose de precio
+            </h2>
+            {% if reserva.es_multiproducto %}
+            {% for item in reserva.items %}
+            <div class="d-flex justify-content-between align-items-center mb-2" style="font-size:14px">
+                <span style="color:var(--at-muted)">{{ item.titulo }}{% if item.cantidad and item.cantidad > 1 %} (x{{ item.cantidad | int }}){% endif %}</span>
+                <span class="at-mono">${{ "%.2f"|format(item.precio_final) }}</span>
+            </div>
+            {% endfor %}
+            {% else %}
+            <div class="d-flex justify-content-between align-items-center mb-2" style="font-size:14px">
+                <span style="color:var(--at-muted)">Tarifa {{ reserva.nivel_tarifa }}</span>
                 <span class="at-mono">${{ "%.2f"|format(reserva.precio_tarifa) }}</span>
             </div>
+            {% endif %}
             {% for e in reserva.extras %}
-            <div class="d-flex justify-content-between mb-1" style="font-size:13.5px">
-                <span>{{ e.descripcion or e.tipo }}</span>
+            <div class="d-flex justify-content-between align-items-center mb-2" style="font-size:13.5px">
+                <span style="color:var(--at-muted)">{{ e.descripcion or e.tipo }}</span>
                 <span class="at-mono">${{ "%.2f"|format(e.precio) }}</span>
             </div>
             {% endfor %}
-            <div class="d-flex justify-content-between mt-2 pt-2" style="border-top:1px solid var(--at-border);font-weight:700">
-                <span>Total</span>
-                <span class="at-mono" style="color:var(--at-primary)">${{ "%.2f"|format(reserva.total_pagar) }}</span>
+            <div style="border-top:2px dashed var(--at-border);margin:14px 0"></div>
+            <div class="d-flex justify-content-between align-items-center">
+                <span style="font-weight:700;font-size:15px">Total pagado</span>
+                <span class="at-mono" style="font-size:22px;font-weight:800;color:var(--at-primary);letter-spacing:-.02em">
+                    ${{ "%.2f"|format(reserva.total_pagar) }}
+                </span>
             </div>
         </div>
     </div>

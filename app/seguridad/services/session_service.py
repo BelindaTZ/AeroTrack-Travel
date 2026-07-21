@@ -47,3 +47,16 @@ async def verificar_sesion(request: Request) -> dict:
     request.state.usuario = usuario
     request.state.pb_token = resultado["token"]
     return usuario
+
+
+async def usuario_opcional(request: Request) -> dict | None:
+    """Variante no-bloqueante de `verificar_sesion` para páginas del portal
+    accesibles sin sesión (buscadores, carrito de invitado): resuelve el
+    usuario si hay una cookie válida, o `None` si no la hay — nunca lanza
+    `SesionExpirada`. Existe porque las páginas públicas necesitan saber
+    "¿hay alguien logueado?" para pintar el topbar (nav, avatar, carrito)
+    sin forzar el login."""
+    try:
+        return await verificar_sesion(request)
+    except SesionExpirada:
+        return None

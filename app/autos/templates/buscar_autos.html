@@ -1,0 +1,195 @@
+{% extends "layout_portal.html" %}
+{% block title %}Buscar autos de renta — AeroTrack Travel{% endblock %}
+{% block description %}Compara autos de renta por ciudad y fechas, precio final por día.{% endblock %}
+
+{% block hero %}
+<section class="at-hero-search {% if resultados is not none %}compact{% endif %}" aria-label="Buscador de autos">
+    <div style="max-width:960px;margin:0 auto;position:relative;z-index:2">
+        {% if not resultados %}
+        <div class="hero-eyebrow">
+            <i class="bi bi-car-front-fill" aria-hidden="true"></i>
+            Autos de renta
+        </div>
+        <h1 class="hero-title">Renta el auto <span class="accent">perfecto para tu viaje</span></h1>
+        <p class="hero-sub">Compara marcas, categorías y precios por día. Precio final sin sorpresas.</p>
+        {% endif %}
+
+        <datalist id="lista-ciudades-autos">
+            {% for c in ciudades %}<option value="{{ c }}">{% endfor %}
+        </datalist>
+
+        <form method="get" action="/autos/buscar" id="form-busqueda-autos"
+              class="{% if resultados %}search-card-compact{% else %}search-card{% endif %}">
+            <div class="row g-3 align-items-end">
+                <div class="col-12 col-md-4">
+                    <label class="form-label-at" for="ciudad">Ciudad de recogida</label>
+                    <input type="text" class="form-control-at" id="ciudad" name="ciudad"
+                           list="lista-ciudades-autos" placeholder="Paris"
+                           value="{{ filtros.ciudad }}" required autocomplete="off">
+                </div>
+                <div class="col-6 col-md-3">
+                    <label class="form-label-at" for="recogida">Recogida</label>
+                    <input type="date" class="form-control-at" id="recogida" name="recogida" value="{{ filtros.recogida }}">
+                </div>
+                <div class="col-6 col-md-3">
+                    <label class="form-label-at" for="devolucion">Devolución</label>
+                    <input type="date" class="form-control-at" id="devolucion" name="devolucion" value="{{ filtros.devolucion }}">
+                </div>
+                <div class="col-12 col-md-2">
+                    <button type="submit" id="btn-buscar-autos" class="btn-search-hero w-100 justify-content-center">
+                        <i class="bi bi-search" aria-hidden="true"></i> Buscar
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</section>
+{% endblock %}
+
+{% block content %}
+{% if resultados is not none %}
+
+<form id="form-filtros-autos" method="get" action="/autos/buscar" style="display:none">
+    <input type="hidden" name="ciudad" value="{{ filtros.ciudad }}">
+    <input type="hidden" name="recogida" value="{{ filtros.recogida }}">
+    <input type="hidden" name="devolucion" value="{{ filtros.devolucion }}">
+    <input type="hidden" name="categoria" id="f-categoria" value="{{ filtros.categoria }}">
+    <input type="hidden" name="transmision" id="f-transmision" value="{{ filtros.transmision }}">
+    <input type="hidden" name="precio_max" id="f-precio-max" value="{{ filtros.precio_max }}">
+</form>
+
+<div class="search-layout">
+    <aside class="search-sidebar" aria-label="Filtros de búsqueda">
+        <div class="sidebar-section" style="background:var(--navy-50);border-bottom:1px solid var(--navy-100)">
+            <div style="font-size:13px;font-weight:700;color:var(--navy-800);margin-bottom:4px">
+                {{ filtros.ciudad }}
+            </div>
+            <div style="font-size:11.5px;color:var(--at-muted)">
+                {% if filtros.recogida %}{{ filtros.recogida }} → {{ filtros.devolucion }}{% else %}Fechas sin especificar{% endif %}
+            </div>
+        </div>
+
+        {% if categorias %}
+        <div class="sidebar-section">
+            <div class="sidebar-section-title">Categoría <i class="bi bi-chevron-down"></i></div>
+            <div class="sidebar-check-list">
+                <label class="sidebar-check-item">
+                    <input type="radio" name="cat-radio" {% if not filtros.categoria %}checked{% endif %}
+                           onchange="setFiltro('f-categoria','')">
+                    Todas
+                </label>
+                {% for c in categorias %}
+                <label class="sidebar-check-item">
+                    <input type="radio" name="cat-radio" {% if filtros.categoria == c %}checked{% endif %}
+                           onchange="setFiltro('f-categoria','{{ c }}')">
+                    {{ c }}
+                </label>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        {% if transmisiones %}
+        <div class="sidebar-section">
+            <div class="sidebar-section-title">Transmisión <i class="bi bi-chevron-down"></i></div>
+            <div class="sidebar-check-list">
+                <label class="sidebar-check-item">
+                    <input type="radio" name="trans-radio" {% if not filtros.transmision %}checked{% endif %}
+                           onchange="setFiltro('f-transmision','')">
+                    Todas
+                </label>
+                {% for t in transmisiones %}
+                <label class="sidebar-check-item">
+                    <input type="radio" name="trans-radio" {% if filtros.transmision == t %}checked{% endif %}
+                           onchange="setFiltro('f-transmision','{{ t }}')">
+                    {{ t }}
+                </label>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="sidebar-section">
+            <div class="sidebar-section-title">Precio máx./día <i class="bi bi-chevron-down"></i></div>
+            <div class="sidebar-check-list">
+                <input type="number" class="form-control-at" min="0" placeholder="Sin límite"
+                       value="{{ filtros.precio_max }}"
+                       onchange="setFiltro('f-precio-max', this.value)">
+            </div>
+        </div>
+    </aside>
+
+    <div class="search-results-area">
+        <div class="results-header">
+            <div>
+                <div class="results-title">{{ resultados | length }} auto(s) encontrado(s)</div>
+                <div class="results-sub">{{ filtros.ciudad }}</div>
+            </div>
+        </div>
+
+        {% if resultados %}
+        <div class="row g-3">
+            {% for a in resultados %}
+            <div class="col-12 col-md-6 col-lg-4">
+                <div class="at-card at-card-hover h-100 d-flex flex-column">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <strong style="font-size:15px;font-weight:700">{{ a.modelo }}</strong>
+                        <span class="badge-status success" style="font-size:10.5px">{{ a.categoria }}</span>
+                    </div>
+                    <div style="font-size:12.5px;color:var(--at-muted);margin-bottom:10px">
+                        {% if a.transmision %}<i class="bi bi-gear"></i> {{ a.transmision }}{% endif %}
+                        {% if a.modalidad_pago_disponible %}
+                        <span class="ms-2"><i class="bi bi-credit-card"></i>
+                        {{ 'Paga al recoger' if a.modalidad_pago_disponible == 'pagar_al_recoger' else 'Paga ahora' }}</span>
+                        {% endif %}
+                    </div>
+                    <div class="mt-auto pt-2" style="border-top:1px solid var(--at-border)">
+                        <div class="at-mono" style="font-size:20px;font-weight:800;color:var(--at-primary)">
+                            ${{ "%.0f"|format(a.precio_dia) }}<span style="font-size:11px;font-weight:500;color:var(--at-muted)"> /día</span>
+                        </div>
+                        <a href="/autos/{{ a.id }}" class="btn-at-ghost w-100 justify-content-center mt-2">
+                            Ver detalle <i class="bi bi-chevron-right"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="at-empty" style="border:1px solid var(--at-border);border-radius:var(--at-r-lg);background:var(--at-surface)">
+            <i class="bi bi-car-front at-empty-icon" aria-hidden="true"></i>
+            <strong>No hay autos disponibles</strong>
+            <p>Prueba con otra ciudad o ajusta los filtros.</p>
+            <a href="/autos/buscar" class="btn-at-ghost mt-2"><i class="bi bi-arrow-left"></i> Nueva búsqueda</a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function setFiltro(campoId, valor) {
+    document.getElementById(campoId).value = valor;
+    document.getElementById('form-filtros-autos').submit();
+}
+var formBusqueda = document.getElementById('form-busqueda-autos');
+var btnBuscar = document.getElementById('btn-buscar-autos');
+if (formBusqueda && btnBuscar) {
+    formBusqueda.addEventListener('submit', function () {
+        btnBuscar.disabled = true;
+        btnBuscar.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Buscando…';
+    });
+}
+document.querySelectorAll('.sidebar-section-title').forEach(function (title) {
+    title.addEventListener('click', function () {
+        var body = title.nextElementSibling;
+        if (body) {
+            body.style.display = body.style.display === 'none' ? '' : 'none';
+            title.classList.toggle('collapsed');
+        }
+    });
+});
+</script>
+{% endblock %}

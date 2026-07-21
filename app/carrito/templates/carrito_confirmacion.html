@@ -1,0 +1,20 @@
+{% extends "layout_portal.html" %}
+{% block title %}Compra confirmada — AeroTrack Travel{% endblock %}
+
+{% block content %}
+<div class="at-card mx-auto" style="max-width:480px;text-align:center;padding:40px 28px">
+    <i class="bi bi-check-circle-fill" style="font-size:44px;color:var(--at-success);display:block;margin-bottom:16px"></i>
+    <h1 style="font-size:20px;font-weight:800;margin-bottom:6px">¡Compra confirmada!</h1>
+    <p style="font-size:13px;color:var(--at-muted);margin-bottom:20px">
+        Tu reserva quedó registrada con el código
+        <strong class="at-mono" style="color:var(--at-text)">{{ reserva.codigo_reserva }}</strong>.
+    </p>
+    <div class="d-flex justify-content-between align-items-baseline pt-3" style="border-top:1px solid var(--at-border);margin-bottom:20px">
+        <span style="font-size:13px;font-weight:600">Total pagado</span>
+        <span class="at-mono" style="font-size:22px;font-weight:800;color:var(--at-primary)">${{ "%.2f"|format(reserva.total_pagar) }}</span>
+    </div>
+    <a href="/vuelos/buscar" class="btn-at-ghost w-100 justify-content-center">
+        <i class="bi bi-search"></i> Seguir explorando
+    </a>
+</div>
+{% endblock %}

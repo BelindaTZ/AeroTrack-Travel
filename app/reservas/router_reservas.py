@@ -4,7 +4,8 @@ from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 
 from app.reservas.repositories.reservas_repo import ReservasRepository
-from app.reservas.schemas import ExtraOut, ReservaDetalleOut
+from app.reservas.schemas import ExtraOut, ItemReservaOut, ReservaDetalleOut
+from app.shared.descripcion_producto import describir_item
 from app.reservas.services.cancelar_reserva_service import (
     ReservaNoEncontrada as ReservaNoEncontradaCancelar,
 )
@@ -53,12 +54,45 @@ EXTRAS_DISPONIBLES = [
 async def construir_detalle(reserva: dict) -> ReservaDetalleOut:
     vuelos_repo = VuelosRepository()
     reservas_repo = ReservasRepository()
+    extras = await reservas_repo.extras_de_reserva(reserva["id"])
+    extras_out = [
+        ExtraOut(tipo=e["tipo"], descripcion=e.get("descripcion"), precio=e["precio"]) for e in extras
+    ]
+
+    if not reserva.get("vuelo_id"):
+        # Reserva multi-producto (Carrito, 2026-07-19) — sin componente de
+        # vuelo, se describe por sus reserva_items en vez del bloque de
+        # vuelo de abajo (ver ReservaDetalleOut.es_multiproducto).
+        items = await reservas_repo.items_de_reserva(reserva["id"])
+        items_out = []
+        for item in items:
+            etiqueta = await describir_item(item)
+            items_out.append(
+                ItemReservaOut(
+                    tipo_producto=item["tipo_producto"],
+                    titulo=etiqueta["titulo"],
+                    href=etiqueta["href"],
+                    cantidad=item.get("cantidad") or 1,
+                    precio_final=item["precio_final"],
+                )
+            )
+        return ReservaDetalleOut(
+            id=reserva["id"],
+            codigo_reserva=reserva["codigo_reserva"],
+            estado=reserva["estado"],
+            canal=reserva["canal"],
+            total_pagar=reserva["total_pagar"],
+            fecha_reserva=reserva["fecha_reserva"],
+            fecha_expiracion_pago=reserva.get("fecha_expiracion_pago"),
+            extras=extras_out,
+            es_multiproducto=True,
+            items=items_out,
+        )
 
     vuelo = await vuelos_repo.obtener_vuelo(reserva["vuelo_id"])
     tarifa = await vuelos_repo.obtener_tarifa(reserva["tarifa_id"])
     aerolinea = await vuelos_repo.obtener_aerolinea(vuelo["aerolinea_id"])
     nivel = await vuelos_repo.nivel_tarifa(tarifa["nivel_tarifa_id"])
-    extras = await reservas_repo.extras_de_reserva(reserva["id"])
 
     return ReservaDetalleOut(
         id=reserva["id"],
@@ -76,10 +110,7 @@ async def construir_detalle(reserva: dict) -> ReservaDetalleOut:
         hora_salida_programada=vuelo["hora_salida_programada"],
         nivel_tarifa=nivel["nombre"],
         precio_tarifa=tarifa["precio_final"],
-        extras=[
-            ExtraOut(tipo=e["tipo"], descripcion=e.get("descripcion"), precio=e["precio"])
-            for e in extras
-        ],
+        extras=extras_out,
     )
 
 

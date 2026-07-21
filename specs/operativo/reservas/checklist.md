@@ -46,6 +46,13 @@
 - [x] CHK025 CU-O45 (RN, orquestación) — prueba de integración confirma que `cupo_service` real de Vuelos se invoca antes de cada creación/modificación (no mockeado, PocketBase real).
 - [x] CHK026 CU-O47 (RN, disparador) — el monto exacto de la diferencia está probado (CHK004/CHK011) **y** Facturación lo recibe y procesa de verdad (`app/facturacion/tests/test_diferencia_tarifa.py`, prueba de integración cruzada con Stripe test mode real).
 
+## Trazabilidad — extensión de catálogo v3.0 (2026-07-18, no implementada)
+
+- [ ] CHK027 RF-RES-008 (CU-O81) — consultar requisitos de visa/documentación por destino. *(no implementado)*
+- [ ] CHK028 RF-RES-009 (CU-O82) — descargar voucher de reserva en PDF. *(no implementado)*
+- [ ] CHK029 CU-O114–O117 (selección de asiento, `<<extend>>` de CU-O21/O22/O23) — no implementado en este módulo; ver `specs/operativo/vuelos/checklist.md` para el estado del lado de Vuelos.
+- [x] CHK030 Migración de esquema `reservas`→`reserva_items` polimórfico (dbml v3) — dual-write implementado 2026-07-19 (`crear_reserva_service.py`, `modificar_reserva_service.py`, `cancelar_reserva_service.py`); `reservas.vuelo_id`/`tarifa_id` ahora `required=false`. Desbloquea Paquetes/Carrito/Cuenta-Mis-Viajes. Los 4 puntos de lectura legados (aquí + Facturación) quedan sin tocar a propósito — ver nota en `reservas-spec.md`.
+
 ## Notas de cierre — sesión de implementación (2026-07-09)
 
 - **Pasajeros no existe** — este módulo solo maneja al pasajero titular (el usuario autenticado, o el que el Agente identifica por correo). Agregar acompañantes a una reserva (varios `reserva_pasajeros`) queda fuera de esta sesión.

@@ -1,0 +1,57 @@
+{% extends "layout_app.html" %}
+{% block title %}Buscar pasajeros — Backoffice — AeroTrack Travel{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <h1><span class="heading-icon"><i class="bi bi-search"></i></span>Buscar pasajeros</h1>
+    <p>Busca por nombre o correo del pasajero.</p>
+</div>
+
+<div class="at-table-wrapper">
+    <div class="at-table-header">
+        <div class="at-search-wrap">
+            <i class="bi bi-search"></i>
+            <input type="text" class="at-search" id="input-busqueda"
+                   placeholder="Buscar por nombre o correo..." value="{{ q }}" oninput="buscar()" style="min-width:300px">
+        </div>
+    </div>
+
+    <div id="resultados">
+        {% if q and not resultados %}
+        <div class="at-empty">
+            <i class="bi bi-search at-empty-icon" aria-hidden="true"></i>
+            <strong>Sin resultados para "{{ q }}"</strong>
+        </div>
+        {% elif resultados %}
+        <div class="at-table-scroll">
+            <table class="at-table">
+                <thead><tr><th>Nombre</th><th>Correo</th><th>Teléfono</th><th></th></tr></thead>
+                <tbody>
+                    {% for p in resultados %}
+                    <tr>
+                        <td>{{ p.nombre_completo }}</td>
+                        <td>{{ p.email }}</td>
+                        <td>{{ p.telefono or '—' }}</td>
+                        <td>
+                            {% if p.id %}
+                            <a href="/backoffice/pasajeros/{{ p.id }}" class="btn-at-ghost" style="font-size:12.5px">Ver</a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+function buscar() {
+    const q = document.getElementById('input-busqueda').value;
+    window.location.search = q ? '?q=' + encodeURIComponent(q) : '';
+}
+</script>
+{% endblock %}

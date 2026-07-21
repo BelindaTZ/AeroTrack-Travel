@@ -46,6 +46,8 @@
 - [x] CHK027 CU-O39 (descarga de factura) — `test_documentos.py`.
 - [x] CHK028 CU-O40 (descarga de itinerario) — `test_documentos.py`.
 - [x] CHK029 CU-O47 (RF, mecanismo) — prueba de integración cruzada con `reservas-spec.md` confirma el monto exacto recibido y procesado. (`test_diferencia_tarifa.py` + `app/reservas/tests/test_modificar_reserva.py::test_modificar_cambia_tarifa_cobra_la_diferencia_exacta_de_verdad`)
+- [x] CHK030 RF-FAC-011 (CU-O85) — conversión diaria de moneda. *(implementado 2026-07-19)* `dags/dag_actualizar_tasas_cambio.py` + `dags/tasas_cambio_tasks.py`, `@daily`, contra ExchangeRate-API real (RapidAPI). Verificado con corrida real: 6/6 tasas (USD→EUR/GBP/MXN/CAD/COP/BRL) escritas con valores reales, upsert confirmado idempotente en una segunda corrida (sigue en 6 filas, no duplica). **Alcance parcial deliberado:** solo se implementó el lado de *escritura* (el job que llena `tasas_cambio`) — el lado de *lectura* (que una vertical use esa tasa para mostrar precio en moneda local) no tiene ningún llamador todavía porque ninguna vertical de producto muestra precio localizado hoy (Vuelos solo muestra USD); construir ese helper ahora sería código sin consumidor. Se agrega cuando alguna vertical lo necesite.
+- [ ] CHK031 RF-FAC-012 (CU-O86) — captura de pago diferido de hotel. *(catálogo v3.0, agregado 2026-07-18, no implementado; depende de que Hoteles implemente CU-O60)*
 
 ## Notas
 

@@ -11,7 +11,7 @@
 
 ## Resumen
 
-Sostener el catálogo operativo de vuelos: generación automática desde el modelo dimensional heredado (solo lectura), búsqueda/detalle para el pasajero, actualización de estado, verificación atómica de cupo (mecanismo consumido por Reservas), y una vía excepcional de backoffice (CU-O48) para forzar el estado de un vuelo con fines de demo. Cubre 6 RF, 3 RNF y 6 RN sobre 5 CU (CU-O17–O20, O45, O48).
+Sostener el catálogo operativo de vuelos: generación automática desde el modelo dimensional heredado (solo lectura), búsqueda/detalle para el pasajero, actualización de estado, verificación atómica de cupo (mecanismo consumido por Reservas), y una vía excepcional de backoffice (CU-O48) para forzar el estado de un vuelo con fines de demo. Cubre 6 RF, 3 RNF y 6 RN sobre 5 CU (CU-O17–O20, O45, O48) — **implementados y probados**, salvo el filtro completo de CU-O17 (solo aerolínea). Ampliado en el catálogo v3.1 con CU-O51/O52/O53/O114–O117 (RF-VUE-007 a 013, sección "Extensión pendiente" abajo) — ninguno implementado todavía.
 
 ---
 
@@ -132,6 +132,15 @@ app/vuelos/
 **Entregable:** `router_backoffice.py`, `forzar_estado_service.py`. **Se implementa al final, deliberadamente** — es la única funcionalidad de este módulo sin contraparte en el flujo de negocio normal, y no debe bloquear ninguna fase de la que dependen Reservas/Disrupciones.
 
 ---
+
+## Extensión pendiente — catálogo v3.1 (2026-07-18, no iniciada)
+
+- **Fase 6 (futura) — Filtros completos de búsqueda (RF-VUE-007, CU-O53):** completar `vuelos_repo.py` con escalas/equipaje/horario/duración y ordenamiento. Sin dependencias externas nuevas.
+- **Fase 7 (futura) — Predicción de precio (RF-VUE-008, CU-O51):** nueva colección `predicciones_precio_ruta`, job de cálculo propio sobre `price_insights` de Google Flights.
+- **Fase 8 (futura) — Risk score en detalle (RF-VUE-009, CU-O52):** solo lectura de `vuelos_catalogo.risk_score`/`risk_score_fuente` — depende de que Disrupciones implemente CU-O83 primero (quien escribe esos campos).
+- **Fase 9 (futura) — Clase de cabina, mapa y selección de asiento (RF-VUE-010 a 013, CU-O114–O117):** la más grande de las pendientes — nueva tabla `asientos_vuelo`, campo `tarifas_vuelo.clase_cabina`, generación del mapa junto con el job de catálogo (Fase 1), y coordinación con `reservas-spec.md` (`reserva_pasajeros.asiento_id`) para RF-VUE-012. Requiere también `configuracion_sistema.disponibilidad_asientos` (categoría nueva del dbml v3).
+
+Ninguna tiene tareas desglosadas todavía — se planean cuando se agende la implementación.
 
 ## Complexity Tracking
 

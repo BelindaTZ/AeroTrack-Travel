@@ -7,6 +7,15 @@
 <div class="d-flex flex-column gap-2">
     {% for r in reservas %}
     <a href="/reservas/{{ r.id }}" class="at-card d-flex align-items-center justify-content-between text-decoration-none" style="color:var(--at-text)">
+        {% if r.es_multiproducto %}
+        <div class="d-flex align-items-center gap-3">
+            <div class="type-chip">{{ r.items | length }} producto(s)</div>
+            <div>
+                <div style="font-weight:600">{{ r.items | map(attribute="titulo") | join(" + ") }}</div>
+                <div style="font-size:12.5px;color:var(--at-muted)">{{ r.codigo_reserva }} · {{ r.fecha_reserva[:10] }}</div>
+            </div>
+        </div>
+        {% else %}
         <div class="d-flex align-items-center gap-3">
             <div class="type-chip">{{ r.aerolinea_nombre }}</div>
             <div>
@@ -16,6 +25,7 @@
                 </div>
             </div>
         </div>
+        {% endif %}
         <div class="text-end">
             <span class="badge-sistema">{{ r.estado.replace('_', ' ') }}</span>
             <div class="at-mono" style="font-size:15px;font-weight:700;color:var(--at-primary)">${{ "%.2f"|format(r.total_pagar) }}</div>

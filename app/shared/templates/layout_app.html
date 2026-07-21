@@ -1,98 +1,185 @@
 {% extends "base.html" %}
 {% block body %}
-{% if usuario.tipo_actor != 'pasajero' %}
-<nav id="at-sidebar" aria-label="Navegación principal">
+
+<!-- ═══════ SIDEBAR mínimo (solo pasajero que llega por error a /app) ═══════ -->
+{% if usuario.tipo_actor == 'pasajero' %}
+<nav id="at-sidebar-pasajero" aria-label="Navegación del portal">
     <a class="sidebar-brand" href="/">
         <img src="/static/assets/images/LogoAeroTrackTravel.png" alt="">
-        <div>
-            <div class="name">AeroTrack</div>
-            <div class="suite">Travel</div>
-        </div>
+        <div><div class="name">AeroTrack</div><div class="suite">Travel</div></div>
     </a>
-
-    <div class="sidebar-nav">
-        {% for modulo in nav_modulos %}
-        <div class="nav-label">{{ modulo.nombre }}</div>
-        {% if modulo['items'] %}
-            {% for item in modulo['items'] %}
-            <a class="nav-item-link {% if request.url.path.startswith(item.href) %}active{% endif %}" href="{{ item.href }}">
-                <i class="bi {{ item.icono }}" aria-hidden="true"></i>
-                <span>{{ item.label }}</span>
-            </a>
-            {% endfor %}
-        {% else %}
-            <span class="nav-item-link disabled-soon" aria-disabled="true">
-                <i class="bi {{ modulo.icono }}" aria-hidden="true"></i>
-                <span>{{ modulo.nombre }}</span>
-                <span class="badge-proximamente">Próximamente</span>
-            </span>
-        {% endif %}
-        {% endfor %}
-    </div>
-
-    <div class="sidebar-footer">
-        <a class="nav-item-link {% if request.url.path == '/mi-perfil' %}active{% endif %}" href="/mi-perfil">
-            <i class="bi bi-person-circle" aria-hidden="true"></i>
-            <span>Mi perfil</span>
+    <div class="sidebar-nav" style="padding:10px 8px 0;flex:1">
+        <div class="nav-label">Portal</div>
+        <a class="nav-item-link {% if request.url.path in ['/vuelos/buscar','/'] %}active{% endif %}" href="/vuelos/buscar">
+            <i class="bi bi-search"></i><span>Buscar vuelos</span>
         </a>
+        <a class="nav-item-link {% if request.url.path=='/mis-reservas' or request.url.path.startswith('/reservas/') %}active{% endif %}" href="/mis-reservas">
+            <i class="bi bi-ticket-perforated"></i><span>Mis reservas</span>
+        </a>
+        <a class="nav-item-link {% if request.url.path=='/notificaciones' %}active{% endif %}" href="/notificaciones">
+            <i class="bi bi-bell"></i><span>Notificaciones</span>
+        </a>
+    </div>
+    <div class="sidebar-footer">
+        <a class="nav-item-link {% if request.url.path=='/mi-perfil' %}active{% endif %}" href="/mi-perfil">
+            <i class="bi bi-person-circle"></i><span>Mi perfil</span>
+        </a>
+        <form method="post" action="/logout" class="m-0">
+            <button type="submit" class="btn-logout-text sidebar-footer">
+                <i class="bi bi-box-arrow-right"></i><span>Cerrar sesión</span>
+            </button>
+        </form>
     </div>
 </nav>
 {% endif %}
 
-<div id="at-main" {% if usuario.tipo_actor == 'pasajero' %}style="margin-left:0"{% endif %}>
+<!-- ═══════ ÁREA PRINCIPAL ═══════ -->
+<div id="at-main" class="{% if usuario.tipo_actor == 'pasajero' %}has-sidebar{% endif %}">
+
+    <!-- Topbar del backoffice -->
     <header id="at-topbar">
         <div class="d-flex align-items-center gap-2">
-            {% if usuario.tipo_actor != 'pasajero' %}
-            <button class="btn-icon btn-toggle-sidebar" type="button" id="btn-toggle-sidebar" aria-label="Abrir menú" aria-expanded="false">
-                <i class="bi bi-list fs-5" aria-hidden="true"></i>
+            {% if usuario.tipo_actor == 'pasajero' %}
+            <button class="btn-icon d-md-none" type="button"
+                    id="btn-toggle-sidebar-mobile"
+                    aria-label="Abrir menú" aria-expanded="false">
+                <i class="bi bi-list fs-5"></i>
             </button>
-            {% else %}
-            <a href="/" class="d-flex align-items-center gap-2 text-decoration-none">
-                <img src="/static/assets/images/LogoAeroTrackTravel.png" alt="" height="26">
-                <span class="font-display fw-semibold" style="color:var(--at-text)">AeroTrack Travel</span>
-            </a>
             {% endif %}
-        </div>
-        <div class="dropdown">
-            <a class="avatar-chip dropdown-toggle" href="#" data-bs-toggle="dropdown" aria-expanded="false">
-                <span class="avatar" aria-hidden="true">{{ (usuario.nombre_completo or usuario.email)[:1] | upper }}</span>
-                <span class="d-none d-sm-inline" style="font-size:13px;font-weight:500">{{ usuario.nombre_completo }}</span>
+            <a href="{% if usuario.tipo_actor == 'pasajero' %}/vuelos/buscar{% else %}/{% endif %}"
+               class="d-flex align-items-center gap-2 text-decoration-none">
+                <img src="/static/assets/images/LogoAeroTrackTravel.png" alt="" height="26">
+                <span class="font-display fw-bold d-none d-sm-inline" style="color:var(--at-text);font-size:14px">
+                    AeroTrack Travel
+                </span>
             </a>
-            <ul class="dropdown-menu dropdown-menu-end" style="font-size:13px;border-radius:12px;border:1px solid var(--at-border);box-shadow:var(--at-shadow-lg);padding:6px;min-width:190px">
-                <li><a class="dropdown-item" style="border-radius:8px;padding:8px 12px" href="/mi-perfil"><i class="bi bi-person me-2"></i>Mi perfil</a></li>
-                <li><hr class="dropdown-divider" style="margin:4px 0"></li>
-                <li>
-                    <form method="post" action="/logout" class="m-0">
-                        <button type="submit" class="dropdown-item text-danger" style="border-radius:8px;padding:8px 12px;border:none;background:none;width:100%;text-align:left">
-                            <i class="bi bi-box-arrow-right me-2"></i>Cerrar sesión
-                        </button>
-                    </form>
-                </li>
-            </ul>
+        </div>
+
+        <!-- Topbar derecha: actor + avatar -->
+        <div class="d-flex align-items-center gap-3">
+            {% if usuario.tipo_actor == 'administrador' %}
+            <span class="d-none d-md-inline" style="font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--at-muted)">
+                <i class="bi bi-shield-lock me-1" style="color:var(--sky-500)"></i>Admin
+            </span>
+            {% elif usuario.tipo_actor == 'agente' %}
+            <span class="d-none d-md-inline" style="font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--at-muted)">
+                <i class="bi bi-headset me-1" style="color:var(--amber-600)"></i>Agente
+            </span>
+            {% endif %}
+
+            <div class="dropdown">
+                <a class="avatar-chip dropdown-toggle" href="#"
+                   data-bs-toggle="dropdown" aria-expanded="false">
+                    <span class="avatar">{{ (usuario.nombre_completo or usuario.email)[:1] | upper }}</span>
+                    <span class="d-none d-sm-inline" style="font-size:13px;font-weight:500">
+                        {{ usuario.nombre_completo }}
+                    </span>
+                </a>
+                <ul class="dropdown-menu dropdown-menu-end"
+                    style="font-size:13px;border-radius:14px;border:1px solid var(--at-border);box-shadow:var(--at-shadow-lg);padding:6px;min-width:200px">
+                    <li>
+                        <div style="padding:10px 14px 8px;border-bottom:1px solid var(--at-border);margin-bottom:4px">
+                            <div style="font-weight:700;font-size:13px">{{ usuario.nombre_completo }}</div>
+                            <div style="font-size:11.5px;color:var(--at-muted)">{{ usuario.email }}</div>
+                            <div style="font-size:10.5px;color:var(--at-sub);margin-top:2px;text-transform:capitalize">
+                                {{ usuario.tipo_actor }}
+                            </div>
+                        </div>
+                    </li>
+                    <li>
+                        <a class="dropdown-item" style="border-radius:8px;padding:8px 12px" href="/mi-perfil">
+                            <i class="bi bi-person me-2"></i>Mi perfil
+                        </a>
+                    </li>
+                    <li><hr class="dropdown-divider" style="margin:4px 0"></li>
+                    <li>
+                        <form method="post" action="/logout" class="m-0">
+                            <button type="submit" class="dropdown-item text-danger"
+                                    style="border-radius:8px;padding:8px 12px;border:none;background:none;width:100%;text-align:left">
+                                <i class="bi bi-box-arrow-right me-2"></i>Cerrar sesión
+                            </button>
+                        </form>
+                    </li>
+                </ul>
+            </div>
         </div>
     </header>
 
+    <!-- ═══════ TABS DE MÓDULO (reemplaza el sidebar para Agente/Administrador, v4) ═══════ -->
+    {% if usuario.tipo_actor != 'pasajero' %}
+    {% set ns = namespace(activo=none) %}
+    {% for modulo in nav_modulos %}
+        {% if modulo['items'] %}
+            {% for item in modulo['items'] %}
+                {% if request.url.path.startswith(item.href) %}{% set ns.activo = modulo %}{% endif %}
+            {% endfor %}
+        {% endif %}
+    {% endfor %}
+    <nav id="at-module-tabs" aria-label="Módulos del backoffice">
+        <div class="at-module-tabs-scroll">
+            {% for modulo in nav_modulos %}
+                {% if modulo['items'] %}
+                <a class="at-module-tab {% if ns.activo and ns.activo.clave == modulo.clave %}active{% endif %}"
+                   href="{{ modulo['items'][0].href }}">
+                    <i class="bi {{ modulo.icono }}" aria-hidden="true"></i>{{ modulo.nombre }}
+                </a>
+                {% else %}
+                <span class="at-module-tab disabled-soon" aria-disabled="true">
+                    <i class="bi {{ modulo.icono }}" aria-hidden="true"></i>{{ modulo.nombre }}
+                    <span class="badge-proximamente">Próximamente</span>
+                </span>
+                {% endif %}
+            {% endfor %}
+        </div>
+    </nav>
+    {% if ns.activo and ns.activo['items']|length > 1 %}
+    <nav id="at-submodule-tabs" aria-label="Secciones de {{ ns.activo.nombre }}">
+        {% for item in ns.activo['items'] %}
+        <a class="at-submodule-tab {% if request.url.path.startswith(item.href) %}active{% endif %}" href="{{ item.href }}">
+            <i class="bi {{ item.icono }}" aria-hidden="true"></i>{{ item.label }}
+        </a>
+        {% endfor %}
+    </nav>
+    {% endif %}
+    {% endif %}
+
+    <!-- Contenido -->
     <main id="at-content">
         {% set _msg = mensaje or request.query_params.get('mensaje') %}
         {% if _msg %}
-        <div class="flash-bar" role="status">
-            <div class="flash-success toast-autodismiss"><i class="bi bi-check-circle-fill" aria-hidden="true"></i>{{ _msg }}</div>
+        <div class="flash-bar">
+            <div class="flash-success toast-autodismiss">
+                <i class="bi bi-check-circle-fill"></i>{{ _msg }}
+            </div>
         </div>
         {% endif %}
         {% block content %}{% endblock %}
     </main>
 </div>
-{% endblock %}
 
-{% block scripts %}
-<script>
-const btnToggle = document.getElementById('btn-toggle-sidebar');
-const sidebar = document.getElementById('at-sidebar');
-if (btnToggle && sidebar) {
-    btnToggle.addEventListener('click', function () {
-        const abierto = sidebar.classList.toggle('open');
-        btnToggle.setAttribute('aria-expanded', abierto ? 'true' : 'false');
-    });
+<style>
+@media (max-width: 900px) {
+  #at-sidebar-pasajero {
+    transform: translateX(-100%);
+    transition: transform 200ms cubic-bezier(.16,1,.3,1);
+  }
+  #at-sidebar-pasajero.open { transform: translateX(0); }
+  #at-main[style*="margin-left:0"] { margin-left: 0 !important; }
 }
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var btn = document.getElementById('btn-toggle-sidebar-mobile');
+    var sidebarApp = document.getElementById('at-sidebar');
+    var sidebarPas = document.getElementById('at-sidebar-pasajero');
+    var sidebar = sidebarApp || sidebarPas;
+    if (btn && sidebar) {
+        btn.addEventListener('click', function () {
+            var abierto = sidebar.classList.toggle('open');
+            btn.setAttribute('aria-expanded', abierto ? 'true' : 'false');
+        });
+    }
+});
 </script>
 {% endblock %}

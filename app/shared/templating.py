@@ -17,6 +17,18 @@ templates = Jinja2Templates(
         str(BASE_DIR / "app" / "vuelos" / "templates"),
         str(BASE_DIR / "app" / "reservas" / "templates"),
         str(BASE_DIR / "app" / "facturacion" / "templates"),
+        str(BASE_DIR / "app" / "pasajeros" / "templates"),
+        str(BASE_DIR / "app" / "disrupciones" / "templates"),
+        str(BASE_DIR / "app" / "integraciones" / "templates"),
+        str(BASE_DIR / "app" / "autos" / "templates"),
+        str(BASE_DIR / "app" / "actividades" / "templates"),
+        str(BASE_DIR / "app" / "cruceros" / "templates"),
+        str(BASE_DIR / "app" / "hoteles" / "templates"),
+        str(BASE_DIR / "app" / "carrito" / "templates"),
+        str(BASE_DIR / "app" / "cuenta" / "templates"),
+        str(BASE_DIR / "app" / "centro_ayuda" / "templates"),
+        str(BASE_DIR / "app" / "ofertas" / "templates"),
+        str(BASE_DIR / "app" / "asistente_ia" / "templates"),
         str(BASE_DIR / "app" / "shared" / "templates"),
     ]
 )

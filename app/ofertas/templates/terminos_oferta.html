@@ -1,0 +1,24 @@
+{% extends "layout_portal.html" %}
+{% block title %}{{ "Términos de la oferta" if oferta else "Oferta no encontrada" }} — AeroTrack Travel{% endblock %}
+{% block content %}
+{% if oferta is none %}
+<div class="at-empty">
+    <i class="bi bi-stars at-empty-icon" aria-hidden="true"></i>
+    <strong>Oferta no encontrada</strong>
+    <a href="/ofertas" class="btn-at-ghost mt-2"><i class="bi bi-arrow-left"></i> Volver a Ofertas</a>
+</div>
+{% else %}
+<a href="/ofertas" class="d-inline-flex align-items-center gap-2 mb-4"
+   style="font-size:13px;color:var(--at-muted);text-decoration:none;font-weight:500">
+    <i class="bi bi-arrow-left"></i>Volver a Ofertas
+</a>
+<div class="at-card">
+    <div class="type-chip mb-2">{{ oferta.tipo_producto }}</div>
+    <h1 style="font-size:22px;font-weight:800;margin-bottom:10px">{{ oferta.titulo }}</h1>
+    <p style="font-size:14px;line-height:1.7;white-space:pre-line">{{ oferta.descripcion or "Sin términos adicionales publicados para esta oferta." }}</p>
+    <div style="font-size:12px;color:var(--at-muted);margin-top:12px">
+        Vigente hasta {{ oferta.fecha_fin[:10] }}
+    </div>
+</div>
+{% endif %}
+{% endblock %}

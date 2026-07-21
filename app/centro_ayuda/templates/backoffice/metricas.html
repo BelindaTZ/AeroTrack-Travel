@@ -1,0 +1,61 @@
+{% extends "layout_app.html" %}
+{% block title %}Métricas de satisfacción — AeroTrack Travel{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <h1><span class="heading-icon"><i class="bi bi-graph-up"></i></span>Métricas de satisfacción</h1>
+    <p>
+        "Más consultados" se aproxima por cantidad de calificaciones — el esquema no registra vistas por
+        artículo, así que un artículo calificado es la señal real de interacción más cercana disponible.
+    </p>
+</div>
+
+<div class="filter-bar mb-3">
+    <a href="?dias=30" class="btn-at-ghost {% if dias == 30 %}active{% endif %}">Últimos 30 días</a>
+    <a href="?dias=90" class="btn-at-ghost {% if dias == 90 %}active{% endif %}">Últimos 90 días</a>
+    <a href="?dias=365" class="btn-at-ghost {% if dias == 365 %}active{% endif %}">Último año</a>
+</div>
+
+<div class="row g-3 mb-3">
+    <div class="col-6 col-md-3">
+        <div class="at-card">
+            <div style="font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--at-sub)">Casos escalados</div>
+            <div class="at-mono" style="font-size:26px;font-weight:700;color:var(--at-primary)">{{ resumen.casos_escalados_total }}</div>
+        </div>
+    </div>
+    {% for estado, cantidad in resumen.casos_por_estado.items() %}
+    <div class="col-6 col-md-3">
+        <div class="at-card">
+            <div style="font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--at-sub)">{{ estado.replace('_',' ') }}</div>
+            <div class="at-mono" style="font-size:26px;font-weight:700">{{ cantidad }}</div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% if resumen.articulos %}
+<div class="at-table-wrapper">
+    <div class="at-table-header"><span class="at-table-title">Artículos por calificaciones</span></div>
+    <div class="at-table-scroll">
+        <table class="at-table">
+            <thead><tr><th>Título</th><th>Categoría</th><th>Estado</th><th>Calificaciones</th><th>% útil</th></tr></thead>
+            <tbody>
+            {% for a in resumen.articulos %}
+            <tr>
+                <td><a href="/ayuda/{{ a.id }}">{{ a.titulo }}</a></td>
+                <td>{{ a.categoria }}</td>
+                <td>{% if a.activo %}<span class="badge-sistema">activo</span>{% else %}<span class="badge-sistema" style="opacity:.6">archivado</span>{% endif %}</td>
+                <td class="at-mono">{{ a.calificaciones_total }}</td>
+                <td class="at-mono">{% if a.porcentaje_util is not none %}{{ a.porcentaje_util }}%{% else %}—{% endif %}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="at-empty">
+    <i class="bi bi-graph-up at-empty-icon" aria-hidden="true"></i>
+    <strong>Sin artículos todavía</strong>
+</div>
+{% endif %}
+{% endblock %}

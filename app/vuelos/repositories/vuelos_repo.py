@@ -33,6 +33,10 @@ class VuelosRepository:
         except PocketBaseError:
             return None
 
+    async def obtener_por_numero_vuelo(self, numero_vuelo: str) -> dict | None:
+        safe = numero_vuelo.replace('"', '\\"')
+        return await self._client.get_first("vuelos_catalogo", f'numero_vuelo="{safe}"')
+
     async def obtener_aerolinea(self, aerolinea_id: str) -> dict:
         return await self._client.get_record("aerolineas", aerolinea_id)
 
@@ -75,6 +79,21 @@ class VuelosRepository:
             )
             vuelos.append({"id": v["id"], "texto": texto})
         return vuelos
+
+    async def destinos_populares(self, limite: int = 6) -> list[dict]:
+        """Destinos con más vuelos programados en el catálogo real — proxy
+        honesto de "popularidad" ya que el sistema no registra conteos de
+        búsqueda/reserva por destino. Alimenta la sección "Destinos
+        populares" de Inicio con datos reales, no una lista fija."""
+        resultado = await self._client.list_records(
+            "vuelos_catalogo", {"filter": 'estado="programado"', "perPage": 200}
+        )
+        conteo: dict[str, int] = {}
+        for v in resultado["items"]:
+            conteo[v["destino_codigo"]] = conteo.get(v["destino_codigo"], 0) + 1
+
+        top = sorted(conteo.items(), key=lambda kv: kv[1], reverse=True)[:limite]
+        return [{"codigo": codigo, "vuelos_disponibles": cantidad} for codigo, cantidad in top]
 
     async def codigos_aeropuertos_disponibles(self) -> list[str]:
         """Códigos de aeropuerto realmente presentes en el catálogo hoy —

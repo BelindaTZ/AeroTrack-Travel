@@ -97,6 +97,12 @@
 
 ---
 
+## Fases 6-9 (futuras, no iniciadas) — catálogo v3.1
+
+No desglosadas en tareas todavía — ver `plan.md` sección "Extensión pendiente" y `vuelos-spec.md` RF-VUE-007 a 013 (CU-O51/O52/O53/O114–O117).
+
+---
+
 ## Dependencias entre fases
 
 - Fase 0 bloquea todo lo demás.

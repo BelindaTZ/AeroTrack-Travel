@@ -1,0 +1,121 @@
+{% extends "layout_portal.html" %}
+{% block title %}Buscar cruceros — AeroTrack Travel{% endblock %}
+{% block description %}Compara cruceros por destino, duración y precio.{% endblock %}
+
+{% block hero %}
+<section class="at-hero-search {% if resultados is not none %}compact{% endif %}" aria-label="Buscador de cruceros">
+    <div style="max-width:960px;margin:0 auto;position:relative;z-index:2">
+        {% if not resultados %}
+        <div class="hero-eyebrow">
+            <i class="bi bi-water" aria-hidden="true"></i>
+            Cruceros
+        </div>
+        <h1 class="hero-title">Navega hacia tu <span class="accent">próximo destino</span></h1>
+        <p class="hero-sub">Compara navieras, barcos e itinerarios con precio real por camarote.</p>
+        {% endif %}
+
+        <form method="get" action="/cruceros/buscar" id="form-busqueda-cruceros"
+              class="{% if resultados %}search-card-compact{% else %}search-card{% endif %}">
+            <div class="row g-3 align-items-end">
+                <div class="col-12 col-md-5">
+                    <label class="form-label-at" for="destino">Puerto o destino</label>
+                    <input type="text" class="form-control-at" id="destino" name="destino"
+                           placeholder="Nassau, Cozumel..." value="{{ filtros.destino }}" required autocomplete="off">
+                </div>
+                <div class="col-6 col-md-3">
+                    <label class="form-label-at" for="duracion_min">Duración mín. (días)</label>
+                    <input type="number" class="form-control-at" id="duracion_min" name="duracion_min" min="1" value="{{ filtros.duracion_min }}">
+                </div>
+                <div class="col-6 col-md-2">
+                    <label class="form-label-at" for="duracion_max">Máx.</label>
+                    <input type="number" class="form-control-at" id="duracion_max" name="duracion_max" min="1" value="{{ filtros.duracion_max }}">
+                </div>
+                <div class="col-12 col-md-2">
+                    <button type="submit" id="btn-buscar-cruceros" class="btn-search-hero w-100 justify-content-center">
+                        <i class="bi bi-search" aria-hidden="true"></i> Buscar
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</section>
+{% endblock %}
+
+{% block content %}
+{% if resultados is not none %}
+
+<form id="form-filtros-cruceros" method="get" action="/cruceros/buscar" style="display:none">
+    <input type="hidden" name="destino" value="{{ filtros.destino }}">
+    <input type="hidden" name="duracion_min" value="{{ filtros.duracion_min }}">
+    <input type="hidden" name="duracion_max" value="{{ filtros.duracion_max }}">
+    <input type="hidden" name="precio_max" id="f-precio-max" value="{{ filtros.precio_max }}">
+</form>
+
+<div class="results-header">
+    <div>
+        <div class="results-title">{{ resultados | length }} crucero(s) encontrado(s)</div>
+        <div class="results-sub">Destino: {{ filtros.destino }}</div>
+    </div>
+    <div style="max-width:200px">
+        <input type="number" class="form-control-at" min="0" placeholder="Precio máx."
+               value="{{ filtros.precio_max }}" onchange="document.getElementById('f-precio-max').value=this.value;document.getElementById('form-filtros-cruceros').submit()">
+    </div>
+</div>
+
+{% if resultados %}
+<div class="row g-3">
+    {% for c in resultados %}
+    <div class="col-12 col-md-6">
+        <div class="at-card at-card-hover h-100 d-flex flex-column">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+                <div>
+                    <strong style="font-size:15px;font-weight:700">{{ c.barco_nombre }}</strong>
+                    <div style="font-size:12px;color:var(--at-muted)">{{ c.naviera_nombre }}</div>
+                </div>
+                {% if c.duracion_dias %}
+                <span class="badge-status success" style="font-size:10.5px">{{ c.duracion_dias | int }} días</span>
+                {% endif %}
+            </div>
+            {% if c.puertos %}
+            <div style="font-size:12px;color:var(--at-muted);margin-bottom:10px">
+                <i class="bi bi-signpost-split"></i> {{ c.puertos | join(" · ") }}
+            </div>
+            {% endif %}
+            <div style="font-size:12px;color:var(--at-sub);margin-bottom:10px">
+                <i class="bi bi-calendar3"></i> Zarpe {{ c.fecha_zarpe }}
+            </div>
+            <div class="mt-auto pt-2" style="border-top:1px solid var(--at-border)">
+                <div class="at-mono" style="font-size:20px;font-weight:800;color:var(--at-primary)">
+                    ${{ "%.0f"|format(c.precio_base) }}<span style="font-size:11px;font-weight:500;color:var(--at-muted)"> desde</span>
+                </div>
+                <a href="/cruceros/{{ c.id }}" class="btn-at-ghost w-100 justify-content-center mt-2">
+                    Ver itinerario y camarotes <i class="bi bi-chevron-right"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="at-empty" style="border:1px solid var(--at-border);border-radius:var(--at-r-lg);background:var(--at-surface)">
+    <i class="bi bi-water at-empty-icon" aria-hidden="true"></i>
+    <strong>No hay cruceros disponibles</strong>
+    <p>Prueba con otro destino o ajusta la duración.</p>
+    <a href="/cruceros/buscar" class="btn-at-ghost mt-2"><i class="bi bi-arrow-left"></i> Nueva búsqueda</a>
+</div>
+{% endif %}
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+var formBusqueda = document.getElementById('form-busqueda-cruceros');
+var btnBuscar = document.getElementById('btn-buscar-cruceros');
+if (formBusqueda && btnBuscar) {
+    formBusqueda.addEventListener('submit', function () {
+        btnBuscar.disabled = true;
+        btnBuscar.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Buscando…';
+    });
+}
+</script>
+{% endblock %}

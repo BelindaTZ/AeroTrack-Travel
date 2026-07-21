@@ -1,11 +1,19 @@
 """RF-RES-007 (CU-O44) — expirar reserva pendiente de pago vencida.
 
-Único caso de este módulo que incrementa `tarifas_vuelo.cupos_disponibles`
-directamente (no vía `cupo_service`, que solo expone verificación+decremento
-atómico): liberar cupo es la operación inversa, no tiene condición de
-carrera que proteger del mismo modo (dos expiraciones concurrentes sobre la
-misma reserva no pueden "liberar de más" porque la segunda ya no encuentra
-la reserva en `pendiente_pago` — el filtro de búsqueda actúa como guarda).
+**2026-07-19:** la liberación de cupo se generalizó a los 5 tipos de
+producto (antes solo tocaba `tarifas_vuelo` directo, y además lo hacía sin
+pasar por `cupo_service` — un lock distinto al que usa el decremento real
+en `app.shared.cupo_service`, dos mecanismos separados para el mismo dato).
+Ahora se recorren los `reserva_items` reales de la reserva (existen para
+los 5 tipos desde Reservas 1.4/Carrito) y se libera cupo vía el mismo
+servicio compartido que lo reservó — mismo lock, sin condición de carrera
+nueva. Antes de esto, una reserva `pendiente_pago` sin `tarifa_id` (creada
+por Carrito para un hotel/actividad/crucero) habría reventado esta rutina
+completa con un `PocketBaseError` no capturado en `client.get_record(
+"tarifas_vuelo", None)` — nunca se llegó a activar en la práctica porque
+Carrito tampoco fijaba `fecha_expiracion_pago` (corregido en el mismo
+cambio, ver `carrito_service.confirmar_checkout`), pero era un riesgo
+latente real.
 """
 
 import datetime
@@ -13,12 +21,27 @@ import datetime
 from app.reservas.repositories.reservas_repo import ReservasRepository
 from app.reservas.services.reserva_locks import locks
 from app.seguridad.services.audit_service import AuditService
-from app.shared.pocketbase_client import get_pocketbase_client
+from app.shared.catalogo_producto import CATALOGO_POR_TIPO
+from app.shared.cupo_service import liberar_cupo
+
+
+async def _liberar_cupo_de_items(repo: ReservasRepository, reserva_id: str) -> None:
+    items = await repo.items_de_reserva(reserva_id)
+    for item in items:
+        info = CATALOGO_POR_TIPO.get(item["tipo_producto"])
+        if info is None:
+            continue
+        coleccion, _, campo_id, campo_cupo = info
+        if campo_cupo is None:
+            continue
+        registro_id = item.get(campo_id)
+        if not registro_id:
+            continue
+        await liberar_cupo(coleccion, registro_id, campo_cupo, int(item.get("cantidad") or 1))
 
 
 async def expirar_pendientes() -> int:
     repo = ReservasRepository()
-    client = get_pocketbase_client()
 
     ahora_iso = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S.000Z")
     vencidas = await repo.listar_pendientes_vencidas(ahora_iso)
@@ -35,13 +58,7 @@ async def expirar_pendientes() -> int:
                 continue
 
             await repo.actualizar_reserva(reserva["id"], {"estado": "cancelada"})
-
-            tarifa = await client.get_record("tarifas_vuelo", reserva["tarifa_id"])
-            await client.update_record(
-                "tarifas_vuelo",
-                reserva["tarifa_id"],
-                {"cupos_disponibles": tarifa["cupos_disponibles"] + 1},
-            )
+            await _liberar_cupo_de_items(repo, reserva["id"])
 
             await AuditService().insertar(
                 "expirar_reserva",

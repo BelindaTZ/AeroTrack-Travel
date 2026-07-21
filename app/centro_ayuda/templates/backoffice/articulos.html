@@ -1,0 +1,81 @@
+{% extends "layout_app.html" %}
+{% block title %}Artículos de ayuda — AeroTrack Travel{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <h1><span class="heading-icon"><i class="bi bi-journal-text"></i></span>Artículos de ayuda</h1>
+    <p>Base de conocimiento del Centro de Ayuda ({{ articulos | length }} en total, activos e archivados). Un artículo nunca se elimina — se archiva.</p>
+</div>
+
+<details class="at-card mb-3">
+    <summary style="cursor:pointer;font-weight:700;font-size:13.5px"><i class="bi bi-plus-lg"></i> Nuevo artículo</summary>
+    <form method="post" action="/backoffice/ayuda/articulos" class="mt-3">
+        <div class="row g-3">
+            <div class="col-12 col-md-3">
+                <label class="form-label-at" for="art-categoria">Categoría</label>
+                <input type="text" class="form-control-at" id="art-categoria" name="categoria" required>
+            </div>
+            <div class="col-12 col-md-9">
+                <label class="form-label-at" for="art-titulo">Título</label>
+                <input type="text" class="form-control-at" id="art-titulo" name="titulo" required>
+            </div>
+            <div class="col-12">
+                <label class="form-label-at" for="art-contenido">Contenido</label>
+                <textarea class="form-control-at" id="art-contenido" name="contenido" rows="4" required></textarea>
+            </div>
+            <div class="col-12">
+                <button type="submit" class="btn-at-primary"><i class="bi bi-plus-lg"></i> Crear artículo</button>
+            </div>
+        </div>
+    </form>
+</details>
+
+{% if articulos %}
+<div class="at-table-wrapper">
+    <div class="at-table-scroll">
+        <table class="at-table">
+            <thead><tr><th>Título</th><th>Categoría</th><th>Estado</th><th>Publicado</th><th class="actions-col">Acciones</th></tr></thead>
+            <tbody>
+            {% for a in articulos %}
+            <tr>
+                <td style="min-width:220px">{{ a.titulo }}</td>
+                <td>{{ a.categoria }}</td>
+                <td>{% if a.activo %}<span class="badge-sistema">activo</span>{% else %}<span class="badge-sistema" style="opacity:.6">archivado</span>{% endif %}</td>
+                <td class="at-mono" style="font-size:12px">{{ a.fecha_publicacion[:10] }}</td>
+                <td class="actions-col">
+                    <details>
+                        <summary class="btn-icon" style="display:inline-flex;cursor:pointer" title="Editar"><i class="bi bi-pencil"></i></summary>
+                        <form method="post" action="/backoffice/ayuda/articulos/{{ a.id }}" class="at-card mt-2" style="min-width:320px">
+                            <div class="row g-2">
+                                <div class="col-12">
+                                    <input type="text" class="form-control-at" name="categoria" value="{{ a.categoria }}" required>
+                                </div>
+                                <div class="col-12">
+                                    <input type="text" class="form-control-at" name="titulo" value="{{ a.titulo }}" required>
+                                </div>
+                                <div class="col-12">
+                                    <textarea class="form-control-at" name="contenido" rows="3" required>{{ a.contenido }}</textarea>
+                                </div>
+                                <div class="col-12 d-flex align-items-center gap-2">
+                                    <input type="checkbox" name="activo" value="true" {% if a.activo %}checked{% endif %} id="activo-{{ a.id }}">
+                                    <label for="activo-{{ a.id }}" style="font-size:12.5px">Activo (visible en búsqueda)</label>
+                                </div>
+                                <div class="col-12">
+                                    <button type="submit" class="btn-at-primary btn-sm"><i class="bi bi-check-lg"></i> Guardar</button>
+                                </div>
+                            </div>
+                        </form>
+                    </details>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="at-empty">
+    <i class="bi bi-journal-text at-empty-icon" aria-hidden="true"></i>
+    <strong>Sin artículos todavía</strong>
+</div>
+{% endif %}
+{% endblock %}

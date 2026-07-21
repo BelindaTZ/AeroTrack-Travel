@@ -1,0 +1,36 @@
+{% extends "layout_portal.html" %}
+{% block title %}Mis conversaciones — AeroTrack Travel{% endblock %}
+{% block content %}
+<h1 class="h5 mb-1" style="font-family:var(--font-display)">Mis conversaciones con el Asistente IA</h1>
+<p style="font-size:13px;color:var(--at-muted);margin:0 0 12px">Incluye conversaciones activas y cerradas.</p>
+
+{% if conversaciones %}
+<div class="d-flex flex-column gap-3">
+    {% for c in conversaciones %}
+    <div class="at-card">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+            <strong style="font-size:14px">{{ c.titulo or "Conversación sin título" }}</strong>
+            <span class="badge-sistema" style="{% if not c.activa %}opacity:.6{% endif %}">{{ "activa" if c.activa else "cerrada" }}</span>
+        </div>
+        <div style="font-size:11.5px;color:var(--at-sub);margin-bottom:10px">
+            {{ c.fecha_inicio[:10] }} · última actividad {{ c.fecha_ultima_actividad[:10] }} · {{ c.mensajes | length }} mensaje(s)
+        </div>
+        <div class="d-flex flex-column gap-2">
+            {% for m in c.mensajes %}
+            <div style="font-size:12.5px">
+                <strong>{{ "Tú" if m.rol == "usuario" else "Asistente" }}:</strong> {{ m.contenido }}
+                {% if m.calificacion %}<span style="color:var(--at-sub)">({{ m.calificacion }})</span>{% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="at-empty">
+    <i class="bi bi-robot at-empty-icon" aria-hidden="true"></i>
+    <strong>Sin conversaciones todavía</strong>
+    <p>Usa el botón de chat en la esquina inferior derecha para empezar.</p>
+</div>
+{% endif %}
+{% endblock %}

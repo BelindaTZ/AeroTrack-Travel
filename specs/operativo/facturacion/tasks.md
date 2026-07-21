@@ -109,6 +109,19 @@
 
 ---
 
+## Fase 7 — CU-O85 (RF-FAC-011)
+
+- [x] T048 `dags/tasas_cambio_tasks.py` — `actualizar_tasas_cambio()`, contra ExchangeRate-API real (RapidAPI)
+- [x] T049 `dags/dag_actualizar_tasas_cambio.py` — `@daily`
+- [x] T050 Config sembrada en `configuracion_sistema` (categoría `tasas_cambio`) — `scripts/seed_tasas_cambio_config.py`
+- [x] T051 Verificado con corrida real: 6/6 tasas escritas, upsert idempotente confirmado en segunda corrida
+
+## Fase 8 (futura, no iniciada) — CU-O86, catálogo v3.0
+
+No desglosada en tareas todavía — ver `facturacion-spec.md` RF-FAC-012 (pago diferido de hotel). Depende de que Hoteles implemente CU-O60 para un disparador real.
+
+---
+
 ## Dependencias entre fases
 
 - Fase 0 bloquea todo lo demás.

@@ -1,0 +1,66 @@
+{% extends "layout_portal.html" %}
+{% block title %}{{ articulo.titulo if articulo else "Artículo no encontrado" }} — AeroTrack Travel{% endblock %}
+
+{% block content %}
+{% if articulo is none %}
+<div class="at-empty" style="border:1px solid var(--at-border);border-radius:var(--at-r-lg);background:var(--at-surface)">
+    <i class="bi bi-question-circle at-empty-icon" aria-hidden="true"></i>
+    <strong>Artículo no encontrado</strong>
+    <a href="/ayuda/buscar" class="btn-at-ghost mt-2"><i class="bi bi-arrow-left"></i> Volver a Ayuda</a>
+</div>
+{% else %}
+<a href="/ayuda/buscar" class="d-inline-flex align-items-center gap-2 mb-4"
+   style="font-size:13px;color:var(--at-muted);text-decoration:none;font-weight:500">
+    <i class="bi bi-arrow-left"></i>Volver a Ayuda
+</a>
+
+<div class="at-card mb-4">
+    <div class="flight-airline-chip mb-3"><i class="bi bi-tag" aria-hidden="true"></i>{{ articulo.categoria }}</div>
+    <h1 style="font-size:24px;font-weight:800;letter-spacing:-.02em;margin-bottom:14px">{{ articulo.titulo }}</h1>
+    <div style="font-size:14.5px;line-height:1.7;white-space:pre-line">{{ articulo.contenido }}</div>
+</div>
+
+<div class="at-card d-flex align-items-center justify-content-between flex-wrap gap-3">
+    <div>
+        <div style="font-weight:600;font-size:13.5px">¿Te sirvió este artículo?</div>
+        <div style="font-size:12px;color:var(--at-muted)">{{ calificaciones_arriba }} útil · {{ calificaciones_abajo }} no útil</div>
+    </div>
+    <div class="d-flex gap-2">
+        <form method="post" action="/ayuda/{{ articulo.id }}/calificar" class="m-0">
+            <input type="hidden" name="util" value="arriba">
+            <button type="submit" class="btn-icon" title="Útil"><i class="bi bi-hand-thumbs-up"></i></button>
+        </form>
+        <form method="post" action="/ayuda/{{ articulo.id }}/calificar" class="m-0">
+            <input type="hidden" name="util" value="abajo">
+            <button type="submit" class="btn-icon" title="No útil"><i class="bi bi-hand-thumbs-down"></i></button>
+        </form>
+    </div>
+</div>
+
+<div class="at-card mt-4" style="border-left:4px solid var(--navy-600)">
+    <h2 style="font-size:15px;font-weight:700;margin:0 0 6px">¿Sigues con dudas?</h2>
+    {% if usuario and usuario.tipo_actor == 'pasajero' %}
+    <form method="post" action="/ayuda/escalar" class="mt-2">
+        <input type="hidden" name="next" value="/ayuda/{{ articulo.id }}">
+        <div class="row g-2">
+            <div class="col-12 col-md-4">
+                <input type="text" class="form-control-at" name="asunto" placeholder="Asunto" value="{{ articulo.titulo }}" required>
+            </div>
+            <div class="col-12 col-md-6">
+                <input type="text" class="form-control-at" name="mensaje" placeholder="Cuéntanos qué necesitas" required>
+            </div>
+            <div class="col-12 col-md-2">
+                <button type="submit" class="btn-at-primary w-100 justify-content-center">
+                    <i class="bi bi-envelope"></i> Escalar
+                </button>
+            </div>
+        </div>
+    </form>
+    {% else %}
+    <p style="font-size:13px;color:var(--at-muted);margin:0">
+        <a href="/login?next=/ayuda/{{ articulo.id }}">Inicia sesión</a> para escalar tu caso a nuestro equipo por email.
+    </p>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}

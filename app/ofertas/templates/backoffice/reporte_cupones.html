@@ -1,0 +1,40 @@
+{% extends "layout_app.html" %}
+{% block title %}Reporte de cupones — AeroTrack Travel{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <h1><span class="heading-icon"><i class="bi bi-graph-up"></i></span>Reporte de cupones</h1>
+    <p>Uso y descuento total otorgado por cupón en el período filtrado.</p>
+</div>
+
+<div class="filter-bar mb-3">
+    <a href="?dias=30" class="btn-at-ghost {% if dias == 30 %}active{% endif %}">Últimos 30 días</a>
+    <a href="?dias=90" class="btn-at-ghost {% if dias == 90 %}active{% endif %}">Últimos 90 días</a>
+    <a href="?dias=365" class="btn-at-ghost {% if dias == 365 %}active{% endif %}">Último año</a>
+</div>
+
+{% if reporte %}
+<div class="at-table-wrapper">
+    <div class="at-table-scroll">
+        <table class="at-table">
+            <thead><tr><th>Código</th><th>Tipo</th><th>Estado</th><th>Usos</th><th>Descuento total</th></tr></thead>
+            <tbody>
+            {% for c in reporte %}
+            <tr>
+                <td class="at-mono">{{ c.codigo }}</td>
+                <td>{{ "%" if c.tipo == "porcentaje" else "$" }} {{ c.valor }}</td>
+                <td>{% if c.activo %}<span class="badge-sistema">activo</span>{% else %}<span class="badge-sistema" style="opacity:.6">inactivo</span>{% endif %}</td>
+                <td class="at-mono">{{ c.usos }}</td>
+                <td class="at-mono" style="color:var(--at-primary)">${{ "%.2f"|format(c.monto_total) }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="at-empty">
+    <i class="bi bi-graph-up at-empty-icon" aria-hidden="true"></i>
+    <strong>Sin cupones todavía</strong>
+</div>
+{% endif %}
+{% endblock %}

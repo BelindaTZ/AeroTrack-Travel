@@ -21,16 +21,17 @@ class Settings:
         self.algorithm = os.environ.get("ALGORITHM", "HS256")
         self.token_expire_minutes = int(os.environ.get("TOKEN_EXPIRE_MINUTES", "60"))
 
-        # MinIO (modelo dimensional heredado, REG-A2 solo lectura) — mismos
-        # defaults de desarrollo que dags/config.py, no secretos de producción.
+        # MinIO (modelo dimensional, REG-A2 solo lectura) — instancia PROPIA
+        # de Travel (minio-travel), no la de minio-elt. Mismos defaults de
+        # desarrollo que dags/config.py, no secretos de producción.
         in_docker = os.path.exists("/.dockerenv")
         self.minio_endpoint = (
-            os.environ.get("MINIO_URL_DOCKER", "minio:9000")
+            os.environ.get("MINIO_TRAVEL_URL_DOCKER", "minio-travel:9000")
             if in_docker
-            else os.environ.get("MINIO_URL", "localhost:9000")
+            else os.environ.get("MINIO_TRAVEL_URL", "localhost:9002")
         )
-        self.minio_access = os.environ.get("MINIO_ACCESS", "admin")
-        self.minio_secret = os.environ.get("MINIO_SECRET", "admin1234")
+        self.minio_access = os.environ.get("MINIO_TRAVEL_ACCESS", "admin")
+        self.minio_secret = os.environ.get("MINIO_TRAVEL_SECRET", "admin1234")
         self.minio_bucket_travel_dims = os.environ.get(
             "MINIO_BUCKET_TRAVEL_DIMS", "aerotrack-travel-dims"
         )

@@ -3,8 +3,10 @@
 **Módulo:** Disrupciones y Notificaciones
 **Prefijo:** DIS
 **Código fuente:** `app/disrupciones/`
-**Casos de uso cubiertos:** CU-O27 (Consultar estado real de vuelo vía API externa), CU-O28 (Monitorear bandeja de correo de aerolíneas), CU-O29 (Detectar cambio de itinerario), CU-O30 (Notificar al pasajero), CU-O31 (Consultar historial de notificaciones), CU-O46 (Reintentar envío de notificación fallida)
+**Casos de uso cubiertos:** CU-O27 (Consultar estado real de vuelo vía API externa), CU-O28 (Monitorear bandeja de correo de aerolíneas), CU-O29 (Detectar cambio de itinerario), CU-O30 (Notificar al pasajero), CU-O31 (Consultar historial de notificaciones), CU-O46 (Reintentar envío de notificación fallida), CU-O83 (Calcular y registrar risk score de vuelo — nuevo v3.0, no implementado), CU-O84 (Ver posición en tiempo real de aeronave en mapa — nuevo v3.0, no implementado)
 **Actor:** Sistema (automático) / Pasajero / Agente
+
+> **Nota de actualización 2026-07-18:** CU-O83/O84 son del catálogo v3.0, asignados a este módulo en `analisis-cus-completo.md` sección 4.1 (junto con CU-O52 en Vuelos, que solo *lee* el `risk_score` que CU-O83 calcula/escribe — mismo patrón de doble documentación que CU-O45/O47). Corrigen dos afirmaciones desactualizadas de la sección "Fuera de alcance" de este documento (ver ahí): CU-E01 (simulador Estratégico, probabilidad predictiva) sigue previsto/fuera de alcance como estaba, pero es **distinto** de CU-O83 (cálculo de risk_score, Operativo, mismo job que genera el catálogo) — y OpenSky Network **sí** es ahora la fuente de CU-O84, ya no es "sin CU-O que lo use".
 
 ---
 
@@ -69,6 +71,20 @@ El sistema debe, cuando una notificación queda en `estado_envio = fallido`, rei
 
 ### RNF-DIS-003 — Aislamiento de fallos del canal de envío
 La caída del proveedor de correo o SMS no impide el resto de las funcionalidades del sistema; el reintento de CU-O46 opera de forma aislada e independiente de cualquier otra integración (REG-F3).
+
+---
+
+## Funcionalidad 6: Calcular y registrar risk score de vuelo (CU-O83) — *(nuevo v3.0, no implementado)*
+
+Se calcula en el mismo job que genera el catálogo (`vuelos-spec.md`, CU-O19), no como proceso separado. **Distinto de CU-E01** (simulador Estratégico, probabilidad predictiva anticipada) — este CU es un score post-hoc/estadístico escrito directamente en `vuelos_catalogo`, consumido en el detalle de vuelo por CU-O52 (`vuelos-spec.md`).
+
+### RF-DIS-007 — Calcular y registrar risk score de vuelo *(pendiente de implementación)*
+El sistema debe calcular, para cada vuelo generado, un `risk_score` (0-1) y registrar su `risk_score_fuente`: `historico_us` (MinIO `agg_otp_aerolinea_mes`/`agg_causas_retraso_mes`, para rutas dentro de EE. UU.) o `estimado_intl` (AeroDataBox `/airports/{code}/delays`, campo real `delayIndex`, única fuente disponible para rutas fuera de EE. UU. — confirmado en pruebas en vivo). Escribe `vuelos_catalogo.risk_score`/`risk_score_fuente`/`risk_score_actualizado`.
+
+## Funcionalidad 7: Ver posición en tiempo real de aeronave (CU-O84) — *(nuevo v3.0, no implementado)*
+
+### RF-DIS-008 — Ver posición en tiempo real de aeronave en mapa *(pendiente de implementación)*
+El sistema debe mostrar, para un vuelo con reserva confirmada y en vuelo, su posición en tiempo real vía OpenSky Network, resuelta por `vuelos_catalogo.avion_icao24` (formato hex, ej. `a77ec5` — normalizar a minúscula al guardar). Es un proxy en vivo contra la API, sin persistir posiciones históricas — no necesita tabla propia. OpenSky es complemento secundario (constitución, `consideraciones.md` sección 7): da posición, no retrasos/cancelaciones — nunca se trata como fuente primaria de disrupción, ese rol lo mantienen CU-O27/O28.
 
 ---
 
@@ -137,6 +153,8 @@ Cerrar el hueco de comunicación que origina el proyecto: garantizar que ningún
 - **CU-O30:** Dado que se detecta una disrupción por cualquier fuente, cuando el sistema procesa el evento, entonces genera una notificación verificable a cada pasajero afectado, deduplicada si más de una fuente detectó el mismo cambio.
 - **CU-O31:** Dado que un pasajero o agente autorizado consulta el historial de notificaciones, cuando accede a la vista, entonces ve todas las notificaciones dentro de su alcance, filtrable de forma instantánea.
 - **CU-O46:** Dado que una notificación queda en estado fallido, cuando el sistema ejecuta el reintento configurado, entonces reenvía la notificación; si se agotan los reintentos, registra el fallo definitivo.
+- **CU-O83** *(pendiente):* Dado que se genera un vuelo en el catálogo, cuando corre el job de cálculo, entonces `risk_score` queda escrito con su fuente (histórico US o estimado internacional).
+- **CU-O84** *(pendiente):* Dado que un vuelo con reserva confirmada está en curso, cuando el pasajero consulta su posición, entonces ve la ubicación en tiempo real resuelta vía OpenSky por `avion_icao24`.
 
 ---
 
@@ -147,6 +165,7 @@ Cerrar el hueco de comunicación que origina el proyecto: garantizar que ningún
 - **Pasajeros:** consume los datos de contacto (teléfono/correo) mantenidos en ese módulo como canal de envío.
 - **Facturación:** dispara CU-O37 (Procesar reembolso) cuando la disrupción notificada es una cancelación.
 - **Seguridad:** credenciales de Gmail API y de la API de estado de vuelo viven en `configuracion_sistema`, nunca hardcodeadas (REG-B3); auditoría (CU-O41) de cada disrupción/notificación generada.
+- **Vuelos:** CU-O83 escribe en `vuelos_catalogo` (tabla propiedad de Vuelos); CU-O52 (`vuelos-spec.md`) solo lee ese dato — mismo patrón de doble documentación que CU-O45/O47.
 
 ---
 
@@ -155,13 +174,14 @@ Cerrar el hueco de comunicación que origina el proyecto: garantizar que ningún
 - CU-O20 (Actualizar estado de un vuelo, Vuelos) — destino de la detección de CU-O27/O29.
 - CU-O21-O26 (Reservas) — fuente de qué pasajeros tienen reservas activas sobre un vuelo.
 - CU-O37 (Procesar reembolso, Facturación) — extend condicional de CU-O30.
-- CU-E01 (previsto, Estratégico) — simulador estadístico, ya implementado como DAG; fuente adicional que converge en CU-O30 cuando se formalice su spec.
+- CU-E01 (previsto, Estratégico) — simulador estadístico predictivo, ya implementado como DAG; fuente adicional que converge en CU-O30 cuando se formalice su spec. Distinto de CU-O83 (ver nota de actualización al inicio).
+- CU-O52 (Ver riesgo de disrupción de un vuelo, Vuelos) — consumidor del dato que CU-O83 calcula.
 
 ---
 
 ## Fuera de alcance
 
-- El simulador estadístico de riesgo en sí (CU-E01) — pertenece al nivel Estratégico previsto; este módulo solo define cómo convergería su resultado en CU-O30 cuando exista.
+- El simulador estadístico de riesgo predictivo en sí (CU-E01) — pertenece al nivel Estratégico previsto; este módulo solo define cómo convergería su resultado en CU-O30 cuando exista. **Distinto de CU-O83** (risk score post-hoc, Operativo, Funcionalidad 6 arriba) — no confundir los dos.
 - Medición de efectividad de notificación (CU-E02, KPI) — nivel Estratégico previsto.
-- Configuración de umbrales del simulador, canales de notificación activos, credenciales de Gmail/API de vuelo (CU-T06, T07, T11, T17) — nivel Táctico previsto; este módulo lee los valores ya persistidos en `configuracion_sistema`, no expone su panel de edición.
-- OpenSky Network (posición ADS-B) — considerado en el documento empresarial como complemento secundario, no forma parte de ningún CU-O redactado; no se implementa en esta versión.
+- Configuración de umbrales de risk score, canales de notificación activos, credenciales de Gmail/API de vuelo — nivel Táctico, corresponde a CU-T19–T21 de este módulo (`analisis-cus-completo.md` sección 1; la numeración citada aquí antes — CU-T06/T07/T11/T17 — pertenecía a otros módulos tras renumerar el catálogo completo); este módulo lee los valores ya persistidos en `configuracion_sistema`, no expone su panel de edición.
+- **Corregido 2026-07-18:** OpenSky Network **ya no está fuera de alcance** — es la fuente confirmada de CU-O84 (Funcionalidad 7 arriba), no implementada todavía pero sí definida en el catálogo desde v3.0.

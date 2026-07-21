@@ -1,0 +1,39 @@
+{% extends "layout_portal.html" %}
+{% block title %}Favoritos — AeroTrack Travel{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <h1 class="h5 m-0" style="font-family:var(--font-display)">Favoritos</h1>
+    <a href="/mis-viajes" class="btn-at-ghost"><i class="bi bi-arrow-left"></i> Mis Viajes</a>
+</div>
+
+{% if favoritos %}
+<div class="d-flex flex-column gap-2">
+    {% for f in favoritos %}
+    <div class="at-card d-flex align-items-center justify-content-between">
+        <div class="d-flex align-items-center gap-3">
+            <div class="type-chip">
+                {% if f.tipo == 'hotel' %}<i class="bi bi-building"></i>{% elif f.tipo == 'actividad' %}<i class="bi bi-compass"></i>{% else %}<i class="bi bi-geo-alt"></i>{% endif %}
+                {{ f.tipo }}
+            </div>
+            <div>
+                <div style="font-weight:600">{{ f.producto_ref }}</div>
+                <div style="font-size:12px;color:var(--at-muted)">Guardado el {{ f.fecha_guardado[:10] }}</div>
+            </div>
+        </div>
+        <form method="post" action="/favoritos/{{ f.id }}/eliminar" class="m-0">
+            <input type="hidden" name="next" value="/favoritos">
+            <button type="submit" class="btn-at-ghost" style="color:#dc3545;border-color:#f3c9c9">
+                <i class="bi bi-trash"></i> Quitar
+            </button>
+        </form>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="at-empty">
+    <i class="bi bi-heart at-empty-icon" aria-hidden="true"></i>
+    <strong>Todavía no tienes favoritos</strong>
+    <p>Guarda destinos, hoteles o actividades mientras exploras el sitio — el botón <i class="bi bi-heart"></i> aparece en cada detalle.</p>
+</div>
+{% endif %}
+{% endblock %}

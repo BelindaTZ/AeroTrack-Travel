@@ -11,7 +11,7 @@
 
 ## Resumen
 
-Detectar cambios operativos sobre vuelos con reservas confirmadas, vía dos fuentes en paralelo (API de estado de vuelo real y monitoreo de bandeja de correo), y notificar al pasajero de forma confiable, con precedencia/deduplicación entre fuentes, degradación ordenada y reintento ante fallo de envío. Es el módulo que materializa el diferenciador de negocio. Cubre 6 RF y 3 RNF sobre 6 CU (CU-O27–O31, O46).
+Detectar cambios operativos sobre vuelos con reservas confirmadas, vía dos fuentes en paralelo (API de estado de vuelo real y monitoreo de bandeja de correo), y notificar al pasajero de forma confiable, con precedencia/deduplicación entre fuentes, degradación ordenada y reintento ante fallo de envío. Es el módulo que materializa el diferenciador de negocio. Cubre 6 RF y 3 RNF sobre 6 CU (CU-O27–O31, O46) — **implementados y probados**. Ampliado en el catálogo v3.0 con CU-O83/O84 (RF-DIS-007/008, sección "Extensión pendiente" abajo) — no implementados todavía.
 
 ---
 
@@ -133,6 +133,13 @@ app/disrupciones/
 **Entregable:** `router_notificaciones.py`.
 
 ---
+
+## Extensión pendiente — catálogo v3.0 (2026-07-18, no iniciada)
+
+- **Fase 6 (futura) — Risk score (RF-DIS-007, CU-O83):** se integra al mismo job que Vuelos Fase 1 (generación de catálogo) — coordinar con `vuelos-spec.md`, no es un job separado. Depende de acceso a MinIO `agg_otp_aerolinea_mes`/`agg_causas_retraso_mes` (ya usado por Fase 1 de este módulo) y de AeroDataBox `/airports/{code}/delays` (mismo proveedor que RF-DIS-001, endpoint distinto).
+- **Fase 7 (futura) — Posición en tiempo real (RF-DIS-008, CU-O84):** integración nueva con OpenSky Network, proxy en vivo sin tabla propia — depende de `vuelos_catalogo.avion_icao24` (dbml v3, ver `vuelos-spec.md`).
+
+Ninguna tiene tareas desglosadas todavía.
 
 ## Complexity Tracking
 

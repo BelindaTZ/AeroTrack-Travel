@@ -1,0 +1,136 @@
+{% extends "layout_portal.html" %}
+{% block title %}Detalle de crucero — AeroTrack Travel{% endblock %}
+
+{% block content %}
+{% if crucero is none %}
+<div class="at-empty" style="border:1px solid var(--at-border);border-radius:var(--at-r-lg);background:var(--at-surface)">
+    <i class="bi bi-water at-empty-icon" aria-hidden="true"></i>
+    <strong>Crucero no encontrado</strong>
+    <a href="/cruceros/buscar" class="btn-at-ghost mt-2"><i class="bi bi-arrow-left"></i> Volver a la búsqueda</a>
+</div>
+
+{% else %}
+<a href="/cruceros/buscar" class="d-inline-flex align-items-center gap-2 mb-4"
+   style="font-size:13px;color:var(--at-muted);text-decoration:none;font-weight:500">
+    <i class="bi bi-arrow-left"></i>Volver a resultados
+</a>
+
+<div class="at-card mb-4" style="border-left:4px solid var(--navy-600)">
+    <div class="d-flex align-items-start justify-content-between flex-wrap gap-3">
+        <div>
+            <div class="flight-airline-chip mb-3">
+                <i class="bi bi-water" aria-hidden="true"></i>
+                {{ naviera.nombre if naviera else "Naviera" }}
+            </div>
+            <h1 style="font-size:26px;font-weight:800;letter-spacing:-.03em;margin-bottom:8px">{{ barco.nombre if barco else "Barco" }}</h1>
+            <div class="flight-meta">
+                <span><i class="bi bi-calendar3 me-1"></i>Zarpe {{ crucero.fecha_zarpe[:10] }}</span>
+                {% if crucero.duracion_dias %}
+                <span class="sep">·</span>
+                <span>{{ crucero.duracion_dias | int }} días</span>
+                {% endif %}
+            </div>
+        </div>
+        {% if barco %}
+        <a href="/cruceros/barco/{{ barco.id }}/fechas" class="btn-at-ghost">
+            <i class="bi bi-calendar-range"></i> Comparar otras fechas de este barco
+        </a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-12 col-md-7">
+        {% if itinerario %}
+        <div class="at-card mb-4">
+            <strong style="font-size:15px;font-weight:700;display:block;margin-bottom:12px">Itinerario</strong>
+            <div class="d-flex flex-column gap-2">
+                {% for parada in itinerario %}
+                <div class="d-flex align-items-center gap-2" style="font-size:13.5px">
+                    <span style="width:22px;height:22px;border-radius:50%;background:var(--at-primary-tint);color:var(--at-primary);display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:700;flex-shrink:0">{{ parada.day or loop.index }}</span>
+                    {{ parada.port }}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        {% if mapa_ruta_url %}
+        <div class="at-card mb-4">
+            <strong style="font-size:15px;font-weight:700;display:block;margin-bottom:10px">
+                <i class="bi bi-map" style="color:var(--at-primary)"></i> Ruta del crucero
+            </strong>
+            <div style="border-radius:var(--at-r-md);overflow:hidden;border:1px solid var(--at-border)">
+                <iframe src="{{ mapa_ruta_url }}" width="100%" height="260" style="border:0;display:block"
+                        loading="lazy" referrerpolicy="no-referrer-when-downgrade"
+                        title="Mapa de ruta del crucero"></iframe>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if barco %}
+        <div class="at-card">
+            <strong style="font-size:15px;font-weight:700;display:block;margin-bottom:12px">Sobre el barco</strong>
+            {% if barco.servicios_abordo %}
+            <div style="font-size:13px;color:var(--at-text);margin-bottom:10px">
+                <i class="bi bi-stars" style="color:var(--at-primary)"></i>
+                {{ barco.servicios_abordo | join(", ") if barco.servicios_abordo is iterable and barco.servicios_abordo is not string else barco.servicios_abordo }}
+            </div>
+            {% endif %}
+            {% if barco.politicas %}
+            <p style="font-size:12.5px;color:var(--at-muted);margin:0">{{ barco.politicas }}</p>
+            {% endif %}
+            {% if not barco.servicios_abordo and not barco.politicas %}
+            <p style="font-size:12.5px;color:var(--at-sub);margin:0">Sin información adicional curada para este barco.</p>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="col-12 col-md-5">
+        <div class="at-card" style="position:sticky;top:16px">
+            <strong style="font-size:15px;font-weight:700;display:block;margin-bottom:4px">Elige tu camarote</strong>
+            <p style="font-size:11.5px;color:var(--at-sub);margin-bottom:14px">Precio por persona — cupo aproximado.</p>
+
+            {% if camarotes %}
+            <div class="d-flex flex-column gap-2">
+                {% for cam in camarotes %}
+                <div style="border:1px solid var(--at-border);border-radius:var(--at-r-md);padding:12px">
+                    <div class="d-flex justify-content-between align-items-baseline mb-2">
+                        <strong style="font-size:13.5px">{{ cam.tipo_camarote }}</strong>
+                        {% if cam.cupos_disponibles %}
+                        <span class="badge-status success" style="font-size:10px">{{ cam.cupos_disponibles }} cupos</span>
+                        {% else %}
+                        <span class="badge-status failed" style="font-size:10px">Agotado</span>
+                        {% endif %}
+                    </div>
+                    <div class="at-mono" style="font-size:18px;font-weight:800;color:var(--at-primary);margin-bottom:8px">
+                        ${{ "%.2f"|format(cam.precio_por_persona) }}<span style="font-size:11px;font-weight:500;color:var(--at-muted)"> /persona</span>
+                    </div>
+                    {% if cam.cupos_disponibles %}
+                    <form method="post" action="/carrito/agregar">
+                        <input type="hidden" name="tipo_producto" value="crucero">
+                        <input type="hidden" name="crucero_id" value="{{ crucero.id }}">
+                        <input type="hidden" name="crucero_camarote_id" value="{{ cam.id }}">
+                        <input type="hidden" name="precio_snapshot" value="{{ cam.precio_por_persona }}">
+                        <button type="submit" class="btn-at-accent w-100 justify-content-center" style="padding:8px;font-size:13px;font-weight:700">
+                            <i class="bi bi-cart-plus"></i> Agregar al carrito
+                        </button>
+                    </form>
+                    {% else %}
+                    <button class="btn-at-ghost w-100 justify-content-center" disabled style="cursor:not-allowed;opacity:.5">Sin disponibilidad</button>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="at-empty" style="padding:24px 12px">
+                <i class="bi bi-door-closed at-empty-icon" style="font-size:28px"></i>
+                <strong style="font-size:13px">Sin camarotes disponibles</strong>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

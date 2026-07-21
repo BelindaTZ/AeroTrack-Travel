@@ -106,3 +106,9 @@
 - Fase 1 bloquea Fase 2 (reutiliza la misma lógica de creación) y Fase 3 (necesita reservas `pendiente_pago` reales para expirar).
 - Fase 4 no depende de Fase 2/3, solo de Fase 1.
 - Fase 5 depende de Fase 1 (reservas existentes que modificar/cancelar) y de Vuelos (ya completo) para revalidar cupo y estado de vuelo.
+
+---
+
+## Fase 6/7 (futuras, no iniciadas) — CU-O81/O82, catálogo v3.0
+
+No desglosadas en tareas todavía — ver `plan.md` sección "Extensión pendiente" y `reservas-spec.md` RF-RES-008/RF-RES-009. Se detallan en `T0xx` cuando se agende la implementación.

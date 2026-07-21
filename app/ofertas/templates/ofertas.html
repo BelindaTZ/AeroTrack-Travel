@@ -1,0 +1,55 @@
+{% extends "layout_portal.html" %}
+{% block title %}Ofertas destacadas — AeroTrack Travel{% endblock %}
+
+{% block hero %}
+<section class="at-hero-search" aria-label="Ofertas destacadas">
+    <div style="max-width:760px;margin:0 auto;position:relative;z-index:2">
+        <div class="hero-eyebrow"><i class="bi bi-stars" aria-hidden="true"></i>Ofertas destacadas</div>
+        <h1 class="hero-title">Promociones <span class="accent">vigentes ahora</span></h1>
+        <p class="hero-sub">Curadas por nuestro equipo, siempre con vigencia real.</p>
+    </div>
+</section>
+{% endblock %}
+
+{% block content %}
+<div class="filter-bar mb-3">
+    <a href="/ofertas" class="btn-at-ghost {% if not tipo_producto %}active{% endif %}">Todas</a>
+    {% for t, label in [("vuelo","Vuelos"),("hotel","Hoteles"),("auto","Autos"),("actividad","Actividades"),("crucero","Cruceros")] %}
+    <a href="/ofertas?tipo_producto={{ t }}" class="btn-at-ghost {% if tipo_producto == t %}active{% endif %}">{{ label }}</a>
+    {% endfor %}
+</div>
+
+{% if ofertas %}
+<div class="categoria-grid">
+    {% for o in ofertas %}
+    <div class="at-card at-card-hover">
+        <div class="type-chip mb-2">{{ o.tipo_producto }}</div>
+        <strong style="display:block;margin-bottom:4px">{{ o.titulo }}</strong>
+        {% if o.descripcion %}<p style="font-size:12.5px;color:var(--at-muted);margin:0 0 8px">{{ o.descripcion }}</p>{% endif %}
+        <div style="font-size:12.5px;margin-bottom:8px">
+            {% if o.href_producto %}<a href="{{ o.href_producto }}">{{ o.titulo_producto }}</a>{% else %}{{ o.titulo_producto }}{% endif %}
+        </div>
+        <a href="/ofertas/{{ o.id }}/terminos" style="font-size:12px;color:var(--at-muted)">Ver términos y condiciones</a>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="at-empty">
+    <i class="bi bi-stars at-empty-icon" aria-hidden="true"></i>
+    <strong>Sin ofertas vigentes para este filtro</strong>
+</div>
+{% endif %}
+
+<div class="at-card mt-4">
+    <h2 style="font-size:15px;font-weight:700;margin:0 0 8px">Recibe ofertas por email</h2>
+    <form method="post" action="/newsletter/suscribirse" class="row g-2">
+        <input type="hidden" name="next" value="/ofertas">
+        <div class="col-8 col-md-4">
+            <input type="email" class="form-control-at" name="email" placeholder="tu@email.com" required>
+        </div>
+        <div class="col-4 col-md-2">
+            <button type="submit" class="btn-at-primary w-100 justify-content-center"><i class="bi bi-envelope"></i> Suscribirme</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

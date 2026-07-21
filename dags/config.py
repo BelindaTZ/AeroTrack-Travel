@@ -6,8 +6,8 @@ automáticamente las URLs correctas (nombres de servicio vs localhost).
 
 Esta instancia de Airflow es NUEVA y separada de la de AeroTrack
 Analytics (proyecto anterior, minio-elt): se conecta a su propia
-PocketBase (pocketbase-travel) y al bucket MinIO aerotrack-travel-dims
-(copia de solo lectura del modelo dimensional heredado).
+PocketBase (pocketbase-travel) y a su propia instancia de MinIO
+(minio-travel) — 100% independiente, no depende de minio-elt.
 """
 
 import os
@@ -20,10 +20,14 @@ load_dotenv(dotenv_path=Path(__file__).parent.parent / ".env")
 
 IN_DOCKER = os.path.exists("/.dockerenv")
 
-# ── MinIO: MISMA instancia del proyecto anterior, bucket propio de Travel ──
-MINIO_ENDPOINT = os.getenv("MINIO_URL_DOCKER", "minio:9000") if IN_DOCKER else os.getenv("MINIO_URL", "localhost:9000")
-MINIO_ACCESS = os.getenv("MINIO_ACCESS", "admin")
-MINIO_SECRET = os.getenv("MINIO_SECRET", "admin1234")
+# ── MinIO: instancia PROPIA de Travel (minio-travel), no la de minio-elt ──
+MINIO_ENDPOINT = (
+    os.getenv("MINIO_TRAVEL_URL_DOCKER", "minio-travel:9000")
+    if IN_DOCKER
+    else os.getenv("MINIO_TRAVEL_URL", "localhost:9002")
+)
+MINIO_ACCESS = os.getenv("MINIO_TRAVEL_ACCESS", "admin")
+MINIO_SECRET = os.getenv("MINIO_TRAVEL_SECRET", "admin1234")
 MINIO_BUCKET_TRAVEL_DIMS = os.getenv("MINIO_BUCKET_TRAVEL_DIMS", "aerotrack-travel-dims")
 
 # ── PocketBase Travel: instancia NUEVA y separada ───────────────────────────
@@ -46,3 +50,27 @@ APP_TRAVEL_URL = (
 #    configuracion_sistema vía get_config(), ver pocketbase_client.py) ──────
 DEFAULT_UMBRAL_API_REAL_HORAS = 72
 DEFAULT_HORIZONTE_CATALOGO_DIAS = 7
+
+# ── Integración puente con AeroTrack Analytics (minio-elt) ─────────────────
+# SOLO la usa el DAG aerotrack_travel_sync_dims para disparar el ELT/cobertura
+# global de Analytics y sincronizar el resultado a minio-travel. No es una
+# dependencia permanente de Travel — el resto del proyecto funciona sin
+# Analytics corriendo; únicamente este DAG específico lo necesita, y solo
+# mientras se ejecuta. host.docker.internal (no elt-network) para no volver
+# a acoplar los contenedores de Travel a la red de Analytics.
+ANALYTICS_AIRFLOW_URL = (
+    os.getenv("ANALYTICS_AIRFLOW_URL_DOCKER", "http://host.docker.internal:8080")
+    if IN_DOCKER
+    else os.getenv("ANALYTICS_AIRFLOW_URL", "http://localhost:8080")
+)
+ANALYTICS_AIRFLOW_USER = os.getenv("ANALYTICS_AIRFLOW_USER", "admin")
+ANALYTICS_AIRFLOW_PASSWORD = os.getenv("ANALYTICS_AIRFLOW_PASSWORD", "admin1234")
+
+ANALYTICS_MINIO_ENDPOINT = (
+    os.getenv("ANALYTICS_MINIO_URL_DOCKER", "host.docker.internal:9000")
+    if IN_DOCKER
+    else os.getenv("ANALYTICS_MINIO_URL", "localhost:9000")
+)
+ANALYTICS_MINIO_ACCESS = os.getenv("ANALYTICS_MINIO_ACCESS", "admin")
+ANALYTICS_MINIO_SECRET = os.getenv("ANALYTICS_MINIO_SECRET", "admin1234")
+ANALYTICS_MINIO_BUCKET_DIMS = os.getenv("ANALYTICS_MINIO_BUCKET_DIMS", "aerotrack-dims")

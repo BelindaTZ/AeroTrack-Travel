@@ -1,105 +1,372 @@
 {% extends "layout_portal.html" %}
 {% block title %}Buscar vuelos — AeroTrack Travel{% endblock %}
-{% block content %}
-<h1 class="h4 mb-3" style="font-family:var(--font-display)">Buscar vuelos</h1>
+{% block description %}Busca y compara vuelos domésticos en EE. UU. con transparencia total de precio.{% endblock %}
 
-<datalist id="lista-aeropuertos">
-    {% for a in aeropuertos %}<option value="{{ a.codigo }}">{{ a.legible }}</option>{% endfor %}
-</datalist>
-
-<form method="get" action="/vuelos/buscar" id="form-busqueda" class="at-card mb-4">
-    <div class="row g-3 align-items-end">
-        <div class="col-6 col-md-3">
-            <label class="form-label-at" for="origen">Origen</label>
-            <input type="text" class="form-control-at text-uppercase" id="origen" name="origen"
-                   list="lista-aeropuertos" maxlength="3" placeholder="JFK"
-                   value="{{ filtros.origen }}" required>
-        </div>
-        <div class="col-6 col-md-3">
-            <label class="form-label-at" for="destino">Destino</label>
-            <input type="text" class="form-control-at text-uppercase" id="destino" name="destino"
-                   list="lista-aeropuertos" maxlength="3" placeholder="LAX"
-                   value="{{ filtros.destino }}" required>
-        </div>
-        <div class="col-6 col-md-3">
-            <label class="form-label-at" for="fecha">Fecha</label>
-            <input type="date" class="form-control-at" id="fecha" name="fecha" value="{{ filtros.fecha }}" required>
-        </div>
-        <div class="col-6 col-md-2">
-            <label class="form-label-at" for="pasajeros">Pasajeros</label>
-            <input type="number" class="form-control-at" id="pasajeros" name="pasajeros" min="1" max="9"
-                   value="{{ filtros.pasajeros }}" required>
-        </div>
-        <div class="col-12 col-md-1">
-            <button type="submit" class="btn-at-primary w-100 justify-content-center"><i class="bi bi-search"></i></button>
-        </div>
+{# ══════════════════════════════════════════
+   HERO SEARCH — full-width (antes de resultados)
+══════════════════════════════════════════ #}
+{% block hero %}
+<section class="at-hero-search {% if resultados is not none %}compact{% endif %}" aria-label="Buscador de vuelos">
+    {% if not resultados %}
+    <div class="hero-route-deco" aria-hidden="true">
+        <svg viewBox="0 0 1200 320" preserveAspectRatio="xMidYMid slice">
+            <circle cx="1020" cy="70" r="220" fill="rgba(255,255,255,.05)"/>
+            <circle cx="120" cy="280" r="160" fill="rgba(255,255,255,.04)"/>
+            <path d="M 640 250 Q 900 90 1140 150" fill="none" stroke="rgba(255,255,255,.45)"
+                  stroke-width="2" stroke-dasharray="2 10" stroke-linecap="round"/>
+            <circle cx="640" cy="250" r="4.5" fill="var(--amber-400)"/>
+            <circle cx="1140" cy="150" r="4.5" fill="var(--amber-400)"/>
+            <g class="plane" transform="translate(890,150) rotate(-14)">
+                <polygon points="0,-8 30,3 0,6 -7,3" fill="#ffffff"/>
+                <polygon points="0,-8 -4,3 -18,9 -7,3" fill="rgba(255,255,255,.7)"/>
+            </g>
+        </svg>
     </div>
-</form>
+    {% endif %}
+    <div style="max-width:960px;margin:0 auto;position:relative;z-index:2">
+        {% if not resultados %}
+        <div class="hero-eyebrow">
+            <i class="bi bi-airplane-fill" aria-hidden="true"></i>
+            Vuelos domésticos · EE. UU.
+        </div>
+        <h1 class="hero-title">¿A dónde quieres <span class="accent">volar hoy?</span></h1>
+        <p class="hero-sub">Compara tarifas y reserva en minutos. Precio final garantizado.</p>
+        {% endif %}
 
-{% if resultados is not none %}
-<div class="d-flex flex-wrap gap-2 align-items-center mb-3" id="filtros-secundarios">
-    <form method="get" action="/vuelos/buscar" id="form-filtros" class="d-flex flex-wrap gap-2 align-items-center">
-        <input type="hidden" name="origen" value="{{ filtros.origen }}">
-        <input type="hidden" name="destino" value="{{ filtros.destino }}">
-        <input type="hidden" name="fecha" value="{{ filtros.fecha }}">
-        <input type="hidden" name="pasajeros" value="{{ filtros.pasajeros }}">
+        <datalist id="lista-aeropuertos">
+            {% for a in aeropuertos %}<option value="{{ a.codigo }}">{{ a.legible }}</option>{% endfor %}
+        </datalist>
 
-        <select class="form-control-at" style="width:auto" name="aerolinea_id">
-            <option value="">Todas las aerolíneas</option>
-            {% for a in aerolineas %}
-            <option value="{{ a.id }}" {% if filtros.aerolinea_id == a.id %}selected{% endif %}>{{ a.nombre }}</option>
-            {% endfor %}
-        </select>
-        <select class="form-control-at" style="width:auto" name="horario">
-            <option value="">Cualquier horario</option>
-            <option value="manana" {% if filtros.horario == 'manana' %}selected{% endif %}>Mañana (00-12h)</option>
-            <option value="tarde" {% if filtros.horario == 'tarde' %}selected{% endif %}>Tarde (12-18h)</option>
-            <option value="noche" {% if filtros.horario == 'noche' %}selected{% endif %}>Noche (18-24h)</option>
-        </select>
-        <select class="form-control-at" style="width:auto" name="orden">
-            <option value="precio" {% if filtros.orden == 'precio' %}selected{% endif %}>Ordenar: precio</option>
-            <option value="duracion" {% if filtros.orden == 'duracion' %}selected{% endif %}>Ordenar: duración</option>
-        </select>
-        <span class="text-muted" style="font-size:12.5px">{{ resultados | length }} resultado(s)</span>
-    </form>
-</div>
-
-{% if resultados %}
-<div class="d-flex flex-column gap-2">
-    {% for v in resultados %}
-    <a href="/vuelos/{{ v.id }}" class="at-card d-flex align-items-center justify-content-between text-decoration-none" style="color:var(--at-text)">
-        <div class="d-flex align-items-center gap-3">
-            <div class="type-chip">{{ v.aerolinea_nombre }}</div>
-            <div>
-                <div style="font-weight:600">{{ v.origen_legible }} → {{ v.destino_legible }}</div>
-                <div style="font-size:12.5px;color:var(--at-muted)">
-                    {{ v.hora_salida_programada }} – {{ v.hora_llegada_programada }}
-                    {% if v.duracion_min %}· {{ (v.duracion_min // 60) }}h {{ v.duracion_min % 60 }}m{% endif %}
-                    · Vuelo {{ v.numero_vuelo }}
+        <form method="get" action="/vuelos/buscar" id="form-busqueda"
+              class="{% if resultados %}search-card-compact{% else %}search-card{% endif %}">
+            <div class="row g-3 align-items-end">
+                <div class="col-6 col-md">
+                    <label class="form-label-at" for="origen">Origen</label>
+                    <input type="text" class="form-control-at text-uppercase"
+                           id="origen" name="origen" list="lista-aeropuertos"
+                           maxlength="3" placeholder="JFK"
+                           value="{{ filtros.origen }}" required autocomplete="off">
+                </div>
+                <div class="col-6 col-md">
+                    <label class="form-label-at" for="destino">Destino</label>
+                    <input type="text" class="form-control-at text-uppercase"
+                           id="destino" name="destino" list="lista-aeropuertos"
+                           maxlength="3" placeholder="LAX"
+                           value="{{ filtros.destino }}" required autocomplete="off">
+                </div>
+                <div class="col-6 col-md">
+                    <label class="form-label-at" for="fecha">Salida</label>
+                    <input type="date" class="form-control-at" id="fecha" name="fecha"
+                           value="{{ filtros.fecha }}" required>
+                </div>
+                <div class="col-4 col-md-2">
+                    <label class="form-label-at" for="pasajeros">Pasajeros</label>
+                    <input type="number" class="form-control-at" id="pasajeros" name="pasajeros"
+                           min="1" max="9" value="{{ filtros.pasajeros }}" required>
+                </div>
+                <div class="col-8 col-md-2">
+                    <button type="submit" id="btn-buscar"
+                            class="btn-search-hero w-100 justify-content-center">
+                        <i class="bi bi-search" aria-hidden="true"></i> Buscar vuelos
+                    </button>
                 </div>
             </div>
+        </form>
+    </div>
+</section>
+{% endblock %}
+
+{# ══════════════════════════════════════════
+   CONTENIDO — layout Despegar: sidebar + resultados
+══════════════════════════════════════════ #}
+{% block content %}
+{% if resultados is not none %}
+
+{# Filtros ocultos para form #}
+<form id="form-filtros" method="get" action="/vuelos/buscar" style="display:none">
+    <input type="hidden" name="origen"    value="{{ filtros.origen }}">
+    <input type="hidden" name="destino"   value="{{ filtros.destino }}">
+    <input type="hidden" name="fecha"     value="{{ filtros.fecha }}">
+    <input type="hidden" name="pasajeros" value="{{ filtros.pasajeros }}">
+    <input type="hidden" name="orden"     id="f-orden" value="{{ filtros.orden or 'precio' }}">
+    <input type="hidden" name="aerolinea_id" id="f-aerolinea" value="{{ filtros.aerolinea_id or '' }}">
+</form>
+
+<div class="search-layout">
+
+    <!-- ── SIDEBAR DE FILTROS ── -->
+    <aside class="search-sidebar" aria-label="Filtros de búsqueda">
+
+        <!-- Resumen de búsqueda -->
+        <div class="sidebar-section" style="background:var(--navy-50);border-bottom:1px solid var(--navy-100)">
+            <div style="font-size:13px;font-weight:700;color:var(--navy-800);margin-bottom:4px">
+                {{ filtros.origen }} → {{ filtros.destino }}
+            </div>
+            <div style="font-size:11.5px;color:var(--at-muted)">
+                {{ filtros.fecha }} · {{ filtros.pasajeros }} pasajero(s)
+            </div>
         </div>
-        <div class="text-end">
-            <div style="font-size:11px;color:var(--at-sub)">desde</div>
-            <div class="at-mono" style="font-size:18px;font-weight:700;color:var(--at-primary)">${{ "%.2f"|format(v.precio_desde) }}</div>
+
+        <!-- Escalas -->
+        <div class="sidebar-section">
+            <div class="sidebar-section-title">
+                Escalas <i class="bi bi-chevron-down"></i>
+            </div>
+            <div class="sidebar-check-list">
+                <label class="sidebar-check-item">
+                    <input type="checkbox" checked onchange="applyFilters()">
+                    Directo <span class="count">—</span>
+                </label>
+                <label class="sidebar-check-item">
+                    <input type="checkbox" checked onchange="applyFilters()">
+                    1 escala <span class="count">—</span>
+                </label>
+                <label class="sidebar-check-item">
+                    <input type="checkbox" checked onchange="applyFilters()">
+                    2+ escalas <span class="count">—</span>
+                </label>
+            </div>
         </div>
-    </a>
-    {% endfor %}
-</div>
-{% else %}
-<div class="at-empty">
-    <i class="bi bi-airplane at-empty-icon" aria-hidden="true"></i>
-    <strong>No hay vuelos para esos criterios</strong>
-    <p>Prueba con otra fecha u otro par de aeropuertos.</p>
-</div>
-{% endif %}
+
+        <!-- Aerolíneas -->
+        {% if aerolineas %}
+        <div class="sidebar-section">
+            <div class="sidebar-section-title">
+                Aerolíneas <i class="bi bi-chevron-down"></i>
+            </div>
+            <div class="sidebar-check-list">
+                {% for a in aerolineas %}
+                <label class="sidebar-check-item">
+                    <input type="checkbox" value="{{ a.id }}"
+                           {% if not filtros.aerolinea_id or filtros.aerolinea_id == a.id %}checked{% endif %}
+                           onchange="filterByAirline(this)">
+                    {{ a.nombre }}
+                </label>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Horarios de salida -->
+        <div class="sidebar-section">
+            <div class="sidebar-section-title">
+                Horario de salida <i class="bi bi-chevron-down"></i>
+            </div>
+            <div class="sidebar-check-list">
+                <label class="sidebar-check-item">
+                    <input type="checkbox" checked>
+                    <span>🌅 Madrugada</span>
+                    <span style="font-size:10.5px;color:var(--at-sub)">00–06h</span>
+                </label>
+                <label class="sidebar-check-item">
+                    <input type="checkbox" checked>
+                    <span>☀️ Mañana</span>
+                    <span style="font-size:10.5px;color:var(--at-sub)">06–12h</span>
+                </label>
+                <label class="sidebar-check-item">
+                    <input type="checkbox" checked>
+                    <span>🌤 Tarde</span>
+                    <span style="font-size:10.5px;color:var(--at-sub)">12–18h</span>
+                </label>
+                <label class="sidebar-check-item">
+                    <input type="checkbox" checked>
+                    <span>🌙 Noche</span>
+                    <span style="font-size:10.5px;color:var(--at-sub)">18–24h</span>
+                </label>
+            </div>
+        </div>
+
+        <!-- Equipaje -->
+        <div class="sidebar-section">
+            <div class="sidebar-section-title">
+                Equipaje <i class="bi bi-chevron-down"></i>
+            </div>
+            <div class="sidebar-check-list">
+                <label class="sidebar-check-item">
+                    <input type="checkbox" checked>
+                    Equipaje de mano
+                </label>
+                <label class="sidebar-check-item">
+                    <input type="checkbox" checked>
+                    Equipaje en bodega
+                </label>
+            </div>
+        </div>
+
+    </aside>
+
+    <!-- ── ÁREA DE RESULTADOS ── -->
+    <div class="search-results-area">
+
+        <!-- Header con conteo + sort tabs -->
+        <div class="results-header">
+            <div>
+                <div class="results-title">
+                    {{ resultados | length }} vuelo(s) encontrado(s)
+                </div>
+                <div class="results-sub">
+                    {{ filtros.origen }} → {{ filtros.destino }} · {{ filtros.fecha }}
+                </div>
+            </div>
+            <div class="sort-tabs" role="group" aria-label="Ordenar resultados">
+                <button class="sort-tab {% if (filtros.orden or 'precio') == 'precio' %}active{% endif %}"
+                        onclick="sortBy('precio')" type="button">
+                    <i class="bi bi-sort-numeric-up me-1"></i>Más baratos
+                </button>
+                <button class="sort-tab {% if filtros.orden == 'duracion' %}active{% endif %}"
+                        onclick="sortBy('duracion')" type="button">
+                    <i class="bi bi-lightning me-1"></i>Más rápidos
+                </button>
+            </div>
+        </div>
+
+        <!-- Filas de vuelo -->
+        {% if resultados %}
+        <div id="lista-vuelos" role="list">
+            {% for v in resultados %}
+            <article class="flight-row" role="listitem"
+                     aria-label="Vuelo {{ v.numero_vuelo }}, {{ v.aerolinea_nombre }}, desde ${{ '%.0f'|format(v.precio_desde) }}">
+
+                <div class="flight-row-header">
+                    <!-- Info principal: aerolínea + tiempos + precio -->
+                    <div class="flight-row-info">
+
+                        <!-- Aerolínea -->
+                        <div class="flight-airline-col">
+                            <div class="airline-logo-box" aria-hidden="true">
+                                <i class="bi bi-airplane" style="color:var(--navy-600)"></i>
+                            </div>
+                            <div>
+                                <div class="airline-name">{{ v.aerolinea_nombre }}</div>
+                                <div class="airline-flight">{{ v.numero_vuelo }}</div>
+                            </div>
+                        </div>
+
+                        <!-- Horarios con visual de ruta -->
+                        <div class="flight-times-col">
+                            <div class="flight-time-block">
+                                <div class="time">{{ v.hora_salida_programada }}</div>
+                                <div class="airport">{{ v.origen_legible[:3] }}</div>
+                            </div>
+
+                            <div class="flight-stops-visual">
+                                <div class="stops-duration">
+                                    {% if v.duracion_min %}
+                                    {{ (v.duracion_min // 60) }}h {{ v.duracion_min % 60 }}m
+                                    {% else %}—{% endif %}
+                                </div>
+                                <div class="stops-line" aria-hidden="true">
+                                    <i class="bi bi-airplane-fill"
+                                       style="font-size:9px;color:var(--navy-500);position:relative;z-index:1"></i>
+                                </div>
+                                <div class="stops-label direct" aria-label="Vuelo directo">
+                                    Directo
+                                </div>
+                            </div>
+
+                            <div class="flight-time-block">
+                                <div class="time">{{ v.hora_llegada_programada }}</div>
+                                <div class="airport">{{ v.destino_legible[:3] }}</div>
+                            </div>
+                        </div>
+
+                        <!-- Tags de características -->
+                        <div class="d-flex flex-column gap-1">
+                            <span class="flight-tag good">
+                                <i class="bi bi-check-circle-fill"></i>Precio final
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Precio + CTA -->
+                    <div style="display:flex;flex-direction:column;align-items:flex-end;min-width:140px">
+                        <div class="flight-price-col">
+                            <div class="label">Precio final desde</div>
+                            <div class="main-price">${{ "%.0f"|format(v.precio_desde) }}</div>
+                            <div class="taxes">USD · impuestos incluidos</div>
+                        </div>
+                        <a href="/vuelos/{{ v.id }}" class="btn-select-flight" id="btn-vuelo-{{ v.id }}">
+                            Ver tarifas <i class="bi bi-chevron-right" aria-hidden="true"></i>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Footer con tags adicionales -->
+                <div class="flight-row-footer">
+                    <div class="flight-tags">
+                        {% if v.duracion_min and v.duracion_min <= 180 %}
+                        <span class="flight-tag good">
+                            <i class="bi bi-lightning-fill"></i>Vuelo rápido
+                        </span>
+                        {% endif %}
+                        <span class="flight-tag">
+                            <i class="bi bi-calendar3"></i>{{ v.fecha_salida[:10] }}
+                        </span>
+                        <span class="flight-tag">
+                            <i class="bi bi-clock"></i>{{ v.hora_salida_programada }}–{{ v.hora_llegada_programada }}
+                        </span>
+                    </div>
+                    <a href="/vuelos/{{ v.id }}"
+                       style="font-size:12px;color:var(--at-primary);font-weight:600;text-decoration:none;display:flex;align-items:center;gap:4px">
+                        Ver todas las tarifas
+                        <i class="bi bi-arrow-right" style="font-size:11px"></i>
+                    </a>
+                </div>
+            </article>
+            {% endfor %}
+        </div>
+
+        {% else %}
+        <div class="at-empty"
+             style="border:1px solid var(--at-border);border-radius:var(--at-r-lg);background:var(--at-surface)">
+            <i class="bi bi-airplane at-empty-icon" aria-hidden="true"></i>
+            <strong>No hay vuelos disponibles</strong>
+            <p>Prueba con otra fecha u otro par de aeropuertos.</p>
+            <a href="/vuelos/buscar" class="btn-at-ghost mt-2">
+                <i class="bi bi-arrow-left"></i> Nueva búsqueda
+            </a>
+        </div>
+        {% endif %}
+
+    </div><!-- /search-results-area -->
+</div><!-- /search-layout -->
+
 {% endif %}
 {% endblock %}
 
 {% block scripts %}
 <script>
-document.querySelectorAll('#form-filtros select').forEach(function (el) {
-    el.addEventListener('change', function () { document.getElementById('form-filtros').requestSubmit(); });
+function sortBy(orden) {
+    document.getElementById('f-orden').value = orden;
+    document.getElementById('form-filtros').submit();
+}
+function filterByAirline(cb) {
+    if (!cb.checked) {
+        document.getElementById('f-aerolinea').value = '';
+    } else {
+        document.getElementById('f-aerolinea').value = cb.value;
+    }
+    document.getElementById('form-filtros').submit();
+}
+/* Loading feedback en buscar */
+var formBusqueda = document.getElementById('form-busqueda');
+var btnBuscar    = document.getElementById('btn-buscar');
+if (formBusqueda && btnBuscar) {
+    formBusqueda.addEventListener('submit', function () {
+        btnBuscar.disabled = true;
+        btnBuscar.innerHTML =
+            '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Buscando…';
+    });
+}
+/* Collapse de secciones del sidebar */
+document.querySelectorAll('.sidebar-section-title').forEach(function (title) {
+    title.addEventListener('click', function () {
+        var body = title.nextElementSibling;
+        if (body) {
+            body.style.display = body.style.display === 'none' ? '' : 'none';
+            title.classList.toggle('collapsed');
+        }
+    });
 });
 </script>
 {% endblock %}

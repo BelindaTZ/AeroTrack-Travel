@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -8,6 +8,9 @@ from fastapi.responses import JSONResponse
 
 from app.shared.nav import nav_context
 from app.shared.templating import templates
+from app.seguridad.services.session_service import usuario_opcional
+from app.vuelos.repositories.dims_reader import resolver_aeropuerto
+from app.vuelos.repositories.vuelos_repo import VuelosRepository
 from app.seguridad.router_auditoria import router as seguridad_auditoria_router
 from app.seguridad.router_auth import router as seguridad_auth_router
 from app.seguridad.router_password import router as seguridad_password_router
@@ -27,6 +30,40 @@ from app.facturacion.router_backoffice import router as facturacion_backoffice_r
 from app.facturacion.router_documentos import router as facturacion_documentos_router
 from app.facturacion.router_interno import router as facturacion_interno_router
 from app.facturacion.router_pagos import router as facturacion_pagos_router
+from app.pasajeros.router_backoffice import router as pasajeros_backoffice_router
+from app.pasajeros.router_contacto import router as pasajeros_contacto_router
+from app.pasajeros.router_historial import router as pasajeros_historial_router
+from app.disrupciones.router_interno import router as disrupciones_interno_router
+from app.disrupciones.router_interno import router_notificaciones as disrupciones_notificaciones_interno_router
+from app.disrupciones.router_notificaciones import router as disrupciones_notificaciones_router
+from app.integraciones.router_bitacora import router as integraciones_bitacora_router
+from app.integraciones.router_fuentes import router as integraciones_fuentes_router
+from app.hoteles.router_interno import router as hoteles_interno_router
+from app.hoteles.router_busqueda import router as hoteles_busqueda_router
+from app.autos.router_interno import router as autos_interno_router
+from app.autos.router_busqueda import router as autos_busqueda_router
+from app.actividades.router_interno import router as actividades_interno_router
+from app.actividades.router_busqueda import router as actividades_busqueda_router
+from app.cruceros.router_interno import router as cruceros_interno_router
+from app.cruceros.router_busqueda import router as cruceros_busqueda_router
+from app.carrito.router_carrito import router as carrito_router
+from app.carrito.router_checkout import router as carrito_checkout_router
+from app.carrito.router_vista import router as carrito_vista_router
+from app.paquetes.router_construccion import router as paquetes_construccion_router
+from app.paquetes.router_resumen import router as paquetes_resumen_router
+from app.cuenta.router_mis_viajes import router as cuenta_mis_viajes_router
+from app.cuenta.router_favoritos import router as cuenta_favoritos_router
+from app.cuenta.router_viajes_personalizados import router as cuenta_viajes_personalizados_router
+from app.cuenta.router_busquedas import router as cuenta_busquedas_router
+from app.cuenta.router_puntos import router as cuenta_puntos_router
+from app.centro_ayuda.router_escalar import router as centro_ayuda_escalar_router
+from app.centro_ayuda.router_ayuda import router as centro_ayuda_ayuda_router
+from app.centro_ayuda.router_backoffice import router as centro_ayuda_backoffice_router
+from app.ofertas.router_cupon import router as ofertas_cupon_router
+from app.ofertas.router_ofertas import router as ofertas_ofertas_router
+from app.ofertas.router_backoffice import router as ofertas_backoffice_router
+from app.asistente_ia.router_conversacion import router as asistente_conversacion_router
+from app.asistente_ia.router_backoffice import router as asistente_backoffice_router
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -51,6 +88,40 @@ app.include_router(facturacion_pagos_router)
 app.include_router(facturacion_documentos_router)
 app.include_router(facturacion_interno_router)
 app.include_router(facturacion_backoffice_router)
+app.include_router(pasajeros_backoffice_router)
+app.include_router(pasajeros_contacto_router)
+app.include_router(pasajeros_historial_router)
+app.include_router(disrupciones_interno_router)
+app.include_router(disrupciones_notificaciones_interno_router)
+app.include_router(disrupciones_notificaciones_router)
+app.include_router(integraciones_fuentes_router)
+app.include_router(integraciones_bitacora_router)
+app.include_router(hoteles_interno_router)
+app.include_router(hoteles_busqueda_router)
+app.include_router(autos_interno_router)
+app.include_router(autos_busqueda_router)
+app.include_router(actividades_interno_router)
+app.include_router(actividades_busqueda_router)
+app.include_router(cruceros_interno_router)
+app.include_router(cruceros_busqueda_router)
+app.include_router(carrito_router)
+app.include_router(carrito_checkout_router)
+app.include_router(carrito_vista_router)
+app.include_router(paquetes_construccion_router)
+app.include_router(paquetes_resumen_router)
+app.include_router(cuenta_mis_viajes_router)
+app.include_router(cuenta_favoritos_router)
+app.include_router(cuenta_viajes_personalizados_router)
+app.include_router(cuenta_busquedas_router)
+app.include_router(cuenta_puntos_router)
+app.include_router(centro_ayuda_escalar_router)
+app.include_router(centro_ayuda_ayuda_router)
+app.include_router(centro_ayuda_backoffice_router)
+app.include_router(ofertas_cupon_router)
+app.include_router(ofertas_ofertas_router)
+app.include_router(ofertas_backoffice_router)
+app.include_router(asistente_conversacion_router)
+app.include_router(asistente_backoffice_router)
 
 
 @app.exception_handler(SesionExpirada)
@@ -88,8 +159,18 @@ async def health() -> dict[str, str]:
 
 
 @app.get("/")
-async def raiz() -> RedirectResponse:
-    # Camino feliz de un pasajero (HU-VUE-01): buscar vuelos no requiere
-    # sesión. Sin landing page de marketing propia todavía — el buscador es
-    # el punto de entrada real del producto.
-    return RedirectResponse("/vuelos/buscar", status_code=303)
+async def raiz(request: Request, usuario: dict | None = Depends(usuario_opcional)):
+    # Un administrador que llega a "/" (ej. logo en el topbar del backoffice)
+    # va a su panel — la landing de abajo es para pasajero/invitado, mismo
+    # criterio que login_submit() en router_auth.py.
+    if usuario and usuario.get("tipo_actor") == "administrador":
+        return RedirectResponse("/admin/usuarios", status_code=303)
+
+    repo = VuelosRepository()
+    destinos = await repo.destinos_populares(limite=6)
+    destinos_out = [
+        {**d, "legible": await resolver_aeropuerto(d["codigo"])} for d in destinos
+    ]
+    return templates.TemplateResponse(
+        request, "inicio.html", {"usuario": usuario, "destinos_populares": destinos_out}
+    )

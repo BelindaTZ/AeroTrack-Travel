@@ -1,6 +1,8 @@
-# Consideraciones — Sistema AeroTrack Travel (Nivel Operativo)
+# Consideraciones — Sistema AeroTrack Travel (Niveles Operativo y Táctico)
 
-**Fuente principal:** `docs/aerotrack-travel-documento-empresarial.md`. Este documento reúne el contexto de negocio y las decisiones de alcance que condicionan cómo se interpreta cada RF/RN en los 6 módulos-spec, para no repetirlas en cada uno.
+**Fuente principal:** `docs/aerotrack-travel-documento-empresarial.md`, actualizado con las decisiones de la sesión de diseño de BD (`docs/aerotrack-travel-casos-de-uso-v3.md`, `docs/aerotrack-travel-propuesta-tablas-v3.dbml`, `docs/fuentes-datos-por-tabla.md`, 2026-07-17). Este documento reúne el contexto de negocio y las decisiones de alcance que condicionan cómo se interpreta cada RF/RN en los 17 módulos-spec, para no repetirlas en cada uno.
+
+> **Nota (2026-07-18):** la sección 3 de este documento decía "solo vuelos, sin hospedaje, paquetes ni actividades" — eso dejó de ser cierto con el catálogo v3.0 (2026-07-15), que amplió el alcance a seis verticales de producto y a rutas internacionales. Se corrige abajo; el resto del documento (secciones 1, 2, 4-11) se actualiza donde corresponde, sin tocar lo que sigue vigente.
 
 ---
 
@@ -12,21 +14,48 @@ AeroTrack Travel es un proyecto académico que **simula** una agencia de viajes 
 
 Un aviso de cambio de itinerario puede llegar correctamente de la aerolínea a la agencia y aun así nunca llegar al pasajero final, porque el correo de contacto registrado ante la aerolínea es el de la agencia, no el del viajero. Esto es el porqué de fondo del módulo Disrupciones y de la regla constitucional E1 (ninguna disrupción detectada queda sin notificar) — toda RN de ese módulo debe evaluarse contra si cierra o reabre este hueco.
 
-## 3. Alcance de producto: solo vuelos, solo EE. UU. doméstico
+## 3. Alcance de producto: seis verticales, alcance internacional (ampliado en v3.0)
 
-- **Solo vuelos** — sin hospedaje, paquetes ni actividades. Mantiene el foco en el diferenciador (gestión de disrupciones) y la coherencia con el dataset heredado (BTS/FAA es de vuelos, no de hospedaje).
-- **Vuelos domésticos EE. UU.** — para pasajeros no se pide ni sube ningún documento de identidad; solo se declara nombre y, opcionalmente, número de identificación, sin verificación ni imágenes. Ninguna spec debe introducir flujos de verificación documental (pasaportes, visados) fuera de este alcance.
-- **Moneda única: USD.**
+> **Decisión revisada 2026-07-15/17** (supersede la versión original de este documento, que
+> limitaba el alcance a "solo vuelos, solo EE. UU. doméstico"): el catálogo creció a seis
+> verticales de producto y a rutas internacionales, validado contra integraciones reales
+> probadas en vivo (ver sección 7). El diferenciador de negocio (gestión proactiva de
+> disrupciones) **sigue siendo exclusivo de Vuelos** — ninguna de las otras cinco verticales tiene
+> monitoreo de disrupciones en el catálogo actual; eso no cambió.
 
-## 4. Tres niveles organizacionales — solo uno se entrega ahora
+- **Seis verticales de producto** — Vuelos, Hoteles, Autos de renta, Actividades, Cruceros y
+  Paquetes (combinación de las anteriores, vuelo+hotel obligatorio como mínimo). Cada una tiene su
+  propio módulo-spec de catálogo/búsqueda, y todas confluyen en Carrito → Reservas → Facturación.
+- **Alcance internacional** — ya no limitado a EE. UU. doméstico. Esto reabre la necesidad de
+  documentación de viaje (pasaporte, vencimiento — CU-O49, módulo Pasajeros) y de consulta de
+  requisitos de visa por destino (CU-O81, módulo Reservas, vía Visa Requirement API) para rutas que
+  sí lo requieran; sigue sin pedirse verificación documental con imágenes, solo declaración de
+  datos, igual que en el alcance doméstico original.
+- **El dataset heredado (BTS/FAA, modelo dimensional Kimball) sigue siendo de vuelos únicamente**
+  — no se amplió a las otras verticales. El risk score histórico (CU-O83) y el simulador
+  estratégico solo aplican a Vuelos; las demás verticales no tienen equivalente de riesgo de
+  disrupción en este catálogo.
+- **Moneda de presentación:** se muestra en la moneda local relevante cuando aplica, convertida
+  para consistencia vía CU-O85 (ExchangeRate-API, 1×/día) — dejó de ser estrictamente USD único al
+  ampliarse a alcance internacional; el cobro real vía Stripe sigue siendo en USD.
+
+## 4. Tres niveles organizacionales — dos se entregan ahora (ampliado 2026-07-18)
 
 | Nivel | Qué define | Estado en esta entrega |
 |---|---|---|
-| Estratégico | Metas de negocio: fidelización, expansión de proveedores, madurez analítica | Solo objetivos planteados, sin spec |
-| Táctico | Configuración de reglas de negocio, roles, parámetros | Solo objetivos planteados, sin spec |
-| **Operativo** | Registro diario: reservas, clientes, vuelos, notificaciones, pagos | **Esta es la entrega actual** |
+| Estratégico | Metas de negocio: fidelización, expansión de proveedores, madurez analítica | Solo objetivos planteados, sin spec — el único nivel que sigue fuera de alcance |
+| **Táctico** | Configuración de reglas de negocio, roles, parámetros, reportes operativos | **Catálogo redactado (43 CU-T, 17 módulos), carpetas creadas bajo `specs/tactico/` — `spec.md` pendiente de redactar módulo por módulo** |
+| **Operativo** | Registro diario: búsqueda/reserva de las 6 verticales, clientes, notificaciones, pagos | **122 CU-O, 16 módulos — 6 ya redactados de una ronda anterior, 10 con carpeta creada, `spec.md` pendiente** |
 
-Ninguna spec de nivel Operativo debe intentar resolver una necesidad de configuración general (SMTP, credenciales, umbrales, plantillas) dentro de sí misma — esas necesidades quedan documentadas como referencia a un CU-T previsto (catálogo en `docs/aerotrack-travel-casos-de-uso-operativos.md`, sección 3) y se resuelven cuando exista el nivel Táctico. Mientras tanto, los valores que normalmente vivirían en configuración táctica (tiempos de expiración, umbrales, credenciales) se leen de `configuracion_sistema` con un valor por defecto documentado en la spec del módulo que lo consume.
+Ninguna spec de nivel Operativo debe intentar resolver una necesidad de configuración general
+(SMTP, credenciales, umbrales, plantillas) dentro de sí misma — esas necesidades se documentan
+como referencia al CU-T correspondiente (catálogo completo en `docs/aerotrack-travel-casos-de-uso-v3.md`,
+mapa de asignación por módulo en `analisis-cus-completo.md` sección 4) y se resuelven cuando se
+redacte el `spec.md` Táctico de ese módulo. Mientras tanto, los valores que vivirían en
+configuración táctica (tiempos de expiración, umbrales, credenciales, frecuencia de sincronización)
+se leen de `configuracion_sistema` con un valor por defecto documentado en la spec Operativa del
+módulo que los consume — igual criterio que cuando el nivel Táctico completo estaba sin redactar,
+ahora aplicado módulo por módulo según se vaya redactando cada `spec.md` Táctico.
 
 ## 5. Modelo de ingresos y facturación
 
@@ -46,13 +75,26 @@ Flujo de referencia: Buscador (origen/destino/fecha/pasajeros) → Resultados fi
 
 ## 7. Fuentes de datos y servicios reales incorporados (y su motivo)
 
+Ampliada 2026-07-17 con las fuentes probadas en vivo durante la sesión de diseño de BD para las
+cinco verticales nuevas — detalle endpoint-por-endpoint en `docs/apis-reference.md` y
+`docs/fuentes-datos-por-tabla.md`; esta tabla queda como el resumen de alto nivel.
+
 | Servicio | Rol en el sistema | Por qué se eligió |
 |---|---|---|
 | **TripIt** | Precedente comercial, no una integración — valida que "monitorear una bandeja de correo" es una estrategia real usada en producción | Referencia de diseño para Disrupciones |
 | **Gmail API (OAuth)** | Monitorea la bandeja de correo de la agencia para detectar avisos reales de cambio/cancelación (CU-O28) | Inspirado en TripIt, sin requerir certificación |
-| **API de estado de vuelo** (AviationStack, FlightAware AeroAPI, AeroDataBox) | Estado real y actual de un vuelo específico (CU-O27) | Sin necesidad de certificación IATA, planes gratuitos/bajo costo |
-| **OpenSky Network** | Posición ADS-B en tiempo real — complemento secundario | Gratuito para uso académico; no entrega retrasos/cancelaciones directamente, solo posición — no debe tratarse como fuente primaria de disrupción |
-| **Stripe (test mode)** | Pasarela de pago para todo el flujo de Facturación | Mecánica real (autorización, captura, reembolso) sin mover dinero real ni requerir certificación |
+| **API de estado de vuelo** (AeroDataBox / AviationStack) | Estado real y actual de un vuelo específico, catálogo de vuelos, delays por aeropuerto (CU-O19, O20, O27) | Sin necesidad de certificación IATA, planes gratuitos/bajo costo; rotación de 3 hubs/día para no agotar cuota |
+| **Google Flights (SerpApi)** | Precio real, clase de cabina, predicción de precio (CU-O19, O51, O114) | Único de los evaluados con precio y `price_insights` reales; rotación separada de cuota (~250/mes) |
+| **OpenSky Network** | Posición ADS-B en tiempo real — complemento secundario (CU-O84) | Gratuito para uso académico; no entrega retrasos/cancelaciones directamente, solo posición — no debe tratarse como fuente primaria de disrupción |
+| **HotelLens** | Catálogo de hoteles, tarifas y reseñas reales (CU-O118, módulo Hoteles) | Único evaluado con `rooms_left` real vía flujo Google Hotels → Booking.com |
+| **Global Rental Cars** | Catálogo de autos de renta (CU-O119, módulo Autos) | Flujo Expedia limpio; Priceline/Booking sirven pero ignoran fecha/ubicación pedida, revalidar antes de cobrar |
+| **Travel Advisor** | Catálogo y reseñas de actividades (CU-O120, módulo Actividades) | Endpoint de disponibilidad real (`check-availability`) confirmado roto — de ahí la disponibilidad sintética (CU-O121) |
+| **Cruise Pricing API** | Catálogo y precio de cruceros/camarotes (CU-O122, módulo Cruceros) | 10/11 endpoints funcionales; sin inventario real de cupos — de ahí la disponibilidad sintética (CU-O123) |
+| **Visa Requirement API** | Requisitos de documentación/visa por destino, cacheados (CU-O81, módulo Reservas) | Necesaria al ampliar a alcance internacional (sección 3) |
+| **ExchangeRate-API** | Conversión de moneda para presentación de precio, 1×/día (CU-O85, módulo Facturación) | Necesaria al ampliar a alcance internacional |
+| **Stripe (test mode)** | Pasarela de pago para todo el flujo de Facturación, incluye pago diferido de hotel (CU-O86) | Mecánica real (autorización, captura, reembolso) sin mover dinero real ni requerir certificación |
+| **SendGrid** | Envío real de notificaciones y campañas de email promocional (Disrupciones, Ofertas y Promociones) | Envío real sin necesidad de infraestructura SMTP propia |
+| **Groq / Gemini** | Generación de respuesta en vivo del Asistente IA (CU-O106–O111) | Constante, contexto acotado y verificable (constitución H1) |
 
 **Explícitamente fuera de alcance (certificaciones formales):** acreditación IATA/IATAN, integración real con BSP/ARC, conexión directa a GDS (Amadeus, Sabre, Travelport), estándar NDC completo. Todos requieren procesos de certificación institucional inviables para un proyecto académico y se sustituyen por los mecanismos simulados/reales de la tabla anterior. Ninguna spec de módulo debe diseñar un flujo que asuma acceso a estos sistemas.
 

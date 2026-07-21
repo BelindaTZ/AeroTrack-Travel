@@ -35,6 +35,11 @@ async def test_crear_reserva_con_cupo_crea_pendiente_pago(client, pb, pasajero_f
     await pb.delete_record("reserva_pasajeros", (await pb.list_records(
         "reserva_pasajeros", {"filter": f'reserva_id="{reserva_id}"'}
     ))["items"][0]["id"])
+    # reserva_items (dual-write de crear_reserva_service) tiene una relación
+    # requerida a reservas — hay que borrarlo antes o PocketBase rechaza el
+    # delete de la reserva ("part of a required relation reference").
+    for item in (await pb.list_records("reserva_items", {"filter": f'reserva_id="{reserva_id}"'}))["items"]:
+        await pb.delete_record("reserva_items", item["id"])
     await pb.delete_record("reservas", reserva_id)
 
 
@@ -124,6 +129,8 @@ async def test_reserva_asistida_exige_rbac_y_registra_agente(
         "reserva_pasajeros",
         (await pb.list_records("reserva_pasajeros", {"filter": f'reserva_id="{reserva_id}"'}))["items"][0]["id"],
     )
+    for item in (await pb.list_records("reserva_items", {"filter": f'reserva_id="{reserva_id}"'}))["items"]:
+        await pb.delete_record("reserva_items", item["id"])
     await pb.delete_record("reservas", reserva_id)
 
 

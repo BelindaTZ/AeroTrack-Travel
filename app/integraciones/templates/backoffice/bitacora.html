@@ -1,0 +1,76 @@
+{% extends "layout_app.html" %}
+{% block title %}Bitácora de sincronizaciones — AeroTrack Travel{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <h1><span class="heading-icon"><i class="bi bi-journal-text"></i></span>Bitácora de sincronizaciones</h1>
+    <p>Historial de corridas de catálogo por fuente. Una corrida fallida no oculta la última exitosa — el catálogo servido sigue siendo el de esa corrida anterior.</p>
+</div>
+
+<div class="at-table-wrapper">
+    <div class="at-table-header">
+        <form method="get" action="/backoffice/integraciones/bitacora" id="form-filtros" class="d-flex gap-2 align-items-center flex-wrap">
+            <select class="form-control-at" name="fuente_id" style="width:240px">
+                <option value="">Todas las fuentes</option>
+                {% for f in fuentes %}
+                <option value="{{ f.id }}" {% if filtros.fuente_id == f.id %}selected{% endif %}>{{ f.nombre }}</option>
+                {% endfor %}
+            </select>
+            <input type="date" class="form-control-at" name="desde" value="{{ filtros.desde }}" style="width:160px">
+            <input type="date" class="form-control-at" name="hasta" value="{{ filtros.hasta }}" style="width:160px">
+        </form>
+    </div>
+
+    {% if corridas %}
+    <div class="at-table-scroll">
+        <table class="at-table">
+            <thead>
+                <tr>
+                    <th>Inicio</th>
+                    <th>Fuente</th>
+                    <th>Producto</th>
+                    <th>Estado</th>
+                    <th>Procesados / nuevos / actualizados</th>
+                    <th>Cuota</th>
+                    <th>Ejecutado por</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for c in corridas %}
+                <tr id="log-{{ c.id }}">
+                    <td class="at-mono" style="font-size:12px">{{ c.fecha_inicio[:16] if c.fecha_inicio else "" }}</td>
+                    <td>{{ c.fuente_nombre }}</td>
+                    <td>{{ c.tipo_producto or "—" }}</td>
+                    <td>
+                        {% if c.estado == "exitoso" %}
+                        <span class="badge-sistema" style="background:var(--at-success-bg);color:var(--at-success-fg)">exitoso</span>
+                        {% elif c.estado == "parcial" %}
+                        <span class="badge-sistema" style="background:var(--at-warning-bg);color:var(--at-warning-fg)">parcial</span>
+                        {% else %}
+                        <span class="badge-sistema" style="background:var(--at-failed-bg);color:var(--at-failed-fg)">fallido</span>
+                        {% endif %}
+                        {% if c.error_detalle %}<div style="font-size:11.5px;color:var(--at-text-muted)">{{ c.error_detalle }}</div>{% endif %}
+                    </td>
+                    <td class="at-mono">{{ c.registros_procesados or 0 }} / {{ c.registros_nuevos or 0 }} / {{ c.registros_actualizados or 0 }}</td>
+                    <td class="at-mono">{{ c.unidades_cuota_consumidas if c.unidades_cuota_consumidas is not none else "—" }}</td>
+                    <td>{% if c.ejecutado_por %}<span class="badge-sistema">manual</span>{% else %}<span class="badge-sistema">automático</span>{% endif %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="at-empty">
+        <i class="bi bi-journal-text at-empty-icon" aria-hidden="true"></i>
+        <strong>Sin corridas para el filtro actual</strong>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.querySelectorAll('#form-filtros select, #form-filtros input').forEach(function (el) {
+    el.addEventListener('change', function () { document.getElementById('form-filtros').requestSubmit(); });
+});
+</script>
+{% endblock %}

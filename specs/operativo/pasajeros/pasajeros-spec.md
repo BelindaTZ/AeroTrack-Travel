@@ -3,8 +3,10 @@
 **Módulo:** Pasajeros
 **Prefijo:** PAS
 **Código fuente:** `app/pasajeros/`
-**Casos de uso cubiertos:** CU-O14 (Consultar historial de reservas propio), CU-O15 (Editar datos de contacto), CU-O16 (Buscar y gestionar pasajeros — backoffice)
+**Casos de uso cubiertos:** CU-O14 (Consultar historial de reservas propio), CU-O15 (Editar datos de contacto), CU-O16 (Buscar y gestionar pasajeros — backoffice), CU-O49 (Gestionar documentos de viaje — nuevo v3.0, no implementado), CU-O50 (Gestionar viajeros frecuentes guardados — nuevo v3.0, no implementado)
 **Actor:** Pasajero / Agente / Administrador
+
+> **Nota de actualización 2026-07-18:** CU-O49/O50 son del catálogo v3.0, no estaban en el alcance original de este módulo y no tienen código todavía (`app/pasajeros/` solo tiene routers de contacto/historial/backoffice). Se agregan como Funcionalidad 4 y 5, marcadas pendientes de implementación.
 
 ---
 
@@ -44,9 +46,27 @@ El sistema debe permitir a un Agente o Administrador ver el detalle completo de 
 
 ---
 
+## Funcionalidad 4: Gestionar documentos de viaje (CU-O49) — *(nuevo v3.0, no implementado)*
+
+Se reabrió al ampliar el alcance a rutas internacionales (`consideraciones.md` sección 3) — para vuelos domésticos EE. UU. nunca hizo falta.
+
+### RF-PAS-005 — Gestionar documentos de viaje *(pendiente de implementación)*
+El sistema debe permitir a un pasajero agregar, editar y eliminar sus documentos de viaje (pasaporte, cédula), cada uno con tipo, número, país de emisión (ISO alpha-2) y fecha de vencimiento; el archivo/escaneo es opcional (`documentos_viaje.archivo`, file field). Alimenta directamente a CU-O81 (Consultar requisitos de visa, `reservas-spec.md`) — sin país de emisión declarado no hay consulta de visa posible.
+
+### RNF-PAS-003 — Documento sensible, sin verificación *(pendiente de implementación)*
+Igual que en RNF-SEG-005, el sistema no verifica la autenticidad del documento — solo lo declara el pasajero. Si se sube un archivo/escaneo, es PII sensible y requiere el mismo nivel de control de acceso que cualquier dato personal (REG-B2/C2).
+
+## Funcionalidad 5: Gestionar viajeros frecuentes guardados (CU-O50) — *(nuevo v3.0, no implementado)*
+
+### RF-PAS-006 — Gestionar viajeros frecuentes guardados *(pendiente de implementación)*
+El sistema debe permitir a un pasajero agregar, editar y eliminar acompañantes recurrentes (`viajeros_frecuentes`: nombre completo, fecha de nacimiento, documento, relación en texto libre), sin que cada uno necesite su propia cuenta de usuario. Alimenta como autocompletado opcional a CU-O21/O22 (Crear reserva, `reservas-spec.md`) cuando el pasajero viaja acompañado.
+
+---
+
 ## Reglas de negocio
 
 - **RN-PAS-001** — El número de documento de identidad es opcional al registrarse (CU-O07) pero se vuelve obligatorio antes de poder confirmar una reserva (CU-O21/O22); el sistema lo exige en ese punto del flujo, no antes.
+- **RN-PAS-005** — *(Nueva v3.0, pendiente)* Un documento de viaje próximo a vencer (dentro de la ventana mínima que exige la ruta consultada) se comunica explícitamente al pasajero al consultar requisitos de visa (CU-O81), no se descubre recién en el aeropuerto.
 - **RN-PAS-002** — El teléfono y el correo del pasajero son, respectivamente, el canal secundario y primario de notificación de disrupciones; mantenerlos actualizados es responsabilidad del pasajero, pero el sistema no bloquea ninguna funcionalidad por un dato de contacto desactualizado — solo reduce la efectividad de la notificación (REG-E1 no se ve comprometido, la notificación se intenta igual).
 - **RN-PAS-003** — En backoffice, un Agente solo puede ver y editar pasajeros dentro del alcance permitido por su restricción RBAC de Nivel 2, si su rol la tiene definida; un Administrador sin restricción de Nivel 2 accede a todos.
 - **RN-PAS-004** — Toda edición de datos de pasajero, ya sea por autoservicio o desde backoffice, se audita (CU-O41), identificando si el cambio lo hizo el propio pasajero o un Agente/Administrador en su nombre.
@@ -101,13 +121,15 @@ Dar a cada pasajero visibilidad total sobre su propio historial de viaje y contr
 - **CU-O14:** Dado que un pasajero está autenticado, cuando accede a su historial de reservas, entonces ve todas sus reservas propias ordenadas por fecha de vuelo, sin ver reservas de otros pasajeros.
 - **CU-O15:** Dado que un pasajero autenticado ingresa un teléfono con formato válido, cuando guarda el cambio, entonces su dato de contacto queda actualizado y disponible como canal de notificación.
 - **CU-O16:** Dado que un Agente/Administrador con permiso RBAC busca un pasajero, cuando encuentra el resultado dentro de su alcance autorizado, entonces puede ver y editar su detalle; si está fuera de su alcance, la acción se bloquea.
+- **CU-O49** *(pendiente de implementación):* Dado que un pasajero agrega un documento de viaje con país de emisión, cuando lo guarda, entonces queda disponible para que Reservas consulte requisitos de visa (CU-O81).
+- **CU-O50** *(pendiente de implementación):* Dado que un pasajero guarda un viajero frecuente, cuando crea una reserva con acompañantes, entonces puede autocompletar sus datos desde la lista guardada.
 
 ---
 
 ## Dependencias
 
 - **Seguridad:** sesión (CU-O42), RBAC (CU-O43), auditoría (CU-O41), y la pantalla base de perfil (RF-SEG-006) que esta funcionalidad especializa.
-- **Reservas:** el historial de CU-O14 lee directamente la tabla `reservas` que ese módulo posee.
+- **Reservas:** el historial de CU-O14 lee directamente la tabla `reservas` que ese módulo posee; CU-O49 alimenta a CU-O81 (requisitos de visa) y CU-O50 alimenta el autocompletado de CU-O21/O22 — ambos pendientes de implementación en ambos lados.
 - **Disrupciones:** consume los datos de contacto mantenidos aquí como canal de envío de notificaciones (CU-O30).
 
 ---
@@ -123,6 +145,7 @@ Dar a cada pasajero visibilidad total sobre su propio historial de viaje y contr
 
 ## Fuera de alcance
 
-- Programa de fidelización o perfil de viajero frecuente — reservado para el departamento Comercial y Marketing, sin CU redactados aún.
+- **Corregido 2026-07-18:** "viajero frecuente" ya NO es un hueco del catálogo (existía esta nota, incorrecta) — CU-O50 lo define explícitamente en este módulo desde v3.0 (Funcionalidad 5 arriba), no implementado todavía. El **programa de beneficios/puntos** (fidelización con niveles y acumulación) sí sigue siendo de otro módulo: CU-O92/CU-T24, en Cuenta/Mis Viajes (Gestión de Clientes), no Comercial y Marketing.
 - Cambio de correo electrónico (identificador de acceso) — pertenece a `seguridad-spec.md` y no está implementado en esta versión.
 - Eliminación de cuenta o de datos personales — el mecanismo de solicitud vive en `seguridad-spec.md` (RF-SEG-017); este módulo solo participa como dueño del dato de perfil extendido.
+- Verificación real de documento de viaje (OCR, validación contra autoridad emisora) — CU-O49 solo declara el dato, igual criterio que el documento de identidad doméstico (RN-PAS-001, RNF-SEG-005).

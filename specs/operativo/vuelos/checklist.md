@@ -42,6 +42,16 @@
 - [x] CHK022 CU-O45 — ídem (mecanismo atómico probado; el lado de orquestación de negocio se probará en `reservas-spec.md` cuando exista).
 - [x] CHK023 CU-O48 — ídem, incluyendo los tres casos de bloqueo (sesión, RBAC, motivo faltante); el disparo de notificación queda documentado como pendiente, no simulado.
 
+## Trazabilidad — extensión de catálogo v3.1 (2026-07-18, no implementada)
+
+- [ ] CHK024 RF-VUE-007 (CU-O53) — filtro completo (escalas/equipaje/horario/duración) + ordenamiento. *(escalas no es implementable con el modelo de datos actual, ver Notas de cierre CHK002; el resto no está implementado)*
+- [ ] CHK025 RF-VUE-008 (CU-O51) — predicción de precio. *(no implementado)*
+- [ ] CHK026 RF-VUE-009 (CU-O52) — riesgo de disrupción en detalle de vuelo. *(no implementado, además depende de que Disrupciones escriba `risk_score` vía CU-O83)*
+- [ ] CHK027 RF-VUE-010 (CU-O114) — clase de cabina. *(no implementado)*
+- [ ] CHK028 RF-VUE-011 (CU-O115) — mapa de asientos. *(no implementado)*
+- [ ] CHK029 RF-VUE-012 (CU-O116) — seleccionar asiento. *(no implementado; también pendiente del lado de Reservas)*
+- [ ] CHK030 RF-VUE-013 (CU-O117) — asignación automática de asiento. *(no implementado)*
+
 ## Notas de cierre — sesión de implementación (2026-07-09)
 
 - **Bug de esquema encontrado y corregido:** `tarifas_vuelo.cupos_disponibles` estaba marcado `required=true` desde que la colección se creó (sesión anterior). PocketBase 0.22 trata `0` como "valor ausente" en un campo numérico requerido, lo cual rompía por completo el caso "cupo agotado" — ni siquiera se podía crear un registro con `cupos_disponibles=0`. Corregido con `scripts/pb_schema_vuelos_fix.py` (idempotente, ya aplicado). Este bug no era de este módulo, pero lo bloqueaba directamente.

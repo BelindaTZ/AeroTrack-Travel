@@ -1,0 +1,22 @@
+{% extends "layout_app.html" %}
+{% block title %}Acumulación cupón + paquete — AeroTrack Travel{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <h1><span class="heading-icon"><i class="bi bi-sliders"></i></span>Acumulación de cupones con descuento de paquete</h1>
+    <p>Default global (CU-T44) — un cupón individual puede marcar una excepción explícita que siempre gana sobre este valor (RN-OFE-T03).</p>
+</div>
+
+<form method="post" action="/backoffice/ofertas/config-acumulacion-paquete" class="at-card" style="max-width:480px">
+    <div class="d-flex align-items-center gap-2 mb-3">
+        <input type="checkbox" name="acumulable" value="true" id="acum-default" {% if acumulable_default %}checked{% endif %}>
+        <label for="acum-default" style="font-weight:600;font-size:13.5px">
+            Por defecto, los cupones SÍ son acumulables con el descuento de un paquete
+        </label>
+    </div>
+    <p style="font-size:12px;color:var(--at-muted);margin:0 0 12px">
+        Estado actual: <strong>{{ "acumulable" if acumulable_default else "no acumulable" }}</strong> por defecto.
+        Solo aplica cuando la reserva es un paquete (RN-OFE-T04) — cupones individuales pueden anular este valor.
+    </p>
+    <button type="submit" class="btn-at-primary"><i class="bi bi-check-lg"></i> Guardar</button>
+</form>
+{% endblock %}

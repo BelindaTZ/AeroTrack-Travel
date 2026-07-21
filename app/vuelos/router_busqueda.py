@@ -2,11 +2,13 @@
 
 from datetime import date
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Depends, Query, Request
 
 from app.vuelos.repositories.dims_reader import resolver_aeropuerto
 from app.vuelos.repositories.vuelos_repo import VuelosRepository
 from app.vuelos.schemas import NivelTarifaOut, VueloBusquedaOut
+from app.seguridad.services.session_service import usuario_opcional
+from app.shared.busqueda_reciente import registrar_busqueda_reciente
 from app.shared.templating import templates
 
 router = APIRouter(prefix="/vuelos")
@@ -18,7 +20,7 @@ _BUCKETS_HORARIO = {
 }
 
 
-async def _formulario_vacio(request: Request, **filtros_extra) -> object:
+async def _formulario_vacio(request: Request, usuario: dict | None, **filtros_extra) -> object:
     repo = VuelosRepository()
     aerolineas = await repo.listar_aerolineas_activas()
     codigos = await repo.codigos_aeropuertos_disponibles()
@@ -28,7 +30,7 @@ async def _formulario_vacio(request: Request, **filtros_extra) -> object:
     return templates.TemplateResponse(
         request,
         "buscar_vuelos.html",
-        {"resultados": None, "aerolineas": aerolineas, "aeropuertos": aeropuertos, "filtros": filtros},
+        {"resultados": None, "aerolineas": aerolineas, "aeropuertos": aeropuertos, "filtros": filtros, "usuario": usuario},
     )
 
 
@@ -42,11 +44,15 @@ async def buscar(
     aerolinea_id: str | None = None,
     horario: str = "",
     orden: str = "precio",
+    usuario: dict | None = Depends(usuario_opcional),
 ):
     if not (origen and destino and fecha):
-        return await _formulario_vacio(request, orden=orden)
+        return await _formulario_vacio(request, usuario, orden=orden)
 
     origen, destino = origen.upper(), destino.upper()
+    await registrar_busqueda_reciente(
+        usuario, "vuelo", {"origen": origen, "destino": destino, "fecha": fecha.isoformat(), "pasajeros": pasajeros}
+    )
     repo = VuelosRepository()
     vuelos = await repo.buscar(origen, destino, fecha.isoformat(), aerolinea_id or None)
 
@@ -96,16 +102,17 @@ async def buscar(
                 "pasajeros": pasajeros, "aerolinea_id": aerolinea_id or "",
                 "horario": horario, "orden": orden,
             },
+            "usuario": usuario,
         },
     )
 
 
 @router.get("/{vuelo_id}")
-async def detalle(request: Request, vuelo_id: str):
+async def detalle(request: Request, vuelo_id: str, usuario: dict | None = Depends(usuario_opcional)):
     repo = VuelosRepository()
     vuelo = await repo.obtener_vuelo(vuelo_id)
     if vuelo is None:
-        return templates.TemplateResponse(request, "detalle_vuelo.html", {"vuelo": None}, status_code=404)
+        return templates.TemplateResponse(request, "detalle_vuelo.html", {"vuelo": None, "usuario": usuario}, status_code=404)
 
     aerolinea = await repo.obtener_aerolinea(vuelo["aerolinea_id"])
     tarifas = await repo.tarifas_de_vuelo(vuelo_id)
@@ -140,5 +147,6 @@ async def detalle(request: Request, vuelo_id: str):
             "niveles": niveles,
             "origen_legible": await resolver_aeropuerto(vuelo["origen_codigo"]),
             "destino_legible": await resolver_aeropuerto(vuelo["destino_codigo"]),
+            "usuario": usuario,
         },
     )

@@ -9,7 +9,7 @@ async def test_buscar_sin_resultados_muestra_mensaje_claro(client):
         params={"origen": "JFK", "destino": "LAX", "fecha": "2099-01-01", "pasajeros": 1},
     )
     assert resp.status_code == 200
-    assert "No hay vuelos para esos criterios" in resp.text
+    assert "No hay vuelos disponibles" in resp.text
 
 
 async def test_buscar_con_resultados_muestra_vuelo(client, vuelo_factory, tarifa_factory):
@@ -22,7 +22,7 @@ async def test_buscar_con_resultados_muestra_vuelo(client, vuelo_factory, tarifa
     )
     assert resp.status_code == 200
     assert vuelo["numero_vuelo"] in resp.text
-    assert "250.00" in resp.text
+    assert "$250" in resp.text  # precio_desde se muestra sin decimales ("%.0f") en el layout de resultados
 
 
 async def test_filtros_secundarios_sin_boton_aplicar(client, vuelo_factory, tarifa_factory):
@@ -34,7 +34,9 @@ async def test_filtros_secundarios_sin_boton_aplicar(client, vuelo_factory, tari
         params={"origen": "JFK", "destino": "LAX", "fecha": "2027-06-16", "pasajeros": 1},
     )
     html = resp.text
-    assert "requestSubmit" in html
+    # Sort tabs y filtro de aerolínea envían el form oculto (#form-filtros) al
+    # interactuar (filterByAirline/sortBy -> .submit()), sin botón "Aplicar".
+    assert "filterByAirline" in html
     assert ">Aplicar<" not in html
     # La búsqueda principal sí conserva su botón explícito (icono de lupa).
     assert 'id="form-busqueda"' in html

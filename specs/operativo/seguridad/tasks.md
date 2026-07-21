@@ -134,6 +134,13 @@
 
 ---
 
+## Fase 7 (futura, no iniciada) — catálogo v3.0/dbml v3
+
+- CU-O112/O113 no requieren tarea nueva — ya cubiertos por T048/T051 (RF-SEG-011).
+- `usuarios.foto_perfil` (file field, dbml v3) — agregar campo a la colección PocketBase real, subida/reemplazo/vista en `router_perfil.py`/`mi_perfil.html`. No desglosado en tareas todavía.
+
+---
+
 ## Dependencias entre fases
 
 - Fase 0 bloquea todo lo demás (colecciones y esqueleto de proyecto no existen aún).

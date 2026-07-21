@@ -1,58 +1,141 @@
 {% extends "layout_portal.html" %}
 {% block title %}Confirmar reserva — AeroTrack Travel{% endblock %}
+
 {% block content %}
-<a href="/vuelos/{{ vuelo.id }}" class="d-inline-flex align-items-center gap-1 mb-3" style="font-size:13px;color:var(--at-muted);text-decoration:none">
+<a href="/vuelos/{{ vuelo.id }}" class="d-inline-flex align-items-center gap-2 mb-4"
+   style="font-size:13px;color:var(--at-muted);text-decoration:none;font-weight:500">
     <i class="bi bi-arrow-left"></i>Volver al vuelo
 </a>
-<h1 class="h5 mb-3" style="font-family:var(--font-display)">Confirmar reserva</h1>
+
+<h1 class="mb-4" style="font-size:22px;font-weight:800;letter-spacing:-.03em">
+    Confirmar reserva
+</h1>
 
 {% if error %}
-<div class="flash-bar" role="alert"><div class="flash-error"><i class="bi bi-exclamation-triangle-fill"></i>{{ error }}</div></div>
+<div class="flash-bar" role="alert">
+    <div class="flash-error"><i class="bi bi-exclamation-triangle-fill"></i>{{ error }}</div>
+</div>
 {% endif %}
 
 <div class="row g-4">
+    <!-- Columna izquierda: detalle vuelo + extras -->
     <div class="col-12 col-lg-7">
-        <div class="at-card mb-3">
-            <div class="type-chip mb-2">{{ aerolinea.nombre }}</div>
-            <div style="font-weight:600">{{ origen_legible }} → {{ destino_legible }}</div>
-            <div style="font-size:13px;color:var(--at-muted)">
-                Vuelo {{ vuelo.numero_vuelo }} · {{ vuelo.fecha_salida[:10] }} · {{ vuelo.hora_salida_programada }}
-                · Tarifa {{ nivel.nombre }}
+
+        <!-- Card vuelo seleccionado -->
+        <div class="at-card mb-4">
+            <div class="d-flex align-items-start gap-3">
+                <div style="width:40px;height:40px;border-radius:var(--at-r-md);background:var(--navy-50);border:1px solid var(--navy-100);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                    <i class="bi bi-airplane" style="color:var(--navy-700);font-size:17px" aria-hidden="true"></i>
+                </div>
+                <div style="flex:1;min-width:0">
+                    <div class="flight-airline-chip mb-2">
+                        <i class="bi bi-airplane" aria-hidden="true"></i>
+                        {{ aerolinea.nombre }}
+                    </div>
+                    <div class="flight-route">
+                        {{ origen_legible }}<span class="arrow">→</span>{{ destino_legible }}
+                    </div>
+                    <div class="flight-meta mt-1">
+                        <span>Vuelo {{ vuelo.numero_vuelo }}</span>
+                        <span class="sep">·</span>
+                        <span>{{ vuelo.fecha_salida[:10] }}</span>
+                        <span class="sep">·</span>
+                        <span>{{ vuelo.hora_salida_programada }}</span>
+                        <span class="sep">·</span>
+                        <span class="flight-duration-badge">Tarifa {{ nivel.nombre }}</span>
+                    </div>
+                </div>
             </div>
         </div>
 
+        <!-- Formulario extras -->
         <form method="post" action="/reservas" id="form-checkout">
             <input type="hidden" name="tarifa_id" value="{{ tarifa.id }}">
             <input type="hidden" name="precio_esperado" value="{{ tarifa.precio_final }}">
+
             <div class="at-card">
-                <h2 style="font-size:14.5px;margin-bottom:10px">Extras opcionales</h2>
+                <h2 style="font-size:15px;font-weight:700;margin-bottom:14px;letter-spacing:-.01em">
+                    <i class="bi bi-plus-circle me-2" style="color:var(--at-primary)"></i>
+                    Servicios adicionales
+                </h2>
+                {% if extras_disponibles %}
                 {% for e in extras_disponibles %}
-                <label class="d-flex align-items-center justify-content-between py-2" style="border-bottom:1px solid var(--slate-100);cursor:pointer">
-                    <span class="d-flex align-items-center gap-2">
-                        <input type="checkbox" class="perm-toggle" name="extras" value="{{ e.tipo }}" data-precio="{{ e.precio }}">
-                        {{ e.descripcion }}
+                <label class="d-flex align-items-center justify-content-between py-3"
+                       style="border-bottom:1px solid var(--slate-100);cursor:pointer;gap:12px"
+                       for="extra-{{ e.tipo }}">
+                    <span class="d-flex align-items-center gap-3">
+                        <input type="checkbox" class="perm-toggle" id="extra-{{ e.tipo }}"
+                               name="extras" value="{{ e.tipo }}" data-precio="{{ e.precio }}">
+                        <span style="font-size:14px">{{ e.descripcion }}</span>
                     </span>
-                    <span class="at-mono">${{ "%.2f"|format(e.precio) }}</span>
+                    <span class="at-mono" style="font-weight:600;color:var(--at-text);white-space:nowrap">
+                        +${{ "%.2f"|format(e.precio) }}
+                    </span>
                 </label>
                 {% endfor %}
+                {% else %}
+                <p style="font-size:13.5px;color:var(--at-muted);margin:0">
+                    No hay extras disponibles para esta tarifa.
+                </p>
+                {% endif %}
             </div>
-            <button type="submit" class="btn-at-accent w-100 justify-content-center mt-3" style="padding:12px">
-                <i class="bi bi-check2-circle"></i>Confirmar reserva
+
+            <button type="submit" id="btn-confirmar"
+                    class="btn-at-accent w-100 justify-content-center mt-4"
+                    style="padding:13px;font-size:15px;font-weight:700;border-radius:var(--at-r-lg)">
+                <i class="bi bi-check2-circle" aria-hidden="true"></i>
+                Confirmar y reservar
             </button>
+            <p style="font-size:12px;color:var(--at-muted);text-align:center;margin-top:10px">
+                <i class="bi bi-lock-fill me-1"></i>Pago seguro procesado por Stripe
+            </p>
         </form>
     </div>
 
+    <!-- Columna derecha: resumen de precio sticky -->
     <div class="col-12 col-lg-5">
-        <div class="at-card">
-            <h2 style="font-size:14.5px;margin-bottom:10px">Resumen de precio</h2>
-            <div class="d-flex justify-content-between mb-1" style="font-size:13.5px">
-                <span>Tarifa {{ nivel.nombre }}</span>
-                <span class="at-mono">${{ "%.2f"|format(tarifa.precio_final) }}</span>
+        <div style="position:sticky;top:calc(var(--topbar-h) + 16px)">
+            <div class="at-card">
+                <h2 style="font-size:15px;font-weight:700;margin-bottom:16px;letter-spacing:-.01em">
+                    Resumen del precio
+                </h2>
+
+                <!-- Tarifa base -->
+                <div class="d-flex justify-content-between align-items-center mb-2"
+                     style="font-size:14px">
+                    <span style="color:var(--at-muted)">Tarifa {{ nivel.nombre }}</span>
+                    <span class="at-mono">${{ "%.2f"|format(tarifa.precio_final) }}</span>
+                </div>
+
+                <!-- Extras dinámicos -->
+                <div id="resumen-extras"></div>
+
+                <!-- Divisor -->
+                <div style="border-top:2px dashed var(--at-border);margin:14px 0"></div>
+
+                <!-- Total -->
+                <div class="d-flex justify-content-between align-items-center">
+                    <span style="font-weight:700;font-size:15px">Total a pagar</span>
+                    <span class="at-mono" id="resumen-total"
+                          style="font-size:22px;font-weight:800;color:var(--at-primary);letter-spacing:-.02em">
+                        ${{ "%.2f"|format(tarifa.precio_final) }}
+                    </span>
+                </div>
+
+                <p style="font-size:11.5px;color:var(--at-muted);margin-top:12px;margin-bottom:0;line-height:1.6">
+                    Precio en USD. El cargo se realizará en Stripe test mode.
+                    Política de reembolso según la tarifa <strong>{{ nivel.nombre }}</strong>.
+                </p>
             </div>
-            <div id="resumen-extras"></div>
-            <div class="d-flex justify-content-between mt-2 pt-2" style="border-top:1px solid var(--at-border);font-weight:700">
-                <span>Total</span>
-                <span class="at-mono" id="resumen-total" style="color:var(--at-primary)">${{ "%.2f"|format(tarifa.precio_final) }}</span>
+
+            <!-- Trust signals -->
+            <div class="mt-3 d-flex flex-wrap gap-2">
+                <span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--at-muted);font-weight:500">
+                    <i class="bi bi-shield-check" style="color:var(--at-success)"></i> Precio transparente
+                </span>
+                <span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--at-muted);font-weight:500">
+                    <i class="bi bi-bell" style="color:var(--at-primary)"></i> Alertas de disrupción
+                </span>
             </div>
         </div>
     </div>
@@ -62,19 +145,38 @@
 {% block scripts %}
 <script>
 const precioBase = {{ tarifa.precio_final }};
+
 function actualizarResumen() {
     let total = precioBase;
     const filas = [];
     document.querySelectorAll('input[name="extras"]:checked').forEach(function (el) {
         const precio = parseFloat(el.dataset.precio);
         total += precio;
-        filas.push(`<div class="d-flex justify-content-between mb-1" style="font-size:13.5px"><span>${el.parentElement.textContent.trim()}</span><span class="at-mono">$${precio.toFixed(2)}</span></div>`);
+        const label = el.closest('label').querySelector('span:last-child, span[style]');
+        const desc  = el.closest('label').querySelector('span > span:last-of-type') ||
+                      el.parentElement.textContent.trim();
+        filas.push(
+            `<div class="d-flex justify-content-between align-items-center mb-2" style="font-size:13.5px">` +
+            `<span style="color:var(--at-muted)">${el.closest('label').querySelectorAll('span')[1]?.textContent?.trim() || 'Extra'}</span>` +
+            `<span class="at-mono">+$${precio.toFixed(2)}</span></div>`
+        );
     });
     document.getElementById('resumen-extras').innerHTML = filas.join('');
     document.getElementById('resumen-total').textContent = '$' + total.toFixed(2);
 }
+
 document.querySelectorAll('input[name="extras"]').forEach(function (el) {
     el.addEventListener('change', actualizarResumen);
 });
+
+/* Loading en submit */
+var form = document.getElementById('form-checkout');
+var btn  = document.getElementById('btn-confirmar');
+if (form && btn) {
+    form.addEventListener('submit', function () {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Procesando…';
+    });
+}
 </script>
 {% endblock %}

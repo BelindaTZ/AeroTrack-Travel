@@ -1,0 +1,37 @@
+{% extends "layout_portal.html" %}
+{% block title %}Búsquedas recientes — AeroTrack Travel{% endblock %}
+
+{% set _iconos = {"vuelo": "bi-airplane", "hotel": "bi-building", "auto": "bi-car-front", "actividad": "bi-compass", "crucero": "bi-water"} %}
+{% set _etiquetas = {"vuelo": "Vuelo", "hotel": "Hotel", "auto": "Auto", "actividad": "Actividad", "crucero": "Crucero"} %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <h1 class="h5 m-0" style="font-family:var(--font-display)">Búsquedas recientes</h1>
+    <a href="/mis-viajes" class="btn-at-ghost"><i class="bi bi-arrow-left"></i> Mis Viajes</a>
+</div>
+
+{% if busquedas %}
+<div class="d-flex flex-column gap-2">
+    {% for b in busquedas %}
+    <a href="{{ b.href_relanzar }}" class="at-card d-flex align-items-center justify-content-between text-decoration-none" style="color:var(--at-text)">
+        <div class="d-flex align-items-center gap-3">
+            <div class="type-chip"><i class="bi {{ _iconos.get(b.tipo_producto, 'bi-search') }}"></i> {{ _etiquetas.get(b.tipo_producto, b.tipo_producto) }}</div>
+            <div>
+                <div style="font-weight:600">
+                    {{ b.criterios.values() | select | join(" · ") }}
+                </div>
+                <div style="font-size:12px;color:var(--at-muted)">{{ b.fecha[:10] }}</div>
+            </div>
+        </div>
+        <span class="btn-at-ghost"><i class="bi bi-arrow-repeat"></i> Repetir</span>
+    </a>
+    {% endfor %}
+</div>
+{% else %}
+<div class="at-empty">
+    <i class="bi bi-clock-history at-empty-icon" aria-hidden="true"></i>
+    <strong>Sin búsquedas recientes</strong>
+    <p>Cada búsqueda que hagas logueado queda aquí, con un clic para repetirla.</p>
+</div>
+{% endif %}
+{% endblock %}

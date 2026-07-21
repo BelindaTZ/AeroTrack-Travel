@@ -1,0 +1,198 @@
+{% extends "layout_portal.html" %}
+{% block title %}Buscar hoteles — AeroTrack Travel{% endblock %}
+{% block description %}Compara hoteles por destino y fechas, con cupo y precio reales.{% endblock %}
+
+{% block hero %}
+<section class="at-hero-search {% if resultados is not none %}compact{% endif %}" aria-label="Buscador de hoteles">
+    <div style="max-width:960px;margin:0 auto;position:relative;z-index:2">
+        {% if not resultados %}
+        <div class="hero-eyebrow">
+            <i class="bi bi-building" aria-hidden="true"></i>
+            Hoteles
+        </div>
+        <h1 class="hero-title">Encuentra tu <span class="accent">próximo hospedaje</span></h1>
+        <p class="hero-sub">Cupo y precio reales, con reseñas verificadas de otros huéspedes.</p>
+        {% endif %}
+
+        <datalist id="lista-ciudades-hoteles">
+            {% for c in ciudades %}<option value="{{ c }}">{% endfor %}
+        </datalist>
+
+        <form method="get" action="/hoteles/buscar" id="form-busqueda-hoteles"
+              class="{% if resultados %}search-card-compact{% else %}search-card{% endif %}">
+            <div class="row g-3 align-items-end">
+                <div class="col-12 col-md-4">
+                    <label class="form-label-at" for="ciudad">Destino</label>
+                    <input type="text" class="form-control-at" id="ciudad" name="ciudad"
+                           list="lista-ciudades-hoteles" placeholder="Paris"
+                           value="{{ filtros.ciudad }}" required autocomplete="off">
+                </div>
+                <div class="col-6 col-md-2">
+                    <label class="form-label-at" for="checkin">Check-in</label>
+                    <input type="date" class="form-control-at" id="checkin" name="checkin" value="{{ filtros.checkin }}">
+                </div>
+                <div class="col-6 col-md-2">
+                    <label class="form-label-at" for="checkout">Check-out</label>
+                    <input type="date" class="form-control-at" id="checkout" name="checkout" value="{{ filtros.checkout }}">
+                </div>
+                <div class="col-6 col-md-2">
+                    <label class="form-label-at" for="huespedes">Huéspedes</label>
+                    <input type="number" class="form-control-at" id="huespedes" name="huespedes" min="1" max="10" value="{{ filtros.huespedes }}">
+                </div>
+                <div class="col-6 col-md-2">
+                    <button type="submit" id="btn-buscar-hoteles" class="btn-search-hero w-100 justify-content-center">
+                        <i class="bi bi-search" aria-hidden="true"></i> Buscar
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</section>
+{% endblock %}
+
+{% block content %}
+{% if resultados is not none %}
+
+<form id="form-filtros-hoteles" method="get" action="/hoteles/buscar" style="display:none">
+    <input type="hidden" name="ciudad" value="{{ filtros.ciudad }}">
+    <input type="hidden" name="checkin" value="{{ filtros.checkin }}">
+    <input type="hidden" name="checkout" value="{{ filtros.checkout }}">
+    <input type="hidden" name="huespedes" value="{{ filtros.huespedes }}">
+    <input type="hidden" name="estrellas_min" id="f-estrellas-min" value="{{ filtros.estrellas_min }}">
+    <input type="hidden" name="precio_max" id="f-precio-max" value="{{ filtros.precio_max }}">
+    <input type="hidden" name="calificacion_min" id="f-calificacion-min" value="{{ filtros.calificacion_min }}">
+</form>
+
+<div class="search-layout">
+    <aside class="search-sidebar" aria-label="Filtros de búsqueda">
+        <div class="sidebar-section" style="background:var(--navy-50);border-bottom:1px solid var(--navy-100)">
+            <div style="font-size:13px;font-weight:700;color:var(--navy-800)">{{ filtros.ciudad }}</div>
+        </div>
+
+        <div class="sidebar-section">
+            <div class="sidebar-section-title">Estrellas mínimas <i class="bi bi-chevron-down"></i></div>
+            <div class="sidebar-check-list">
+                {% for e in [5, 4, 3] %}
+                <label class="sidebar-check-item">
+                    <input type="radio" name="est-radio" {% if filtros.estrellas_min == e %}checked{% endif %}
+                           onchange="setFiltro('f-estrellas-min','{{ e }}')">
+                    {{ e }}+ <i class="bi bi-star-fill" style="color:var(--amber-400);font-size:10px"></i>
+                </label>
+                {% endfor %}
+                <label class="sidebar-check-item">
+                    <input type="radio" name="est-radio" {% if not filtros.estrellas_min %}checked{% endif %}
+                           onchange="setFiltro('f-estrellas-min','')">
+                    Cualquiera
+                </label>
+            </div>
+        </div>
+
+        <div class="sidebar-section">
+            <div class="sidebar-section-title">Precio máx./noche <i class="bi bi-chevron-down"></i></div>
+            <div class="sidebar-check-list">
+                <input type="number" class="form-control-at" min="0" placeholder="Sin límite"
+                       value="{{ filtros.precio_max }}" onchange="setFiltro('f-precio-max', this.value)">
+            </div>
+        </div>
+
+        <div class="sidebar-section">
+            <div class="sidebar-section-title">Calificación mínima <i class="bi bi-chevron-down"></i></div>
+            <div class="sidebar-check-list">
+                {% for c in [4.5, 4.0, 3.5] %}
+                <label class="sidebar-check-item">
+                    <input type="radio" name="cal-radio" {% if filtros.calificacion_min == c %}checked{% endif %}
+                           onchange="setFiltro('f-calificacion-min','{{ c }}')">
+                    {{ c }}+
+                </label>
+                {% endfor %}
+                <label class="sidebar-check-item">
+                    <input type="radio" name="cal-radio" {% if not filtros.calificacion_min %}checked{% endif %}
+                           onchange="setFiltro('f-calificacion-min','')">
+                    Cualquiera
+                </label>
+            </div>
+        </div>
+    </aside>
+
+    <div class="search-results-area">
+        <div class="results-header">
+            <div>
+                <div class="results-title">{{ resultados | length }} hotel(es) encontrado(s)</div>
+                <div class="results-sub">{{ filtros.ciudad }}</div>
+            </div>
+        </div>
+
+        {% if resultados %}
+        <div class="row g-3">
+            {% for h in resultados %}
+            <div class="col-12 col-md-6 col-lg-4">
+                <div class="at-card at-card-hover h-100 d-flex flex-column">
+                    {% if h.imagen_principal %}
+                    <div style="height:140px;border-radius:var(--at-r-md);overflow:hidden;margin-bottom:10px;background:var(--at-bg)">
+                        <img src="{{ h.imagen_principal }}" alt="" style="width:100%;height:100%;object-fit:cover;filter:grayscale(1)">
+                    </div>
+                    {% endif %}
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <strong style="font-size:14.5px;font-weight:700;line-height:1.3">{{ h.nombre }}</strong>
+                    </div>
+                    <div style="font-size:12px;color:var(--at-muted);margin-bottom:10px">
+                        {% if h.estrellas %}{{ h.estrellas | int }}<i class="bi bi-star-fill" style="color:var(--amber-400)"></i>{% endif %}
+                        {% if h.calificacion_promedio %}
+                        <span class="ms-2">{{ "%.1f"|format(h.calificacion_promedio) }}
+                        {% if h.cantidad_resenas %}({{ h.cantidad_resenas | int }} reseñas){% endif %}</span>
+                        {% endif %}
+                    </div>
+                    <div class="mt-auto pt-2" style="border-top:1px solid var(--at-border)">
+                        {% if h.precio_desde %}
+                        <div class="at-mono" style="font-size:18px;font-weight:800;color:var(--at-primary)">
+                            ${{ "%.0f"|format(h.precio_desde) }}<span style="font-size:11px;font-weight:500;color:var(--at-muted)"> /noche</span>
+                        </div>
+                        {% else %}
+                        <div style="font-size:12px;color:var(--at-sub)">Sin tarifas disponibles</div>
+                        {% endif %}
+                        <a href="/hoteles/{{ h.id }}" class="btn-at-ghost w-100 justify-content-center mt-2">
+                            Ver detalle <i class="bi bi-chevron-right"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="at-empty" style="border:1px solid var(--at-border);border-radius:var(--at-r-lg);background:var(--at-surface)">
+            <i class="bi bi-building at-empty-icon" aria-hidden="true"></i>
+            <strong>No hay hoteles disponibles</strong>
+            <p>Prueba con otro destino o ajusta los filtros.</p>
+            <a href="/hoteles/buscar" class="btn-at-ghost mt-2"><i class="bi bi-arrow-left"></i> Nueva búsqueda</a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function setFiltro(campoId, valor) {
+    document.getElementById(campoId).value = valor;
+    document.getElementById('form-filtros-hoteles').submit();
+}
+var formBusqueda = document.getElementById('form-busqueda-hoteles');
+var btnBuscar = document.getElementById('btn-buscar-hoteles');
+if (formBusqueda && btnBuscar) {
+    formBusqueda.addEventListener('submit', function () {
+        btnBuscar.disabled = true;
+        btnBuscar.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Buscando…';
+    });
+}
+document.querySelectorAll('.sidebar-section-title').forEach(function (title) {
+    title.addEventListener('click', function () {
+        var body = title.nextElementSibling;
+        if (body) {
+            body.style.display = body.style.display === 'none' ? '' : 'none';
+            title.classList.toggle('collapsed');
+        }
+    });
+});
+</script>
+{% endblock %}

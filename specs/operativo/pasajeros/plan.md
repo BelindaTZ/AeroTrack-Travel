@@ -11,7 +11,7 @@
 
 ## Resumen
 
-Dar al pasajero autoservicio sobre su historial de reservas y sus datos de contacto, y dar al backoffice (Agente/Administrador) una vía de búsqueda y soporte sobre esos mismos datos. Cubre 4 RF, 2 RNF y 4 RN sobre 3 CU (CU-O14–O16).
+Dar al pasajero autoservicio sobre su historial de reservas y sus datos de contacto, y dar al backoffice (Agente/Administrador) una vía de búsqueda y soporte sobre esos mismos datos. Cubre 4 RF, 2 RNF y 4 RN sobre 3 CU (CU-O14–O16) — **implementados y probados**. Ampliado en el catálogo v3.0 con CU-O49/O50 (RF-PAS-005/006, colecciones nuevas `documentos_viaje`/`viajeros_frecuentes`) — no implementados todavía, ver `pasajeros-spec.md`.
 
 ---
 
@@ -110,6 +110,10 @@ app/pasajeros/
 ### Fase 3 — Backoffice: buscar y gestionar pasajeros (RF-PAS-003, 004)
 **Precondición externa:** Seguridad Fase 2 (RBAC/auditoría) completa.
 **Entregable:** `router_backoffice.py`, con filtro instantáneo (REG-J9) y respeto estricto de RBAC Nivel 2 (RN-PAS-003).
+
+### Fase 4 (futura, no iniciada) — Documentos de viaje y viajeros frecuentes (RF-PAS-005, 006; CU-O49/O50)
+**Precondición externa:** ninguna adicional a Fase 1-2 ya cerradas.
+**Entregable:** colecciones PocketBase `documentos_viaje`/`viajeros_frecuentes` (no existen todavía en la instancia real), `router_documentos.py`, `router_viajeros_frecuentes.py`. RF-PAS-005 es precondición de dato para CU-O81 (`reservas-spec.md`, también pendiente); RF-PAS-006 alimenta el autocompletado de CU-O21/O22.
 
 ---
 

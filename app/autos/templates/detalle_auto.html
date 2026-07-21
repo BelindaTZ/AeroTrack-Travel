@@ -1,0 +1,92 @@
+{% extends "layout_portal.html" %}
+{% block title %}Detalle de auto — AeroTrack Travel{% endblock %}
+
+{% block content %}
+{% if auto is none %}
+<div class="at-empty" style="border:1px solid var(--at-border);border-radius:var(--at-r-lg);background:var(--at-surface)">
+    <i class="bi bi-car-front at-empty-icon" aria-hidden="true"></i>
+    <strong>Auto no encontrado</strong>
+    <p>Es posible que la oferta haya expirado o no exista.</p>
+    <a href="/autos/buscar" class="btn-at-ghost mt-2"><i class="bi bi-arrow-left"></i> Volver a la búsqueda</a>
+</div>
+
+{% else %}
+<a href="/autos/buscar?ciudad={{ auto.ciudad_recogida }}" class="d-inline-flex align-items-center gap-2 mb-4"
+   style="font-size:13px;color:var(--at-muted);text-decoration:none;font-weight:500">
+    <i class="bi bi-arrow-left"></i>Volver a resultados
+</a>
+
+<div class="at-card mb-4" style="border-left:4px solid var(--navy-600)">
+    <div class="d-flex align-items-start justify-content-between flex-wrap gap-3">
+        <div>
+            <div class="flight-airline-chip mb-3">
+                <i class="bi bi-car-front" aria-hidden="true"></i>
+                {{ auto.categoria }}
+            </div>
+            <h1 style="font-size:26px;font-weight:800;letter-spacing:-.03em;margin-bottom:8px">
+                {{ auto.modelo }}
+            </h1>
+            <div class="flight-meta">
+                <span><i class="bi bi-geo-alt me-1"></i>{{ auto.ciudad_recogida }}{% if auto.aeropuerto_codigo %} ({{ auto.aeropuerto_codigo }}){% endif %}</span>
+                {% if auto.transmision %}
+                <span class="sep">·</span>
+                <span><i class="bi bi-gear me-1"></i>{{ auto.transmision }}</span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-12 col-md-7">
+        <div class="at-card h-100">
+            <strong style="font-size:15px;font-weight:700;display:block;margin-bottom:12px">Especificaciones</strong>
+            <ul class="list-unstyled" style="font-size:13.5px;display:flex;flex-direction:column;gap:9px">
+                <li style="display:flex;align-items:center;gap:8px">
+                    <i class="bi bi-car-front-fill" style="color:var(--at-primary);font-size:14px"></i>
+                    Categoría: {{ auto.categoria }}
+                </li>
+                {% if auto.transmision %}
+                <li style="display:flex;align-items:center;gap:8px">
+                    <i class="bi bi-gear-fill" style="color:var(--at-primary);font-size:14px"></i>
+                    Transmisión: {{ auto.transmision }}
+                </li>
+                {% endif %}
+                <li style="display:flex;align-items:center;gap:8px">
+                    <i class="bi bi-geo-alt-fill" style="color:var(--at-primary);font-size:14px"></i>
+                    Recogida en {{ auto.ciudad_recogida }}
+                </li>
+                {% if auto.modalidad_pago_disponible %}
+                <li style="display:flex;align-items:center;gap:8px">
+                    <i class="bi bi-credit-card-fill" style="color:var(--at-success);font-size:14px"></i>
+                    {{ 'Puedes pagar al recoger el vehículo' if auto.modalidad_pago_disponible == 'pagar_al_recoger' else 'Pago al confirmar la reserva' }}
+                </li>
+                {% endif %}
+                <li style="display:flex;align-items:center;gap:8px">
+                    <i class="bi bi-shield-check" style="color:var(--at-primary);font-size:14px"></i>
+                    Oferta vía {{ auto.proveedor_agregador | capitalize }} — precio revalidado antes de cobrar
+                </li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="col-12 col-md-5">
+        <div class="at-card h-100 d-flex flex-column">
+            <div class="at-mono" style="font-size:30px;font-weight:800;color:var(--at-primary);letter-spacing:-.02em">
+                ${{ "%.2f"|format(auto.precio_dia) }}<span style="font-size:13px;font-weight:500;color:var(--at-muted)"> /día</span>
+            </div>
+            <div style="font-size:11px;color:var(--at-sub);margin-bottom:16px">{{ auto.moneda }} · precio por día, revalidado al confirmar</div>
+
+            <form method="post" action="/carrito/agregar" class="mt-auto">
+                <input type="hidden" name="tipo_producto" value="auto">
+                <input type="hidden" name="auto_id" value="{{ auto.id }}">
+                <input type="hidden" name="precio_snapshot" value="{{ auto.precio_dia }}">
+                <button type="submit" class="btn-at-accent w-100 justify-content-center" style="padding:10px;font-size:14px;font-weight:700">
+                    <i class="bi bi-cart-plus" aria-hidden="true"></i>Agregar al carrito
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

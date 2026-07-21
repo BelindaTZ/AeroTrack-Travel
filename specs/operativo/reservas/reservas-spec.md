@@ -3,8 +3,13 @@
 **Módulo:** Reservas
 **Prefijo:** RES
 **Código fuente:** `app/reservas/`
-**Casos de uso cubiertos:** CU-O21 (Crear reserva autoservicio), CU-O22 (Crear reserva asistida), CU-O23 (Modificar reserva), CU-O24 (Cancelar reserva), CU-O25 (Consultar estado de una reserva), CU-O26 (Crear alerta de precio), CU-O44 (Expirar reserva pendiente de pago), CU-O45 (Verificar disponibilidad de vuelo/cupo — RN, orquestación/negocio), CU-O47 (Cobrar/reembolsar diferencia de tarifa — RN, disparador/negocio)
+**Casos de uso cubiertos:** CU-O21 (Crear reserva autoservicio), CU-O22 (Crear reserva asistida), CU-O23 (Modificar reserva), CU-O24 (Cancelar reserva), CU-O25 (Consultar estado de una reserva), CU-O26 (Crear alerta de precio — ver nota de migración), CU-O44 (Expirar reserva pendiente de pago), CU-O45 (Verificar disponibilidad de vuelo/cupo — RN, orquestación/negocio), CU-O47 (Cobrar/reembolsar diferencia de tarifa — RN, disparador/negocio), CU-O81 (Consultar requisitos de documentación y visa por destino — nuevo v3.0, no implementado), CU-O82 (Descargar voucher de reserva en PDF — nuevo v3.0, no implementado)
 **Actor:** Pasajero / Agente / Sistema (automático, temporizador)
+
+> **Notas de actualización 2026-07-18 — leer antes de tocar este módulo:**
+> 1. **CU-O26 fue eliminado del catálogo** (`docs/aerotrack-travel-casos-de-uso-v3.md`), supersedido por CU-O91 en el módulo Cuenta/Mis Viajes — conceptualmente es gestión de cuenta, no proceso de reserva. La Funcionalidad 4 de abajo (RF-RES-006) **ya está implementada y probada** bajo el número CU-O26 original; no se elimina ni se mueve el código en esta pasada. Cuando se redacte `specs/operativo/cuenta-mis-viajes/`, ese módulo debe referenciar esta implementación existente en vez de reconstruirla desde cero.
+> 2. **Rediseño de esquema: dual-write ya implementado (2026-07-19).** `docs/aerotrack-travel-propuesta-tablas-v3.dbml` rediseña `reservas` de un header con `vuelo_id`/`tarifa_id` directos a un header genérico + `reserva_items` polimórfico. `crear_reserva_service.py`/`modificar_reserva_service.py`/`cancelar_reserva_service.py` ahora crean/actualizan también el `reserva_items` (tipo_producto=vuelo) correspondiente, además de seguir escribiendo `reservas.vuelo_id`/`tarifa_id` (ahora `required=false` en el esquema) — decisión deliberada de no reescribir los 4 puntos de lectura existentes (`construir_detalle` aquí, 3 en Facturación) porque siguen siendo correctos para el único flujo real hoy (Vuelos, un producto por reserva); reescribirlos habría sido riesgo sin beneficio hasta que Paquetes (multi-producto) exista de verdad. Ver `specs/000-sistema-general/pendientes-implementacion-codigo.md` sección 1.4.
+> 3. **Selección de asiento (CU-O114–O117, `vuelos-spec.md`) ya no está fuera de alcance del catálogo** — existía una nota en este archivo diciendo lo contrario (ver sección "Fuera de alcance", corregida abajo). El campo relevante también cambió de forma en el dbml v3: `reserva_pasajeros.asiento` (texto libre) pasó a `reserva_pasajeros.asiento_id` (relation a la nueva tabla `asientos_vuelo`) + `asiento_asignado_por` (pasajero | sistema) — tampoco implementado todavía, mismo estado que el punto 2.
 
 ---
 
@@ -64,6 +69,20 @@ El sistema debe, mediante un proceso automático por temporizador, identificar t
 
 ### RNF-RES-002 — Ventana de expiración configurable
 El tiempo entre creación de una reserva `pendiente_pago` y su expiración se lee de `configuracion_sistema` (categoría `expiraciones`); mientras el nivel Táctico (CU-T13) no exista, se usa un valor por defecto de 15 minutos documentado en el código.
+
+---
+
+## Funcionalidad 6: Requisitos de documentación y visa por destino (CU-O81) — *(nuevo v3.0, no implementado)*
+
+Consulta informativa que se reabrió al ampliar el alcance a rutas internacionales (`consideraciones.md` sección 3).
+
+### RF-RES-008 — Consultar requisitos de documentación y visa por destino *(pendiente de implementación)*
+El sistema debe permitir a un pasajero consultar, para un destino y su pasaporte declarado (`documentos_viaje.pais_emision`, `pasajeros-spec.md`), los requisitos de visa/documentación vigentes. Se resuelve vía Visa Requirement API (`POST /v2/visa/check`) con caché bajo demanda en `requisitos_visa_cache` — se refresca solo si `fecha_consulta` es vieja, no se pre-computa el universo completo pasaporte×destino (~211 destinos según la documentación de la API). Relacionado con CU-O49 (Pasajeros — gestión de documentos de viaje): sin país de emisión de pasaporte declarado no hay consulta posible.
+
+## Funcionalidad 7: Descargar voucher de reserva en PDF (CU-O82) — *(nuevo v3.0, no implementado)*
+
+### RF-RES-009 — Descargar voucher de reserva en PDF *(pendiente de implementación)*
+El sistema debe permitir a un pasajero descargar un voucher en PDF de una reserva confirmada, análogo a la factura/e-ticket de `facturacion-spec.md` (CU-O39/O40). El dbml v3 agrega `reservas.voucher_pdf` (file field) para esto — mismo patrón de almacenamiento que `facturas.archivo_pdf`.
 
 ---
 
@@ -138,6 +157,8 @@ Gestionar el ciclo de vida completo de una reserva — desde su creación hasta 
 - **CU-O44:** Dado que una reserva `pendiente_pago` supera su fecha de expiración, cuando se ejecuta el proceso automático, entonces la reserva se cancela y su cupo se libera.
 - **CU-O45 (RN):** Dado que CU-O21/O22/O23 necesita confirmar una reserva, cuando invoca la verificación de cupo, entonces la reserva solo procede si el servicio confirma disponibilidad; si no, se informa al usuario sin crear/modificar la reserva.
 - **CU-O47 (RN):** Dado que una modificación de reserva (CU-O23) resulta en un vuelo con precio distinto al original, cuando se confirma la modificación, entonces se dispara automáticamente el cobro o reembolso de la diferencia; si el precio no cambió, no se dispara nada.
+- **CU-O81** *(pendiente de implementación):* Dado que un pasajero tiene un documento de viaje con país de emisión declarado, cuando consulta requisitos para un destino, entonces ve el resultado vigente (de caché reciente o recién consultado a la API).
+- **CU-O82** *(pendiente de implementación):* Dado que una reserva está confirmada, cuando el pasajero solicita su voucher, entonces recibe un PDF descargable.
 
 ---
 
@@ -157,11 +178,15 @@ Gestionar el ciclo de vida completo de una reserva — desde su creación hasta 
 - CU-O32 (Procesar pago, Facturación) — incluido obligatoriamente por CU-O21/O22.
 - CU-O37 (Procesar reembolso, Facturación) — extend de CU-O24 y de CU-O30 (Notificar al pasajero).
 - CU-O30 (Notificar al pasajero, Disrupciones) — puede disparar CU-O37 si la disrupción es una cancelación.
+- CU-O49 (Gestionar documentos de viaje, Pasajeros) — origen del país de pasaporte que consume CU-O81.
+- CU-O91 (Crear alerta de precio, Cuenta/Mis Viajes) — sucesor conceptual de CU-O26, implementado hoy en este módulo (ver nota de migración al inicio).
+- CU-O114–O117 (Seleccionar clase/asiento, Vuelos) — `<<extend>>` de CU-O21/O22/O23, no implementado todavía en este módulo.
 
 ---
 
 ## Fuera de alcance
 
-- Selección de asiento específico con mapa de cabina interactivo — el campo `reserva_pasajeros.asiento` existe en el esquema pero su UI detallada no está definida en el catálogo de CU actual.
+- **Selección de asiento con mapa de cabina interactivo — ya NO está fuera de alcance del catálogo** (corrección 2026-07-18): CU-O114–O117 (`vuelos-spec.md`) lo definen explícitamente desde v3.1, incluyendo `<<extend>>` de CU-O21/O22/O23. Sigue sin implementarse en este módulo todavía — es trabajo pendiente, no un hueco del catálogo.
+- Reescribir los 4 puntos de lectura que siguen usando `reservas.vuelo_id`/`tarifa_id` directo (`construir_detalle` aquí + 3 en Facturación) para leer de `reserva_items` — no tiene sentido hasta que exista un creador real de reservas multi-producto (Paquetes); ver nota de migración al inicio de este documento.
 - Reservas grupales con reglas comerciales especiales (tarifas de grupo) — no existe CU operativo para esto; el agente humano puede asistir manualmente vía CU-O22 sin una tarifa de grupo dedicada.
-- Configuración del tiempo de expiración de pago y de las políticas de reembolso — pertenece al nivel Táctico previsto (CU-T13, CU-T10); este módulo usa los valores por defecto documentados mientras tanto.
+- Configuración del tiempo de expiración de pago y de las políticas de reembolso — pertenece al nivel Táctico previsto (CU-T13, CU-T18 — la numeración de este último cambió al renumerar el catálogo completo, ver `analisis-cus-completo.md`); este módulo usa los valores por defecto documentados mientras tanto.

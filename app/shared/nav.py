@@ -19,7 +19,14 @@ MODULOS_CATALOGO = [
             {"label": "Auditoría", "href": "/admin/auditoria", "icono": "bi-journal-text"},
         ],
     },
-    {"clave": "pasajeros", "nombre": "Pasajeros", "icono": "bi-person-badge", "items": []},
+    {
+        "clave": "pasajeros",
+        "nombre": "Pasajeros",
+        "icono": "bi-person-badge",
+        "items": [
+            {"label": "Buscar pasajeros", "href": "/backoffice/pasajeros", "icono": "bi-search"},
+        ],
+    },
     {
         "clave": "vuelos_catalogo",
         "nombre": "Vuelos",
@@ -36,7 +43,14 @@ MODULOS_CATALOGO = [
             {"label": "Reserva asistida", "href": "/backoffice/reservas/nueva", "icono": "bi-headset"},
         ],
     },
-    {"clave": "disrupciones", "nombre": "Disrupciones", "icono": "bi-exclamation-triangle", "items": []},
+    {
+        "clave": "disrupciones",
+        "nombre": "Disrupciones",
+        "icono": "bi-exclamation-triangle",
+        "items": [
+            {"label": "Notificaciones", "href": "/backoffice/notificaciones", "icono": "bi-bell"},
+        ],
+    },
     {
         "clave": "facturacion",
         "nombre": "Facturación",
@@ -44,6 +58,45 @@ MODULOS_CATALOGO = [
         "items": [
             {"label": "Comisiones", "href": "/backoffice/comisiones", "icono": "bi-percent"},
             {"label": "Remesas", "href": "/backoffice/remesas", "icono": "bi-bank"},
+        ],
+    },
+    {
+        "clave": "integraciones",
+        "nombre": "Integraciones",
+        "icono": "bi-plug",
+        "items": [
+            {"label": "Fuentes de datos", "href": "/backoffice/integraciones/fuentes", "icono": "bi-plug"},
+            {"label": "Bitácora de sincronizaciones", "href": "/backoffice/integraciones/bitacora", "icono": "bi-journal-text"},
+        ],
+    },
+    {
+        "clave": "centro_ayuda",
+        "nombre": "Centro de Ayuda",
+        "icono": "bi-question-circle",
+        "items": [
+            {"label": "Artículos", "href": "/backoffice/ayuda/articulos", "icono": "bi-journal-text"},
+            {"label": "Métricas", "href": "/backoffice/ayuda/metricas", "icono": "bi-graph-up"},
+            {"label": "Casos escalados", "href": "/backoffice/ayuda/casos", "icono": "bi-headset"},
+        ],
+    },
+    {
+        "clave": "ofertas",
+        "nombre": "Ofertas y Marketing",
+        "icono": "bi-stars",
+        "items": [
+            {"label": "Cupones", "href": "/backoffice/ofertas/cupones", "icono": "bi-ticket-perforated"},
+            {"label": "Reporte de cupones", "href": "/backoffice/ofertas/reporte-cupones", "icono": "bi-graph-up"},
+            {"label": "Campañas de email", "href": "/backoffice/ofertas/campanas", "icono": "bi-envelope-paper"},
+            {"label": "Acumulación con paquete", "href": "/backoffice/ofertas/config-acumulacion-paquete", "icono": "bi-sliders"},
+        ],
+    },
+    {
+        "clave": "asistente_ia",
+        "nombre": "Asistente IA",
+        "icono": "bi-robot",
+        "items": [
+            {"label": "Configuración", "href": "/backoffice/asistente/configuracion", "icono": "bi-sliders"},
+            {"label": "Reporte de consultas", "href": "/backoffice/asistente/reporte", "icono": "bi-graph-up"},
         ],
     },
 ]

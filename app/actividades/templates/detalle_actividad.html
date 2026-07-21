@@ -1,0 +1,152 @@
+{% extends "layout_portal.html" %}
+{% block title %}Detalle de actividad — AeroTrack Travel{% endblock %}
+
+{% block content %}
+{% if actividad is none %}
+<div class="at-empty" style="border:1px solid var(--at-border);border-radius:var(--at-r-lg);background:var(--at-surface)">
+    <i class="bi bi-compass at-empty-icon" aria-hidden="true"></i>
+    <strong>Actividad no encontrada</strong>
+    <p>Es posible que ya no esté disponible.</p>
+    <a href="/actividades/buscar" class="btn-at-ghost mt-2"><i class="bi bi-arrow-left"></i> Volver a la búsqueda</a>
+</div>
+
+{% else %}
+<a href="/actividades/buscar?ciudad={{ actividad.ciudad }}" class="d-inline-flex align-items-center gap-2 mb-4"
+   style="font-size:13px;color:var(--at-muted);text-decoration:none;font-weight:500">
+    <i class="bi bi-arrow-left"></i>Volver a resultados
+</a>
+
+<div class="at-card mb-4" style="border-left:4px solid var(--navy-600)">
+    <div class="flight-airline-chip mb-3">
+        <i class="bi bi-compass" aria-hidden="true"></i>
+        {{ actividad.categoria or "Actividad" }}
+    </div>
+    <div class="d-flex align-items-start justify-content-between gap-3">
+        <h1 style="font-size:26px;font-weight:800;letter-spacing:-.03em;margin-bottom:8px">{{ actividad.nombre }}</h1>
+        {% if usuario and usuario.tipo_actor == 'pasajero' %}
+        <form method="post" action="/favoritos" class="m-0">
+            <input type="hidden" name="tipo" value="actividad">
+            <input type="hidden" name="producto_ref" value="{{ actividad.id }}">
+            <input type="hidden" name="next" value="{{ request.url.path }}">
+            <button type="submit" class="btn-at-ghost" title="Guardar como favorito">
+                <i class="bi bi-heart"></i>
+            </button>
+        </form>
+        {% endif %}
+    </div>
+    <div class="flight-meta">
+        <span><i class="bi bi-geo-alt me-1"></i>{{ actividad.ciudad }}{% if actividad.pais %}, {{ actividad.pais }}{% endif %}</span>
+        {% if actividad.calificacion_promedio %}
+        <span class="sep">·</span>
+        <span><i class="bi bi-star-fill" style="color:var(--amber-400)"></i> {{ "%.1f"|format(actividad.calificacion_promedio) }}
+        {% if actividad.cantidad_resenas %}({{ actividad.cantidad_resenas | int }} reseñas){% endif %}</span>
+        {% endif %}
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-12 col-md-7">
+        {% if actividad.descripcion %}
+        <div class="at-card mb-4">
+            <strong style="font-size:15px;font-weight:700;display:block;margin-bottom:10px">Descripción</strong>
+            <p style="font-size:13.5px;color:var(--at-text);white-space:pre-line">{{ actividad.descripcion }}</p>
+        </div>
+        {% endif %}
+
+        {% if actividad.inclusiones or actividad.punto_encuentro or actividad.condiciones %}
+        <div class="at-card mb-4">
+            {% if actividad.inclusiones %}
+            <div class="mb-3">
+                <strong style="font-size:13px;font-weight:700"><i class="bi bi-check-circle-fill" style="color:var(--at-success)"></i> Incluye</strong>
+                <p style="font-size:13px;color:var(--at-muted);margin:4px 0 0">{{ actividad.inclusiones }}</p>
+            </div>
+            {% endif %}
+            {% if actividad.punto_encuentro %}
+            <div class="mb-3">
+                <strong style="font-size:13px;font-weight:700"><i class="bi bi-geo-alt-fill" style="color:var(--at-primary)"></i> Punto de encuentro</strong>
+                <p style="font-size:13px;color:var(--at-muted);margin:4px 0 0">{{ actividad.punto_encuentro }}</p>
+            </div>
+            {% endif %}
+            {% if actividad.condiciones %}
+            <div>
+                <strong style="font-size:13px;font-weight:700"><i class="bi bi-info-circle-fill" style="color:var(--at-muted)"></i> Condiciones</strong>
+                <p style="font-size:13px;color:var(--at-muted);margin:4px 0 0">{{ actividad.condiciones }}</p>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {% if resenas %}
+        <div class="at-card">
+            <strong style="font-size:15px;font-weight:700;display:block;margin-bottom:14px">Reseñas ({{ resenas | length }})</strong>
+            <div class="d-flex flex-column gap-3">
+                {% for r in resenas %}
+                <div style="border-top:1px solid var(--at-border);padding-top:12px" class="{% if not loop.first %}mt-0{% endif %}">
+                    <div class="d-flex justify-content-between align-items-baseline">
+                        <strong style="font-size:13px">{{ r.autor or "Viajero" }}</strong>
+                        {% if r.calificacion %}
+                        <span style="font-size:12px"><i class="bi bi-star-fill" style="color:var(--amber-400)"></i> {{ r.calificacion }}</span>
+                        {% endif %}
+                    </div>
+                    {% if r.fecha_resena %}
+                    <div style="font-size:11px;color:var(--at-sub);margin-bottom:4px">{{ r.fecha_resena[:10] }}</div>
+                    {% endif %}
+                    <p style="font-size:13px;color:var(--at-text);margin:0">{{ r.comentario }}</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="col-12 col-md-5">
+        <div class="at-card" style="position:sticky;top:16px">
+            <strong style="font-size:15px;font-weight:700;display:block;margin-bottom:4px">Elige fecha y horario</strong>
+            <p style="font-size:11.5px;color:var(--at-sub);margin-bottom:14px">Cupos aproximados — sujetos a confirmación.</p>
+
+            {% if fechas_disponibles %}
+            <form method="get" action="/actividades/{{ actividad.id }}" class="mb-3">
+                <label class="form-label-at" for="fecha">Fecha</label>
+                <select class="form-control-at" id="fecha" name="fecha" onchange="this.form.submit()">
+                    <option value="">Todas las fechas próximas</option>
+                    {% for f in fechas_disponibles %}
+                    <option value="{{ f }}" {% if fecha_filtro == f %}selected{% endif %}>{{ f }}</option>
+                    {% endfor %}
+                </select>
+            </form>
+            {% endif %}
+
+            {% if horarios %}
+            <div class="d-flex flex-column gap-2" style="max-height:340px;overflow-y:auto">
+                {% for h in horarios %}
+                <form method="post" action="/carrito/agregar" class="d-flex align-items-center justify-content-between gap-2"
+                      style="border:1px solid var(--at-border);border-radius:var(--at-r-md);padding:8px 10px">
+                    <input type="hidden" name="tipo_producto" value="actividad">
+                    <input type="hidden" name="actividad_id" value="{{ actividad.id }}">
+                    <input type="hidden" name="actividad_horario_id" value="{{ h.id }}">
+                    <input type="hidden" name="precio_snapshot" value="{{ h.precio }}">
+                    <div style="font-size:12.5px">
+                        <strong>{{ h.fecha[:10] }}</strong> · {{ h.hora }}
+                        <div style="font-size:11px;color:var(--at-sub)">{{ h.cupos_disponibles }} cupos aprox. · ${{ "%.2f"|format(h.precio) }}/persona</div>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                        <input type="number" name="cantidad" class="form-control-at" min="1" max="{{ h.cupos_disponibles or 10 }}"
+                               value="1" style="width:56px;padding:4px 6px" aria-label="Participantes">
+                        <button type="submit" class="btn-at-accent" style="padding:6px 10px;font-size:12px">
+                            <i class="bi bi-cart-plus"></i>
+                        </button>
+                    </div>
+                </form>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="at-empty" style="padding:24px 12px">
+                <i class="bi bi-calendar-x at-empty-icon" style="font-size:28px"></i>
+                <strong style="font-size:13px">Sin horarios para esta fecha</strong>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

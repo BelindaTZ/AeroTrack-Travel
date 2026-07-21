@@ -1,0 +1,85 @@
+{% extends "layout_portal.html" %}
+{% block title %}Centro de Ayuda — AeroTrack Travel{% endblock %}
+
+{% block hero %}
+<section class="at-hero-search" aria-label="Buscador de ayuda">
+    <div style="max-width:760px;margin:0 auto;position:relative;z-index:2">
+        <div class="hero-eyebrow"><i class="bi bi-question-circle" aria-hidden="true"></i>Centro de Ayuda</div>
+        <h1 class="hero-title">¿En qué <span class="accent">podemos ayudarte?</span></h1>
+        <p class="hero-sub">Busca por palabra clave o categoría — si no encuentras respuesta, puedes escalar tu caso a nuestro equipo.</p>
+
+        <form method="get" action="/ayuda/buscar" class="search-card">
+            <div class="row g-3 align-items-end">
+                <div class="col-12 col-md-8">
+                    <label class="form-label-at" for="ha-q">Buscar</label>
+                    <input type="text" class="form-control-at" id="ha-q" name="q" value="{{ q }}" placeholder="ej. mi vuelo se retrasó">
+                </div>
+                <div class="col-8 col-md-3">
+                    <label class="form-label-at" for="ha-categoria">Categoría</label>
+                    <select class="form-control-at" id="ha-categoria" name="categoria">
+                        <option value="">Todas</option>
+                        {% for c in categorias %}
+                        <option value="{{ c }}" {% if c == categoria %}selected{% endif %}>{{ c }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-4 col-md-1">
+                    <button type="submit" class="btn-search-hero w-100 justify-content-center">
+                        <i class="bi bi-search" aria-hidden="true"></i>
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</section>
+{% endblock %}
+
+{% block content %}
+{% if q or categoria %}
+    {% if articulos %}
+    <div class="d-flex flex-column gap-2">
+        {% for a in articulos %}
+        <a href="/ayuda/{{ a.id }}" class="at-card at-card-hover d-flex align-items-center justify-content-between text-decoration-none" style="color:var(--at-text)">
+            <div>
+                <div style="font-weight:600">{{ a.titulo }}</div>
+                <div style="font-size:12px;color:var(--at-muted)">{{ a.categoria }}</div>
+            </div>
+            <i class="bi bi-chevron-right" style="color:var(--at-muted)"></i>
+        </a>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="at-empty">
+        <i class="bi bi-search at-empty-icon" aria-hidden="true"></i>
+        <strong>Sin resultados para tu búsqueda</strong>
+        <p>Prueba con otro término o categoría — o escala tu caso directamente a nuestro equipo.</p>
+    </div>
+    {% endif %}
+
+    <div class="at-card mt-4" style="border-left:4px solid var(--at-accent, var(--navy-600))">
+        <h2 style="font-size:15px;font-weight:700;margin:0 0 6px">¿No encontraste lo que buscabas?</h2>
+        {% if usuario and usuario.tipo_actor == 'pasajero' %}
+        <form method="post" action="/ayuda/escalar" class="mt-2">
+            <input type="hidden" name="next" value="/ayuda/buscar?q={{ q }}&categoria={{ categoria }}">
+            <div class="row g-2">
+                <div class="col-12 col-md-4">
+                    <input type="text" class="form-control-at" name="asunto" placeholder="Asunto" value="{{ q }}" required>
+                </div>
+                <div class="col-12 col-md-6">
+                    <input type="text" class="form-control-at" name="mensaje" placeholder="Cuéntanos qué necesitas" required>
+                </div>
+                <div class="col-12 col-md-2">
+                    <button type="submit" class="btn-at-primary w-100 justify-content-center">
+                        <i class="bi bi-envelope"></i> Escalar
+                    </button>
+                </div>
+            </div>
+        </form>
+        {% else %}
+        <p style="font-size:13px;color:var(--at-muted);margin:0">
+            <a href="/login?next=/ayuda/buscar">Inicia sesión</a> para escalar tu caso a nuestro equipo por email.
+        </p>
+        {% endif %}
+    </div>
+{% endif %}
+{% endblock %}

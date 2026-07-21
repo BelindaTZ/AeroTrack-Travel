@@ -3,8 +3,10 @@
 **Módulo:** Seguridad
 **Prefijo:** SEG
 **Código fuente:** `app/seguridad/`
-**Casos de uso cubiertos:** CU-O01 (Iniciar sesión), CU-O02 (Cerrar sesión), CU-O03 (Recuperar contraseña), CU-O04 (Restablecer contraseña vía enlace), CU-O05 (Ver y editar perfil propio), CU-O06 (Cambiar contraseña autenticado), CU-O07 (Registrar nuevo pasajero), CU-O08 (Gestionar usuarios internos), CU-O09 (Crear rol), CU-O10 (Editar rol), CU-O11 (Eliminar rol), CU-O12 (Ver log de auditoría), CU-O13 (Filtrar y exportar log de auditoría), CU-O41 (Registrar evento en auditoría), CU-O42 (Verificar sesión activa), CU-O43 (Verificar permisos de acceso RBAC)
+**Casos de uso cubiertos:** CU-O01 (Iniciar sesión), CU-O02 (Cerrar sesión), CU-O03 (Recuperar contraseña), CU-O04 (Restablecer contraseña vía enlace), CU-O05 (Ver y editar perfil propio), CU-O06 (Cambiar contraseña autenticado), CU-O07 (Registrar nuevo pasajero), CU-O08 (Gestionar usuarios internos), CU-O09 (Crear rol), CU-O10 (Editar rol), CU-O11 (Eliminar rol), CU-O12 (Ver log de auditoría), CU-O13 (Filtrar y exportar log de auditoría), CU-O41 (Registrar evento en auditoría), CU-O42 (Verificar sesión activa), CU-O43 (Verificar permisos de acceso RBAC), CU-O112 (Asignar/revocar permisos de módulo a un rol), CU-O113 (Asignar/revocar permisos de tabla de BD a un rol)
 **Actor:** Pasajero / Agente / Administrador / Sistema
+
+> **Nota de actualización 2026-07-18:** CU-O112/O113 son del catálogo v3.0 — ya estaban implementados y probados bajo este módulo antes de tener número propio: `RF-SEG-011` (Editar rol) ya asigna/revoca permisos de Nivel 1 (módulo, = CU-O112) y Nivel 2 (tabla, = CU-O113) en la misma operación (`roles_service.editar_rol`, probado en CHK015/CHK031). Se agregan aquí solo como citas de trazabilidad, sin RF/tarea/prueba nueva. Además, el dbml v3 agregó `usuarios.foto_perfil` (file field) — campo nuevo para RF-SEG-006 que **no está implementado todavía** (el perfil actual no sube foto); ver nota en esa funcionalidad.
 
 ---
 
@@ -60,6 +62,8 @@ Permite a cualquier usuario autenticado ver, editar sus propios datos y cambiar 
 ### RF-SEG-006 — Ver y editar perfil propio
 El sistema debe mostrar a todo usuario autenticado sus propios datos (`usuarios`, y si es pasajero, también `pasajeros`) y permitirle editar los campos no sensibles (nombre, teléfono, dirección de facturación, contacto de emergencia, género). El correo electrónico, por ser identificador de acceso, requiere un flujo de verificación adicional para cambiarse — fuera de alcance de esta versión (queda registrado como error conocido si se solicita antes de implementarse).
 
+**Pendiente v3 (no implementado):** el dbml v3 agregó `usuarios.foto_perfil` (file field de PocketBase) — faltaba por completo del esquema anterior. Subir/cambiar foto de perfil desde `/mi-perfil` es trabajo nuevo, no cubierto por la implementación actual de RF-SEG-006.
+
 ### RF-SEG-007 — Cambiar contraseña (autenticado)
 El sistema debe permitir a un usuario autenticado cambiar su contraseña ingresando la contraseña actual y la nueva (con confirmación). Valida la contraseña actual antes de aceptar el cambio.
 
@@ -96,8 +100,8 @@ Catálogo de roles y sus permisos, base del RBAC de dos niveles (REG-B1).
 ### RF-SEG-010 — Crear rol
 El sistema debe permitir a un Administrador crear un rol nuevo con nombre y descripción, inicialmente sin permisos asignados.
 
-### RF-SEG-011 — Editar rol
-El sistema debe permitir a un Administrador modificar el nombre/descripción de un rol y su matriz de permisos: Nivel 1 (`roles_permisos` — qué módulos puede usar) y Nivel 2 (`roles_permisos_tablas` — a qué tablas específicas dentro de un módulo ya autorizado se restringe). El Nivel 2 nunca puede otorgar acceso a un módulo no autorizado en Nivel 1 (RN-SEG-009).
+### RF-SEG-011 — Editar rol (incluye CU-O112, CU-O113)
+El sistema debe permitir a un Administrador modificar el nombre/descripción de un rol y su matriz de permisos: Nivel 1 (`roles_permisos` — qué módulos puede usar; **= CU-O112**, "Asignar/revocar permisos de módulo a un rol") y Nivel 2 (`roles_permisos_tablas` — a qué tablas específicas dentro de un módulo ya autorizado se restringe; **= CU-O113**, "Asignar/revocar permisos de tabla de BD a un rol"). El Nivel 2 nunca puede otorgar acceso a un módulo no autorizado en Nivel 1 (RN-SEG-009).
 
 ### RF-SEG-012 — Eliminar rol
 El sistema debe permitir a un Administrador eliminar un rol, siempre que no esté marcado como protegido (`roles.es_sistema = true`) y no tenga usuarios activos asignados actualmente (RN-SEG-008). Si tiene usuarios asignados, el sistema bloquea la eliminación y ofrece reasignar esos usuarios a otro rol primero.
@@ -248,6 +252,8 @@ Proveer la base de identidad, control de acceso y trazabilidad de todo el sistem
 - **CU-O41:** Dado que ocurre una mutación de datos en cualquier módulo, cuando la operación se ejecuta, entonces queda un registro inmutable en auditoría con usuario, acción, módulo/tabla y resultado.
 - **CU-O42:** Dado que llega una solicitud a una ruta que requiere sesión, cuando el token es inválido o expiró, entonces la solicitud se rechaza y el usuario es redirigido a iniciar sesión sin perder el progreso de un flujo multi-paso.
 - **CU-O43:** Dado que un Agente/Administrador solicita una acción sobre un módulo/tabla, cuando su rol no tiene el permiso correspondiente en la matriz RBAC, entonces la acción se bloquea antes de tocar datos.
+- **CU-O112:** Dado que un Administrador edita los permisos Nivel 1 de un rol, cuando asigna o revoca el acceso a un módulo, entonces `roles_permisos` queda actualizado en consecuencia — mismo criterio que CU-O10, probado en CHK015/CHK031.
+- **CU-O113:** Dado que un Administrador edita los permisos Nivel 2 de un rol, cuando asigna o revoca el acceso a una tabla dentro de un módulo ya autorizado, entonces `roles_permisos_tablas` queda actualizado sin ampliar lo no autorizado en Nivel 1 — mismo criterio que CU-O10, probado en CHK015/CHK031.
 
 ---
 

@@ -11,7 +11,7 @@
 
 ## Resumen
 
-Gestionar el ciclo de vida completo de una reserva: creación (autoservicio/asistida), modificación, cancelación, consulta de estado, alertas de precio y expiración automática. Es el módulo con más dependencias cruzadas del sistema — orquesta la verificación de cupo de Vuelos y dispara el cobro/reembolso de diferencia de tarifa en Facturación. Cubre 7 RF, 2 RNF y 6 RN sobre 9 CU (CU-O21–O26, O44, y las contrapartes RN de O45/O47).
+Gestionar el ciclo de vida completo de una reserva: creación (autoservicio/asistida), modificación, cancelación, consulta de estado, alertas de precio y expiración automática. Es el módulo con más dependencias cruzadas del sistema — orquesta la verificación de cupo de Vuelos y dispara el cobro/reembolso de diferencia de tarifa en Facturación. Cubre 7 RF, 2 RNF y 6 RN sobre 9 CU (CU-O21–O26, O44, y las contrapartes RN de O45/O47) — **implementados y probados 2026-07-09**. Ampliado en el catálogo v3.0/v3.1 con CU-O81/O82 (RF-RES-008/009, sección "Extensión pendiente" abajo) — no implementados todavía.
 
 ---
 
@@ -141,6 +141,14 @@ Este plan asume Pasajeros y Facturación completas (`facturacion-spec.md` para C
 - **Pago real no existe.** RF-RES-001 termina en "dirige al pasajero al pago" — sin Facturación, el destino es la propia pantalla de detalle de la reserva (`GET /reservas/{id}`), que muestra `pendiente_pago` con una nota explícita de que el cobro real se conecta cuando exista Facturación. Se introduce `services/pago_stub_service.py` (no estaba en el plan original): expone `confirmar_pago_reserva(reserva_id)`, el punto de integración que el futuro webhook de Stripe de Facturación invocará. Permite implementar y probar de verdad RN-RES-005 (QP-04, la condición de carrera pago-vs-expiración) sin necesitar Stripe — es el mecanismo real, con un disparador simulado en vez de uno real.
 - **CU-O47 (diferencia de tarifa) y el reembolso de CU-O24 quedan como puntos de integración documentados, no simulados.** Igual que Vuelos documentó `"notificacion": "pendiente_de_modulo_disrupciones"` en vez de fingir un disparo real, `modificar_reserva_service`/`cancelar_reserva_service` calculan el monto exacto de la diferencia/reembolso y lo registran en el detalle de auditoría como `"pendiente_de_modulo_facturacion"`, sin inventar una llamada a un servicio que no existe.
 - **Scheduler de CU-O44:** se usa Airflow (ya en el stack, mismo patrón que Vuelos), no APScheduler — un DAG delgado en `dags/` llama por HTTP a `POST /internal/reservas/expirar-pendientes`, cuya lógica real vive y se prueba dentro de `app/reservas/services/expiracion_service.py`.
+
+## Extensión pendiente — catálogo v3.0/v3.1 (2026-07-18, no iniciada)
+
+Tres piezas nuevas que el catálogo agregó después de que este módulo se cerrara, ninguna implementada todavía — ver `reservas-spec.md` para el detalle funcional (RF-RES-008, RF-RES-009) y la nota de migración al inicio de ese documento:
+
+- **Fase 6 (futura) — Requisitos de visa (RF-RES-008, CU-O81):** nueva colección `requisitos_visa_cache`, integración con Visa Requirement API. Depende de que Pasajeros exponga `documentos_viaje.pais_emision` (ya implementado en `pasajeros-spec.md`/`app/pasajeros/`, ver ese módulo).
+- **Fase 7 (futura) — Voucher PDF (RF-RES-009, CU-O82):** agregar `reservas.voucher_pdf` (file field) al esquema PocketBase real; mismo patrón que `facturas.archivo_pdf` en Facturación.
+- **Migración de esquema:** ✅ hecho 2026-07-19 — dual-write `reserva_items` (ver `pendientes-implementacion-codigo.md` 1.4). No hubo datos legados que migrar (las reservas demo se borraron, ver nota en ese documento).
 
 ## Complexity Tracking
 

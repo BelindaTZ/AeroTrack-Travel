@@ -1,62 +1,118 @@
 {% extends "layout_portal.html" %}
 {% block title %}Detalle de vuelo — AeroTrack Travel{% endblock %}
+
 {% block content %}
 {% if vuelo is none %}
-<div class="at-empty">
+<div class="at-empty" style="border:1px solid var(--at-border);border-radius:var(--at-r-lg);background:var(--at-surface)">
     <i class="bi bi-airplane at-empty-icon" aria-hidden="true"></i>
     <strong>Vuelo no encontrado</strong>
-    <p><a href="/vuelos/buscar">Volver a la búsqueda</a></p>
+    <p>Es posible que haya expirado o no exista.</p>
+    <a href="/vuelos/buscar" class="btn-at-ghost mt-2"><i class="bi bi-arrow-left"></i> Volver a la búsqueda</a>
 </div>
+
 {% else %}
-<a href="/vuelos/buscar" class="d-inline-flex align-items-center gap-1 mb-3" style="font-size:13px;color:var(--at-muted);text-decoration:none">
+<a href="/vuelos/buscar" class="d-inline-flex align-items-center gap-2 mb-4"
+   style="font-size:13px;color:var(--at-muted);text-decoration:none;font-weight:500">
     <i class="bi bi-arrow-left"></i>Volver a resultados
 </a>
 
-<div class="at-card mb-4">
-    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+<!-- Hero del vuelo -->
+<div class="at-card mb-5" style="border-left:4px solid var(--navy-600)">
+    <div class="d-flex align-items-start justify-content-between flex-wrap gap-3">
         <div>
-            <div class="type-chip mb-2">{{ aerolinea.nombre }}</div>
-            <h1 class="h5 mb-1" style="font-family:var(--font-display)">{{ origen_legible }} → {{ destino_legible }}</h1>
-            <div style="font-size:13px;color:var(--at-muted)">
-                Vuelo {{ vuelo.numero_vuelo }} · {{ vuelo.fecha_salida[:10] }} ·
-                {{ vuelo.hora_salida_programada }} – {{ vuelo.hora_llegada_programada }}
-                {% if vuelo.duracion_min %}· {{ (vuelo.duracion_min // 60) }}h {{ vuelo.duracion_min % 60 }}m{% endif %}
+            <div class="flight-airline-chip mb-3">
+                <i class="bi bi-airplane" aria-hidden="true"></i>
+                {{ aerolinea.nombre }}
+            </div>
+            <h1 style="font-size:26px;font-weight:800;letter-spacing:-.03em;margin-bottom:8px">
+                {{ origen_legible }}<span style="color:var(--at-muted);font-weight:400;margin:0 10px">→</span>{{ destino_legible }}
+            </h1>
+            <div class="flight-meta">
+                <span><i class="bi bi-calendar3 me-1"></i>{{ vuelo.fecha_salida[:10] }}</span>
+                <span class="sep">·</span>
+                <span>{{ vuelo.hora_salida_programada }} – {{ vuelo.hora_llegada_programada }}</span>
+                {% if vuelo.duracion_min %}
+                <span class="sep">·</span>
+                <span class="flight-duration-badge">
+                    <i class="bi bi-clock" aria-hidden="true"></i>
+                    {{ (vuelo.duracion_min // 60) }}h {{ vuelo.duracion_min % 60 }}m
+                </span>
+                {% endif %}
+                <span class="sep">·</span>
+                <span>Vuelo {{ vuelo.numero_vuelo }}</span>
             </div>
         </div>
     </div>
 </div>
 
-<h2 class="h6 mb-3">Niveles de tarifa</h2>
-<div class="row g-3">
+<!-- Tarifas -->
+<div class="mb-3 d-flex align-items-center gap-2">
+    <h2 style="font-size:18px;font-weight:800;margin:0;letter-spacing:-.02em">Elige tu tarifa</h2>
+    <span style="font-size:12.5px;color:var(--at-muted)">· precio final por pasajero</span>
+</div>
+
+<div class="row g-4">
     {% for n in niveles %}
     <div class="col-12 col-md-4">
-        <div class="at-card h-100 d-flex flex-column">
-            <div class="d-flex justify-content-between align-items-start mb-2">
-                <strong style="font-size:15px">{{ n.nombre }}</strong>
+        <div class="at-card h-100 d-flex flex-column at-card-hover"
+             style="{% if loop.index == 2 %}border-color:var(--navy-300);box-shadow:var(--at-shadow-md){% endif %}">
+
+            {% if loop.index == 2 %}
+            <div style="background:linear-gradient(135deg,var(--navy-800),var(--navy-600));color:#fff;font-size:10px;font-weight:700;padding:4px 12px;border-radius:var(--at-r-full);display:inline-flex;align-items:center;gap:5px;margin-bottom:12px;align-self:flex-start;letter-spacing:.4px">
+                <i class="bi bi-star-fill" style="font-size:9px"></i> MÁS POPULAR
+            </div>
+            {% endif %}
+
+            <div class="d-flex justify-content-between align-items-start mb-3">
+                <strong style="font-size:16px;font-weight:700;letter-spacing:-.01em">{{ n.nombre }}</strong>
                 {% if n.cupos_disponibles > 0 %}
-                <span class="badge-sistema" style="background:var(--at-success-bg);color:var(--at-success-fg)">{{ n.cupos_disponibles }} cupos</span>
+                <span class="badge-status success" style="font-size:11px">{{ n.cupos_disponibles }} cupos</span>
                 {% else %}
-                <span class="badge-sistema" style="background:var(--at-failed-bg);color:var(--at-danger)">Agotado</span>
+                <span class="badge-status failed" style="font-size:11px">Agotado</span>
                 {% endif %}
             </div>
-            {% if n.descripcion %}<p style="font-size:13px;color:var(--at-muted)">{{ n.descripcion }}</p>{% endif %}
-            <ul class="list-unstyled" style="font-size:13px;flex:1">
-                <li class="mb-1"><i class="bi bi-{{ 'check-circle text-success' if n.equipaje_incluido else 'x-circle text-muted' }} me-1"></i>Equipaje facturado {{ 'incluido' if n.equipaje_incluido else 'no incluido' }}</li>
-                <li class="mb-1"><i class="bi bi-{{ 'check-circle text-success' if n.cambios_permitidos else 'x-circle text-muted' }} me-1"></i>Cambios {{ 'permitidos' if n.cambios_permitidos else 'no permitidos' }}</li>
-                <li class="mb-1"><i class="bi bi-shield-check me-1"></i>{{ n.politica_nombre }}: {{ n.politica_condiciones }}</li>
+
+            {% if n.descripcion %}
+            <p style="font-size:13px;color:var(--at-muted);margin-bottom:14px">{{ n.descripcion }}</p>
+            {% endif %}
+
+            <ul class="list-unstyled" style="font-size:13.5px;flex:1;display:flex;flex-direction:column;gap:7px">
+                <li style="display:flex;align-items:center;gap:8px">
+                    <i class="bi bi-{{ 'check-circle-fill' if n.equipaje_incluido else 'x-circle' }}"
+                       style="color:{{ 'var(--at-success)' if n.equipaje_incluido else 'var(--at-sub)' }};font-size:14px;flex-shrink:0"></i>
+                    Equipaje facturado {{ 'incluido' if n.equipaje_incluido else 'no incluido' }}
+                </li>
+                <li style="display:flex;align-items:center;gap:8px">
+                    <i class="bi bi-{{ 'check-circle-fill' if n.cambios_permitidos else 'x-circle' }}"
+                       style="color:{{ 'var(--at-success)' if n.cambios_permitidos else 'var(--at-sub)' }};font-size:14px;flex-shrink:0"></i>
+                    Cambios {{ 'permitidos' if n.cambios_permitidos else 'no permitidos' }}
+                </li>
+                <li style="display:flex;align-items:center;gap:8px">
+                    <i class="bi bi-shield-check" style="color:var(--at-primary);font-size:14px;flex-shrink:0"></i>
+                    {{ n.politica_nombre }}: {{ n.politica_condiciones }}
+                </li>
                 {% if n.politica_porcentaje_reembolso > 0 %}
-                <li class="mb-1"><i class="bi bi-cash-coin me-1"></i>{{ n.politica_porcentaje_reembolso }}% de reembolso hasta {{ n.politica_ventana_horas }}h antes</li>
+                <li style="display:flex;align-items:center;gap:8px">
+                    <i class="bi bi-cash-coin" style="color:var(--at-success);font-size:14px;flex-shrink:0"></i>
+                    {{ n.politica_porcentaje_reembolso }}% reembolso hasta {{ n.politica_ventana_horas }}h antes
+                </li>
                 {% endif %}
             </ul>
-            <div class="mt-2 pt-2" style="border-top:1px solid var(--at-border)">
-                <div class="at-mono" style="font-size:22px;font-weight:700;color:var(--at-primary)">${{ "%.2f"|format(n.precio_final) }}</div>
-                <div style="font-size:11px;color:var(--at-sub);margin-bottom:10px">precio final por pasajero</div>
+
+            <div class="mt-3 pt-3" style="border-top:1px solid var(--at-border)">
+                <div class="at-mono" style="font-size:26px;font-weight:800;color:var(--at-primary);letter-spacing:-.02em">
+                    ${{ "%.2f"|format(n.precio_final) }}
+                </div>
+                <div style="font-size:11px;color:var(--at-sub);margin-bottom:12px">precio final por pasajero</div>
                 {% if n.cupos_disponibles > 0 %}
-                <a href="/reservas/nueva?tarifa_id={{ n.id }}" class="btn-at-accent w-100 justify-content-center">
-                    <i class="bi bi-ticket-perforated"></i>Reservar
+                <a href="/reservas/nueva?tarifa_id={{ n.id }}"
+                   class="btn-at-accent w-100 justify-content-center"
+                   style="padding:10px;font-size:14px;font-weight:700">
+                    <i class="bi bi-ticket-perforated" aria-hidden="true"></i>Seleccionar
                 </a>
                 {% else %}
-                <button class="btn-at-ghost w-100 justify-content-center" disabled>Sin cupo</button>
+                <button class="btn-at-ghost w-100 justify-content-center" disabled
+                        style="padding:10px;cursor:not-allowed;opacity:.5">Sin disponibilidad</button>
                 {% endif %}
             </div>
         </div>

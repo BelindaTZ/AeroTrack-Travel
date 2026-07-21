@@ -72,6 +72,8 @@
 
 - [x] CHK047 CU-O01 a CU-O13 — cada uno tiene al menos una prueba automatizada que ejercita su criterio de aceptación tal como está redactado en `seguridad-spec.md`.
 - [ ] CHK048 CU-O41, O42, O43 — cada uno tiene al menos una prueba automatizada, y se verifica que son invocables como dependencia desde un módulo externo (prueba de integración cruzada, p. ej. simulando su uso desde `pasajeros-spec.md`). *(probado vía apps FastAPI mínimas independientes que solo importan `Depends(...)`, el mismo patrón que usará un módulo externo real; sin un segundo módulo real todavía no hay una prueba de integración cruzada genuina — ver Notas de cierre)*
+- [x] CHK049 CU-O112, CU-O113 *(catálogo v3.0, agregado 2026-07-18)* — ya cubiertos por las mismas pruebas de CHK015/CHK031 (RF-SEG-011 asigna/revoca Nivel 1 y Nivel 2 en una sola operación); sin prueba propia nueva, la cobertura existente ya los ejercita.
+- [ ] CHK050 `usuarios.foto_perfil` *(dbml v3, agregado 2026-07-18)* — no implementado; RF-SEG-006 no sube ni muestra foto de perfil todavía.
 
 ## Notas de cierre — sesión de implementación (2026-07-09)
 

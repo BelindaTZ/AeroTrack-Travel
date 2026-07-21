@@ -1,0 +1,50 @@
+{% extends "layout_portal.html" %}
+{% block title %}Planificación de viajes — AeroTrack Travel{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <h1 class="h5 m-0" style="font-family:var(--font-display)">Planificación de viajes</h1>
+    <a href="/mis-viajes" class="btn-at-ghost"><i class="bi bi-arrow-left"></i> Mis Viajes</a>
+</div>
+
+<form method="post" action="/viajes-personalizados" class="at-card mb-3">
+    <div class="row g-3 align-items-end">
+        <div class="col-12 col-md-4">
+            <label class="form-label-at" for="vp-nombre">Nombre</label>
+            <input type="text" class="form-control-at" id="vp-nombre" name="nombre" placeholder="Luna de miel 2027" required>
+        </div>
+        <div class="col-12 col-md-6">
+            <label class="form-label-at" for="vp-descripcion">Descripción (opcional)</label>
+            <input type="text" class="form-control-at" id="vp-descripcion" name="descripcion" placeholder="Ideas, notas, presupuesto...">
+        </div>
+        <div class="col-12 col-md-2">
+            <button type="submit" class="btn-at-primary w-100 justify-content-center">
+                <i class="bi bi-plus-lg"></i> Crear
+            </button>
+        </div>
+    </div>
+</form>
+
+{% if viajes %}
+<div class="d-flex flex-column gap-2">
+    {% for v in viajes %}
+    <div class="at-card d-flex align-items-center justify-content-between">
+        <div>
+            <div style="font-weight:600">{{ v.nombre }}</div>
+            {% if v.descripcion %}<div style="font-size:12.5px;color:var(--at-muted)">{{ v.descripcion }}</div>{% endif %}
+        </div>
+        <form method="post" action="/viajes-personalizados/{{ v.id }}/eliminar" class="m-0">
+            <button type="submit" class="btn-at-ghost" style="color:#dc3545;border-color:#f3c9c9">
+                <i class="bi bi-trash"></i> Eliminar
+            </button>
+        </form>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="at-empty">
+    <i class="bi bi-map at-empty-icon" aria-hidden="true"></i>
+    <strong>Sin viajes en planificación</strong>
+    <p>Crea una nota libre para organizar ideas antes de reservar nada.</p>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,230 @@
+{% extends "layout_portal.html" %}
+{% block title %}AeroTrack Travel — Vuelos, hoteles, autos, actividades y cruceros{% endblock %}
+{% block description %}Busca y reserva vuelos, hoteles, autos, actividades y cruceros con transparencia total de precio.{% endblock %}
+
+{# ══════════════════════════════════════════
+   HERO — selector de vertical + mini-buscador
+   (cada tab apunta a un /buscar real ya construido, no hay
+   producto "universal" inventado — ver diseno-visual.md)
+══════════════════════════════════════════ #}
+{% block hero %}
+<section class="at-hero-search" aria-label="Buscador AeroTrack Travel">
+    <div class="hero-route-deco" aria-hidden="true">
+        <svg viewBox="0 0 1200 320" preserveAspectRatio="xMidYMid slice">
+            <circle cx="1020" cy="70" r="220" fill="rgba(255,255,255,.05)"/>
+            <circle cx="120" cy="280" r="160" fill="rgba(255,255,255,.04)"/>
+        </svg>
+    </div>
+    <div style="max-width:960px;margin:0 auto;position:relative;z-index:2">
+        <div class="hero-eyebrow">
+            <i class="bi bi-globe-americas" aria-hidden="true"></i>
+            Agencia digital · con sede en Miami, operación internacional
+        </div>
+        <h1 class="hero-title">Viajes con seguimiento real, <span class="accent">en cualquier parte del mundo</span></h1>
+        <p class="hero-sub">Buscas, reservas y pagas sin llamar a nadie — rutas domésticas e internacionales — y si tu viaje cambia, te avisamos antes que nadie.</p>
+
+        <div class="hero-vt" role="tablist" aria-label="Elegir tipo de búsqueda">
+            <button type="button" class="on" data-vertical="vuelos" role="tab" aria-selected="true">
+                <i class="bi bi-airplane" aria-hidden="true"></i>Vuelos
+            </button>
+            <button type="button" data-vertical="hoteles" role="tab" aria-selected="false">
+                <i class="bi bi-building" aria-hidden="true"></i>Hoteles
+            </button>
+            <button type="button" data-vertical="autos" role="tab" aria-selected="false">
+                <i class="bi bi-car-front" aria-hidden="true"></i>Autos
+            </button>
+            <button type="button" data-vertical="actividades" role="tab" aria-selected="false">
+                <i class="bi bi-compass" aria-hidden="true"></i>Actividades
+            </button>
+            <button type="button" data-vertical="cruceros" role="tab" aria-selected="false">
+                <i class="bi bi-water" aria-hidden="true"></i>Cruceros
+            </button>
+        </div>
+
+        <form method="get" action="/vuelos/buscar" class="search-card hero-form" data-vertical-form="vuelos">
+            <div class="row g-3 align-items-end">
+                <div class="col-6 col-md">
+                    <label class="form-label-at" for="hi-origen">Origen</label>
+                    <input type="text" class="form-control-at text-uppercase" id="hi-origen" name="origen"
+                           maxlength="3" placeholder="JFK" autocomplete="off">
+                </div>
+                <div class="col-6 col-md">
+                    <label class="form-label-at" for="hi-destino">Destino</label>
+                    <input type="text" class="form-control-at text-uppercase" id="hi-destino" name="destino"
+                           maxlength="3" placeholder="LAX" autocomplete="off">
+                </div>
+                <div class="col-6 col-md">
+                    <label class="form-label-at" for="hi-fecha">Salida</label>
+                    <input type="date" class="form-control-at" id="hi-fecha" name="fecha">
+                </div>
+                <div class="col-6 col-md-2">
+                    <label class="form-label-at" for="hi-pasajeros">Pasajeros</label>
+                    <input type="number" class="form-control-at" id="hi-pasajeros" name="pasajeros" min="1" max="9" value="1">
+                </div>
+                <div class="col-12 col-md-2">
+                    <button type="submit" class="btn-search-hero w-100 justify-content-center">
+                        <i class="bi bi-search" aria-hidden="true"></i> Buscar
+                    </button>
+                </div>
+            </div>
+        </form>
+
+        <form method="get" action="/hoteles/buscar" class="search-card hero-form" data-vertical-form="hoteles" hidden>
+            <div class="row g-3 align-items-end">
+                <div class="col-12 col-md-4">
+                    <label class="form-label-at" for="hh-ciudad">Ciudad</label>
+                    <input type="text" class="form-control-at" id="hh-ciudad" name="ciudad" placeholder="Miami" autocomplete="off">
+                </div>
+                <div class="col-6 col-md-3">
+                    <label class="form-label-at" for="hh-checkin">Check-in</label>
+                    <input type="date" class="form-control-at" id="hh-checkin" name="checkin">
+                </div>
+                <div class="col-6 col-md-3">
+                    <label class="form-label-at" for="hh-checkout">Check-out</label>
+                    <input type="date" class="form-control-at" id="hh-checkout" name="checkout">
+                </div>
+                <div class="col-8 col-md-1">
+                    <label class="form-label-at" for="hh-huespedes">Huésp.</label>
+                    <input type="number" class="form-control-at" id="hh-huespedes" name="huespedes" min="1" max="9" value="1">
+                </div>
+                <div class="col-4 col-md-1">
+                    <button type="submit" class="btn-search-hero w-100 justify-content-center">
+                        <i class="bi bi-search" aria-hidden="true"></i>
+                    </button>
+                </div>
+            </div>
+        </form>
+
+        <form method="get" action="/autos/buscar" class="search-card hero-form" data-vertical-form="autos" hidden>
+            <div class="row g-3 align-items-end">
+                <div class="col-12 col-md-5">
+                    <label class="form-label-at" for="ha-ciudad">Ciudad de recogida</label>
+                    <input type="text" class="form-control-at" id="ha-ciudad" name="ciudad" placeholder="Orlando" autocomplete="off">
+                </div>
+                <div class="col-6 col-md-3">
+                    <label class="form-label-at" for="ha-recogida">Recogida</label>
+                    <input type="date" class="form-control-at" id="ha-recogida" name="recogida">
+                </div>
+                <div class="col-6 col-md-3">
+                    <label class="form-label-at" for="ha-devolucion">Devolución</label>
+                    <input type="date" class="form-control-at" id="ha-devolucion" name="devolucion">
+                </div>
+                <div class="col-12 col-md-1">
+                    <button type="submit" class="btn-search-hero w-100 justify-content-center">
+                        <i class="bi bi-search" aria-hidden="true"></i>
+                    </button>
+                </div>
+            </div>
+        </form>
+
+        <form method="get" action="/actividades/buscar" class="search-card hero-form" data-vertical-form="actividades" hidden>
+            <div class="row g-3 align-items-end">
+                <div class="col-9 col-md-10">
+                    <label class="form-label-at" for="hac-ciudad">Ciudad</label>
+                    <input type="text" class="form-control-at" id="hac-ciudad" name="ciudad" placeholder="Cancún" autocomplete="off">
+                </div>
+                <div class="col-3 col-md-2">
+                    <button type="submit" class="btn-search-hero w-100 justify-content-center">
+                        <i class="bi bi-search" aria-hidden="true"></i>
+                    </button>
+                </div>
+            </div>
+        </form>
+
+        <form method="get" action="/cruceros/buscar" class="search-card hero-form" data-vertical-form="cruceros" hidden>
+            <div class="row g-3 align-items-end">
+                <div class="col-9 col-md-10">
+                    <label class="form-label-at" for="hcr-destino">Destino o puerto</label>
+                    <input type="text" class="form-control-at" id="hcr-destino" name="destino" placeholder="Caribe" autocomplete="off">
+                </div>
+                <div class="col-3 col-md-2">
+                    <button type="submit" class="btn-search-hero w-100 justify-content-center">
+                        <i class="bi bi-search" aria-hidden="true"></i>
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</section>
+{% endblock %}
+
+{% block content %}
+<h2 style="font-family:var(--font-display,var(--font-heading));font-size:20px;margin:0 0 4px">Explora por categoría</h2>
+<p style="font-size:13px;color:var(--at-muted);margin:0">Cada categoría abre su propio buscador con filtros completos.</p>
+<div class="categoria-grid">
+    <a class="categoria-card at-card at-card-hover" href="/vuelos/buscar">
+        <div class="icon-box"><i class="bi bi-airplane" aria-hidden="true"></i></div>
+        <strong>Vuelos</strong>
+        <span>Domésticos e internacionales, precio final garantizado</span>
+    </a>
+    <a class="categoria-card at-card at-card-hover" href="/hoteles/buscar">
+        <div class="icon-box"><i class="bi bi-building" aria-hidden="true"></i></div>
+        <strong>Hoteles</strong>
+        <span>Con reseñas reales y cargos locales cuando aplican</span>
+    </a>
+    <a class="categoria-card at-card at-card-hover" href="/autos/buscar">
+        <div class="icon-box"><i class="bi bi-car-front" aria-hidden="true"></i></div>
+        <strong>Autos</strong>
+        <span>Renta por día, varias categorías de vehículo</span>
+    </a>
+    <a class="categoria-card at-card at-card-hover" href="/actividades/buscar">
+        <div class="icon-box"><i class="bi bi-compass" aria-hidden="true"></i></div>
+        <strong>Actividades</strong>
+        <span>Tours y experiencias por ciudad, con horarios</span>
+    </a>
+    <a class="categoria-card at-card at-card-hover" href="/cruceros/buscar">
+        <div class="icon-box"><i class="bi bi-water" aria-hidden="true"></i></div>
+        <strong>Cruceros</strong>
+        <span>Itinerarios por naviera, compara fechas del mismo barco</span>
+    </a>
+</div>
+
+{% if destinos_populares %}
+<h2 style="font-family:var(--font-display,var(--font-heading));font-size:20px;margin:32px 0 4px">Destinos con más vuelos disponibles</h2>
+<p style="font-size:13px;color:var(--at-muted);margin:0">Según el catálogo de vuelos programados ahora mismo — elige uno y completa origen y fecha.</p>
+<div class="destinos-grid">
+    {% for d in destinos_populares %}
+    <div class="destino-card at-card at-card-hover">
+        <a href="/vuelos/buscar?destino={{ d.codigo }}" class="text-decoration-none" style="color:inherit;flex:1">
+            <div class="codigo">{{ d.codigo }}</div>
+            <div class="legible">{{ d.legible }}</div>
+        </a>
+        <div class="d-flex align-items-center gap-2">
+            <span class="conteo">{{ d.vuelos_disponibles }} vuelo(s)</span>
+            {% if usuario and usuario.tipo_actor == 'pasajero' %}
+            <form method="post" action="/favoritos" class="m-0">
+                <input type="hidden" name="tipo" value="destino">
+                <input type="hidden" name="producto_ref" value="{{ d.codigo }} — {{ d.legible }}">
+                <input type="hidden" name="next" value="/">
+                <button type="submit" class="btn-icon" title="Guardar como favorito">
+                    <i class="bi bi-heart" style="font-size:14px"></i>
+                </button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var tabs = document.querySelectorAll('.hero-vt button');
+    var forms = document.querySelectorAll('.hero-form');
+    tabs.forEach(function (tab) {
+        tab.addEventListener('click', function () {
+            var vertical = tab.getAttribute('data-vertical');
+            tabs.forEach(function (t) {
+                t.classList.toggle('on', t === tab);
+                t.setAttribute('aria-selected', t === tab ? 'true' : 'false');
+            });
+            forms.forEach(function (f) {
+                f.hidden = f.getAttribute('data-vertical-form') !== vertical;
+            });
+        });
+    });
+});
+</script>
+{% endblock %}

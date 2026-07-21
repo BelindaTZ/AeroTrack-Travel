@@ -1,0 +1,85 @@
+{% extends "layout_portal.html" %}
+{% block title %}Mis Viajes — AeroTrack Travel{% endblock %}
+
+{% macro reserva_card(r) %}
+<a href="/reservas/{{ r.id }}" class="at-card d-flex align-items-center justify-content-between text-decoration-none" style="color:var(--at-text)">
+    {% if r.es_multiproducto %}
+    <div class="d-flex align-items-center gap-3">
+        <div class="type-chip">{{ r.items | length }} producto(s)</div>
+        <div>
+            <div style="font-weight:600">{{ r.items | map(attribute="titulo") | join(" + ") }}</div>
+            <div style="font-size:12.5px;color:var(--at-muted)">{{ r.codigo_reserva }} · {{ r.fecha_reserva[:10] }}</div>
+        </div>
+    </div>
+    {% else %}
+    <div class="d-flex align-items-center gap-3">
+        <div class="type-chip">{{ r.aerolinea_nombre }}</div>
+        <div>
+            <div style="font-weight:600">{{ r.origen_legible }} → {{ r.destino_legible }}</div>
+            <div style="font-size:12.5px;color:var(--at-muted)">
+                {{ r.codigo_reserva }} · {{ r.fecha_salida }} · {{ r.nivel_tarifa }}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    <div class="text-end">
+        <span class="badge-sistema">{{ r.estado.replace('_', ' ') }}</span>
+        <div class="at-mono" style="font-size:15px;font-weight:700;color:var(--at-primary)">${{ "%.2f"|format(r.total_pagar) }}</div>
+    </div>
+</a>
+{% endmacro %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <h1 class="h5 m-0" style="font-family:var(--font-display)">Mis Viajes</h1>
+    <div class="d-flex gap-2">
+        <a href="/favoritos" class="btn-at-ghost btn-sm"><i class="bi bi-heart"></i> Favoritos</a>
+        <a href="/mis-busquedas-recientes" class="btn-at-ghost btn-sm"><i class="bi bi-clock-history"></i> Búsquedas</a>
+        <a href="/viajes-personalizados" class="btn-at-ghost btn-sm"><i class="bi bi-map"></i> Planificación</a>
+        <a href="/mi-cuenta/puntos" class="btn-at-ghost btn-sm"><i class="bi bi-award"></i> Puntos</a>
+    </div>
+</div>
+
+{% if not (grupos.activas or grupos.proximas or grupos.pasadas or grupos.sin_fecha) %}
+<div class="at-empty">
+    <i class="bi bi-airplane at-empty-icon" aria-hidden="true"></i>
+    <strong>Todavía no tienes reservas</strong>
+    <p>
+        <a href="/vuelos/buscar">Buscar vuelos</a> ·
+        <a href="/hoteles/buscar">Hoteles</a> ·
+        <a href="/actividades/buscar">Actividades</a>
+    </p>
+</div>
+{% endif %}
+
+{% if grupos.activas %}
+<h2 style="font-size:14px;font-weight:700;letter-spacing:.4px;color:var(--at-text);margin:18px 0 8px">
+    <i class="bi bi-play-circle-fill" style="color:var(--red-600)"></i> En curso
+</h2>
+<div class="d-flex flex-column gap-2 mb-3">{% for r in grupos.activas %}{{ reserva_card(r) }}{% endfor %}</div>
+{% endif %}
+
+{% if grupos.proximas %}
+<h2 style="font-size:14px;font-weight:700;letter-spacing:.4px;color:var(--at-text);margin:18px 0 8px">
+    <i class="bi bi-calendar-event"></i> Próximas
+</h2>
+<div class="d-flex flex-column gap-2 mb-3">{% for r in grupos.proximas %}{{ reserva_card(r) }}{% endfor %}</div>
+{% endif %}
+
+{% if grupos.pasadas %}
+<h2 style="font-size:14px;font-weight:700;letter-spacing:.4px;color:var(--at-muted);margin:18px 0 8px">
+    <i class="bi bi-calendar-check"></i> Pasadas
+</h2>
+<div class="d-flex flex-column gap-2 mb-3">{% for r in grupos.pasadas %}{{ reserva_card(r) }}{% endfor %}</div>
+{% endif %}
+
+{% if grupos.sin_fecha %}
+<h2 style="font-size:14px;font-weight:700;letter-spacing:.4px;color:var(--at-muted);margin:18px 0 8px">
+    <i class="bi bi-question-circle"></i> Sin fecha de viaje registrada
+</h2>
+<p style="font-size:12px;color:var(--at-sub);margin:-4px 0 8px">
+    Reservas de hotel/auto todavía no capturan fecha de check-in/recogida en el checkout — no se pueden clasificar como próximas o pasadas.
+</p>
+<div class="d-flex flex-column gap-2 mb-3">{% for r in grupos.sin_fecha %}{{ reserva_card(r) }}{% endfor %}</div>
+{% endif %}
+{% endblock %}

@@ -2,25 +2,19 @@ version: '3.8'
 
 # ─────────────────────────────────────────
 #  AEROTRACK TRAVEL — infraestructura nueva y aislada
-#  Reutiliza la instancia de MinIO existente (proyecto minio-elt).
-#  PocketBase y Airflow son instancias NUEVAS con sus propios
-#  volúmenes y su propia base de datos de metadatos.
+#  100% independiente del proyecto minio-elt (AeroTrack Analytics):
+#  PocketBase, Airflow y MinIO son instancias propias, con sus propios
+#  volúmenes y credenciales. No hace falta levantar minio-elt para nada.
 # ─────────────────────────────────────────
 
 networks:
   travel-network:
     driver: bridge
-  # Red externa del proyecto anterior (minio-elt), SOLO para que los
-  # contenedores de Travel puedan resolver "minio" por DNS y llegar
-  # a la instancia de MinIO compartida. No se modifica ni se toca
-  # ningún contenedor del proyecto anterior.
-  elt-network:
-    external: true
-    name: minio-elt_elt-network
 
 volumes:
   pocketbase-travel-data:
   postgres-travel-data:
+  minio-travel-data:
 
 services:
 
@@ -43,6 +37,46 @@ services:
       retries: 5
       start_period: 10s
 
+  # ── MINIO (Travel) — instancia y volumen propios, sin depender de Analytics ──
+  minio-travel:
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+    container_name: minio-travel
+    ports:
+      - "${MINIO_TRAVEL_PORT:-9002}:9000"   # API S3
+      - "${MINIO_TRAVEL_CONSOLE_PORT:-9003}:9001"   # Consola web
+    environment:
+      TZ: America/Guayaquil
+      MINIO_ROOT_USER: ${MINIO_TRAVEL_ACCESS:-admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_TRAVEL_SECRET:-admin1234}
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio-travel-data:/data
+    networks:
+      - travel-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
+
+  # ── MINIO-TRAVEL-INIT (crea el bucket aerotrack-travel-dims) ──
+  minio-travel-init:
+    image: quay.io/minio/mc:latest
+    container_name: minio-travel-init
+    depends_on:
+      minio-travel:
+        condition: service_healthy
+    networks:
+      - travel-network
+    restart: "no"
+    entrypoint: >
+      /bin/sh -c "
+        mc alias set localtravel http://minio-travel:9000 ${MINIO_TRAVEL_ACCESS:-admin} ${MINIO_TRAVEL_SECRET:-admin1234};
+        mc mb --ignore-existing localtravel/${MINIO_BUCKET_TRAVEL_DIMS:-aerotrack-travel-dims};
+        echo 'Bucket de Travel listo.';
+      "
+
   # ── APP FASTAPI (Travel) — módulos operativos (Seguridad, Vuelos, ...) ──
   app-travel:
     build:
@@ -59,16 +93,17 @@ services:
       SECRET_KEY: ${SECRET_KEY}
       ALGORITHM: ${ALGORITHM:-HS256}
       TOKEN_EXPIRE_MINUTES: ${TOKEN_EXPIRE_MINUTES:-60}
-      MINIO_URL_DOCKER: ${MINIO_URL_DOCKER:-minio:9000}
-      MINIO_ACCESS: ${MINIO_ACCESS}
-      MINIO_SECRET: ${MINIO_SECRET}
+      MINIO_URL_DOCKER: ${MINIO_TRAVEL_URL_DOCKER:-minio-travel:9000}
+      MINIO_ACCESS: ${MINIO_TRAVEL_ACCESS:-admin}
+      MINIO_SECRET: ${MINIO_TRAVEL_SECRET:-admin1234}
       MINIO_BUCKET_TRAVEL_DIMS: ${MINIO_BUCKET_TRAVEL_DIMS:-aerotrack-travel-dims}
     depends_on:
       pocketbase-travel:
         condition: service_healthy
+      minio-travel:
+        condition: service_healthy
     networks:
       - travel-network
-      - elt-network
     restart: unless-stopped
 
   # ── POSTGRES (metadatos del Airflow de Travel) — dedicado ──
@@ -124,6 +159,8 @@ services:
         condition: service_healthy
       airflow-init-travel:
         condition: service_completed_successfully
+      minio-travel:
+        condition: service_healthy
     ports:
       - "${AIRFLOW_TRAVEL_PORT:-8081}:8080"   # UI en http://localhost:8081
     environment:
@@ -145,7 +182,6 @@ services:
       - ./plugins:/opt/airflow/plugins
     networks:
       - travel-network
-      - elt-network
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
@@ -163,6 +199,8 @@ services:
         condition: service_healthy
       airflow-init-travel:
         condition: service_completed_successfully
+      minio-travel:
+        condition: service_healthy
     environment:
       TZ: America/Guayaquil
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
@@ -170,7 +208,7 @@ services:
       AIRFLOW__CORE__FERNET_KEY: ${FERNET_KEY_TRAVEL}
       AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
       AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session'
-      _PIP_ADDITIONAL_REQUIREMENTS: "requests pandas pyarrow minio python-dotenv"
+      _PIP_ADDITIONAL_REQUIREMENTS: "requests pandas pyarrow minio python-dotenv docker"
       PYTHONPATH: /opt/airflow
     env_file:
       - .env
@@ -179,7 +217,11 @@ services:
       - ./dags:/opt/airflow/dags
       - ./logs:/opt/airflow/logs
       - ./plugins:/opt/airflow/plugins
+      # Socket de Docker del host — SOLO en el scheduler (es el que ejecuta
+      # código de tareas bajo LocalExecutor), no en el webserver. Usado
+      # únicamente por aerotrack_travel_sync_dims para arrancar los 5
+      # contenedores de Analytics que hagan falta antes de disparar su ELT.
+      - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - travel-network
-      - elt-network
     restart: unless-stopped

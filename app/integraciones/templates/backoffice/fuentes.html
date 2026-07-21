@@ -1,0 +1,86 @@
+{% extends "layout_app.html" %}
+{% block title %}Fuentes de datos externas — AeroTrack Travel{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <h1><span class="heading-icon"><i class="bi bi-plug"></i></span>Fuentes de datos externas</h1>
+    <p>Configuración y cuota consumida de cada fuente externa y regla de negocio interna. Desactivar una fuente no borra el catálogo ya generado con ella.</p>
+</div>
+
+{% if fuentes %}
+<div class="at-table-wrapper">
+    <div class="at-table-scroll">
+        <table class="at-table">
+            <thead>
+                <tr>
+                    <th>Fuente</th>
+                    <th>Tipo de uso</th>
+                    <th>Cuota consumida</th>
+                    <th>Activa</th>
+                    <th>Frecuencia (h) / acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for f in fuentes %}
+                <tr>
+                    <td>
+                        <strong>{{ f.nombre }}</strong>
+                        {% if f.notas %}<div style="font-size:12px;color:var(--at-text-muted)">{{ f.notas }}</div>{% endif %}
+                    </td>
+                    <td><span class="badge-sistema">{{ f.tipo_uso }}</span></td>
+                    <td class="at-mono">{{ f.cuota_consumida }}</td>
+                    <td>
+                        <label style="font-size:12.5px;display:flex;align-items:center;gap:4px">
+                            <input type="checkbox" data-fuente="{{ f.id }}" data-campo="activa" {% if f.activa %}checked{% endif %}> activa
+                        </label>
+                    </td>
+                    <td id="fila-{{ f.id }}">
+                        {% if f.tipo_uso == "catalogo_periodico" %}
+                        <div class="d-flex gap-2 align-items-center flex-wrap">
+                            <input type="number" min="1" class="form-control-at" style="width:80px" data-fuente="{{ f.id }}" data-campo="frecuencia_sincronizacion_horas" value="{{ f.frecuencia_sincronizacion_horas or '' }}" placeholder="horas">
+                            <form method="post" action="/backoffice/integraciones/fuentes/{{ f.id }}/resincronizar">
+                                <button type="submit" class="btn-at-ghost" style="font-size:12.5px"><i class="bi bi-arrow-repeat"></i>Resincronizar ahora</button>
+                            </form>
+                        </div>
+                        {% else %}
+                        <span style="color:var(--at-text-muted);font-size:12.5px">no aplica ({{ f.tipo_uso }})</span>
+                        {% endif %}
+                        <span class="fila-estado" style="font-size:11px"></span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="at-empty">
+    <i class="bi bi-plug at-empty-icon" aria-hidden="true"></i>
+    <strong>No hay fuentes registradas</strong>
+    <p>Correr <code>scripts/seed_fuentes_datos_externas.py</code>.</p>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.querySelectorAll('[data-fuente]').forEach(function (el) {
+    el.addEventListener('change', async function () {
+        const fuenteId = el.dataset.fuente;
+        const campo = el.dataset.campo;
+        const valor = el.type === 'checkbox' ? el.checked : el.value;
+        const body = new URLSearchParams();
+        body.append(campo, valor);
+        const resp = await fetch(`/backoffice/integraciones/fuentes/${fuenteId}`, {
+            method: 'PUT', body, headers: { 'Accept': 'application/json' },
+        });
+        const estado = document.getElementById(`fila-${fuenteId}`).querySelector('.fila-estado');
+        if (!estado) return;
+        estado.textContent = resp.ok ? 'Guardado' : 'Error';
+        estado.style.color = resp.ok ? 'var(--at-success)' : 'var(--at-danger)';
+        estado.classList.remove('toast-autodismiss');
+        void estado.offsetWidth;
+        estado.classList.add('toast-autodismiss');
+    });
+});
+</script>
+{% endblock %}

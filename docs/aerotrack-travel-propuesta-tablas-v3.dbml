@@ -1,0 +1,1827 @@
+// ============================================================================
+// AeroTrack Travel — Propuesta de esquema v3 (PocketBase pocketbase-travel)
+// ============================================================================
+// PROPUESTA DE DISEÑO — nada de esto está aplicado todavía. Generada a partir
+// de docs/aerotrack-travel-casos-de-uso-v3.md (148 CU, 16 módulos) contra el
+// esquema REAL vigente en PocketBase (dump en vivo, no el .dbml anterior) y
+// contra docs/apis-reference.md + docs/apis-listas-implementacion.md.
+//
+// Sustituye conceptualmente a aerotrack-travel-propuesta-tablas.dbml (v2,
+// 2026-07-08, solo 6 módulos) — ese archivo queda como referencia histórica,
+// no se borra. Las tablas marcada "// SIN CAMBIO" están reproducidas tal cual
+// existen hoy en PocketBase (confirmado por dump en vivo); las marcadas
+// "// MODIFICADA" tienen un comentario explicando el cambio puntual; el resto
+// son nuevas.
+//
+// ── PRINCIPIO DE DIVISIÓN PocketBase vs. MinIO (responde la pregunta del
+//    usuario de "cómo dividir lo que falta") ──────────────────────────────
+// MinIO (aerotrack-travel-dims) sigue siendo EXCLUSIVAMENTE el star-schema
+// histórico heredado de vuelos (BTS/FAA, 11 dim_* + 10 agg_* + fact_vuelo,
+// solo lectura, ~millones de filas). NINGUNA tabla nueva de este archivo va
+// a MinIO, por una razón estructural, no solo de estilo: en cuanto existen
+// Carrito y Paquetes, cualquier ítem reservable (vuelo/hotel/auto/actividad/
+// crucero) necesita una relation field real con integridad referencial e
+// RBAC por fila — y PocketBase no puede relacionar una fila contra un
+// Parquet. Además, a diferencia de vuelos (que sí tiene un dataset histórico
+// masivo BTS/FAA detrás), Hoteles/Autos/Actividades/Cruceros NO tienen un
+// dataset histórico equivalente en ninguna de las APIs probadas — son
+// agregadores que devuelven inventario/precio VIGENTE, no series históricas.
+// Por eso sus catálogos son 100% PocketBase, poblados periódicamente (ver
+// fuentes_datos_externas más abajo), exactamente con el mismo patrón que ya
+// usa vuelos_catalogo (generado por Airflow, CU-O19) — no con llamada en vivo
+// por cada búsqueda del pasajero, tal como pediste.
+// Recomendación opcional (no modelada como tabla, es infraestructura, no
+// esquema): agregar un bucket MinIO "aerotrack-travel-raw" para guardar el
+// JSON crudo de cada sincronización antes de transformarlo a filas de
+// PocketBase — evita tener que re-consultar una API con cuota limitada si
+// hay que reprocesar. Mismo patrón raw/dims que ya usa minio-elt.
+//
+// ── MECANISMO NUEVO: catálogo de fuentes externas + bitácora de sync ───────
+// Generaliza lo que antes solo existía para vuelos (CU-T06/T07) a los 5 tipos
+// de producto. Responde "cada cuánto actualizamos" + deja auditable si una
+// fuente dejó de responder — con FK obligatoria a quién la configuró
+// (fuentes_datos_externas.modificado_por) y su fecha (updated), igual que ya
+// exige configuracion_sistema.
+// ============================================================================
+
+
+// ── ENUMS que YA EXISTÍAN (sin cambio) ──────────────────────────────────────
+
+Enum tipo_actor {
+  pasajero
+  agente
+  administrador
+}
+
+Enum genero_enum {
+  M
+  F
+  prefiero_no_decir
+}
+
+Enum accion_permiso {
+  ver
+  crear
+  editar
+  eliminar
+  exportar
+  ejecutar
+}
+
+Enum estado_vuelo {
+  programado
+  retrasado
+  cancelado
+  completado
+  desviado
+}
+
+// CORREGIDO 2026-07-17 (dos vueltas, la primera estaba mal): el generador
+// actual (dag_generar_catalogo_vuelos.py / catalogo_vuelos_tasks.py, YA
+// IMPLEMENTADO) fabrica número de vuelo/hora/precio por fórmula — solo la
+// ruta/aeropuerto/distancia viene de dim_ruta (MinIO, real). Esto es
+// inconsistente con Disrupciones, que YA asume vuelos reales (umbral
+// configurable `disrupciones.umbral_api_real_horas` para decidir cuándo
+// consultar AviationStack) — un número de vuelo inventado nunca encuentra
+// coincidencia real, así que la detección de disrupciones nunca se dispara
+// de verdad.
+// Primer intento de solución (Skyscanner) DESCARTADO tras verificar en
+// vivo: `flights/searchFlights` da carrier/horario/precio reales, pero
+// **NUNCA un número de vuelo** (confirmado extrayendo todas las claves del
+// JSON real — no existe `flightNumber` en ninguna forma, ni patrón "DL1234"
+// en todo el payload).
+// Solución real, verificada en vivo 2026-07-17: **AviationStack** (ya
+// integrado y funcionando, no hace falta ninguna API nueva) SÍ da número de
+// vuelo real si se consulta por ruta en vez de por número:
+// `GET /v1/flights?dep_iata=ATL&arr_iata=JFK&airline_iata=DL` (sin
+// `flight_iata`) devuelve una lista de vuelos reales con `flight.iata`
+// ("DL2101"), `airline.iata`/`name`, horarios reales, Y de regalo
+// `aircraft.icao24` real ("A47D05") — esto además resuelve `avion_icao24`
+// sin depender de AeroDataBox para nada.
+// LÍMITE REAL DEL PLAN (confirmado con test en vivo): pasar `flight_date`
+// con una fecha futura (probado 5 días adelante) da
+// `{"error":{"code":"function_access_restricted"}}` — el plan free/básico
+// de AviationStack **no soporta pedir el horario de una fecha futura
+// explícita**, solo el día actual.
+// SOLUCIÓN INTERMEDIA (2026-07-17, mientras AeroDataBox estaba caída): se
+// encontró `GOOGLE_FLIGHTS_API_KEY` (SerpApi, motor `google_flights`, plan
+// free 250 búsquedas/mes) — SÍ acepta fecha futura explícita y devuelve
+// `flight_number` REAL + `price` REAL + horario real. Verificado cruzando
+// resultado real de Google Flights (ruta ATL→JFK, 2026-07-22, "F9 4732")
+// contra AviationStack (mismo número "F94732", mismos horarios) —
+// coincidencia exacta, no es data sintética como resultó ser Duffel.
+// PERO: refrescar 20 rutas con dato real vía Google Flights TODOS los días
+// no entra en 250/mes (~600/mes solo para eso) — quedó como recurso
+// secundario, no primario (ver más abajo).
+//
+// SOLUCIÓN FINAL (2026-07-17, AeroDataBox reactivada — RapidAPI confirmó
+// que la caída del 07-16 fue un incidente de su lado que afectó a varios
+// suscriptores, no algo específico de esta cuenta): **AeroDataBox FIDS es
+// la fuente PRIMARIA**, no Google Flights. Verificado en vivo:
+// `GET /flights/airports/{codeType}/{code}/{fromLocal}/{toLocal}` —
+// ⚠️ **límite duro de 12 horas por llamada** (no "7-30 días", esa cifra
+// era de la OTRA familia de endpoints — historial por vuelo/aeronave
+// específica, `/flights/{searchBy}/{searchParam}/{dateFromLocal}/
+// {dateToLocal}`, no por aeropuerto). SÍ acepta fecha futura sin la
+// restricción de AviationStack (probado 5 días adelante, 200 OK).
+// Extremadamente eficiente pese al límite de 12h: una sola llamada a ATL
+// devolvió **781 salidas reales, 141 hacia 14 de los otros 15 hubs
+// curados** (~10 vuelos reales por ruta en promedio) — 1 llamada cubre
+// MUCHAS rutas a la vez (cobra por AEROPUERTO, no por ruta), a diferencia
+// de Google Flights (1 llamada = 1 ruta). También trae `aircraft.model`
+// (ej. "Boeing 757") gratis en la misma llamada — resuelve avion_modelo
+// sin gastar una consulta aparte de Google Flights.
+// avion_icao24 se resuelve independientemente vía `aircraft.icao24` de
+// AviationStack (no depende de Google Flights ni de AeroDataBox).
+//
+// DIVISIÓN DE ROLES FINAL:
+//   - AeroDataBox FIDS -> numero_vuelo, horario, avion_modelo (PRIMARIA,
+//     barata, cubre muchas rutas por llamada).
+//   - AviationStack -> avion_icao24 + validación cruzada + su rol original
+//     (chequeo de estado real contra reservas activas, CU-O27/O29).
+//   - Google Flights -> precio_base real + price_insights (predicción) y,
+//     si se decide gastar la cuota, clases de cabina Business/First en un
+//     subconjunto chico de rutas. AeroDataBox NO da precio ni clase de
+//     cabina, así que no reemplaza esta parte.
+//
+// CUOTA — HALLAZGO Y PLAN FINAL 2026-07-17 (con el número REAL: MinIO ya
+// estaba corriendo, se ejecutó la misma consulta que usa el DAG
+// implementado contra dim_ruta real). Las 20 rutas curadas actuales solo
+// tienen **2 orígenes únicos — ATL y CLT** (`_rutas_curadas()` ordena
+// alfabéticamente por OriginCode y trunca a 20, así que agarra las 14
+// rutas de ATL completas + 6 de CLT; ningún otro de los 15 hubs aparece
+// como origen, solo como destino). Es casi seguro un efecto colateral no
+// intencional del orden+truncado, no una decisión deliberada — vale la
+// pena revisar `catalogo_vuelos_tasks.py` cuando se pase a implementación,
+// **pero eso es un cambio de código, no de este esquema**.
+//
+// INSIGHT CLAVE: el costo de AeroDataBox FIDS es POR AEROPUERTO DE ORIGEN
+// consultado, no por ruta — una sola llamada a un hub ya trae TODOS sus
+// vuelos salientes reales (confirmado: 781 salidas desde ATL cubrieron 14
+// rutas de una vez). Por eso **aumentar la cantidad de rutas es casi
+// gratis** (con tal de que sigan siendo combinaciones de los mismos hubs
+// ya consultados) — lo único que cuesta es CUÁNTOS HUBS DISTINTOS se
+// consultan por día.
+//
+// PLAN CONFIRMADO POR EL USUARIO: rotar 3 hubs/día entre los 15 (no
+// refrescar los 15 todos los días, que sí excedería el presupuesto). Cada
+// hub se refresca con dato real (FIDS, 2 llamadas de 12h) cada 5 días
+// (15 hubs ÷ 3/día); los días intermedios de ese hub reutilizan el último
+// dato real conocido como plantilla para el día que entra a la ventana
+// (mismo patrón que ya se usa con AviationStack). Costo: 3 hubs × 2
+// llamadas × 2 unidades = 12 unidades/día → **360 unidades/mes**, dejando
+// ~240/mes de margen para Statistical API (risk_score, ~6 unidades cada
+// una) + Aircraft/Airport + pruebas futuras.
+// `MAX_RUTAS` puede subirse de 20 a lo que se quiera (30-40, más rutas por
+// hub) sin costo adicional de AeroDataBox — solo afecta la rotación de
+// Google Flights (precio/clase de cabina, presupuesto separado de
+// 250/mes), que con más rutas cubre cada una con menos frecuencia.
+Enum origen_generacion {
+  sistema_api_real
+  sistema_formula
+  manual
+}
+
+Enum canal_reserva {
+  autoservicio
+  asistida
+}
+
+Enum estado_reserva {
+  pendiente_pago
+  confirmada
+  modificada
+  cancelada
+  completada
+}
+
+Enum tipo_pasajero_reserva {
+  adulto
+  nino
+  infante
+}
+
+// NUEVA 2026-07-17 — CONFIRMADA con datos reales de Google Flights
+// (travel_class real: "Economy"/"Business Class"/"First Class" para el
+// MISMO vuelo F9 4732, precios reales distintos: $134/$326/—). No
+// confirmado "Premium economy" (travel_class=2, no se probó). Es un
+// concepto DISTINTO de niveles_tarifa (Light/Standard/Flex, que es una
+// construcción propia de la agencia sobre la tarifa) — un vuelo real puede
+// tener ambas dimensiones cruzadas (ej. "Economy Standard", "Business
+// Flex"). Ver decisión de cuota pendiente en la nota de tarifas_vuelo.
+Enum clase_cabina {
+  economy
+  premium_economy
+  business
+  first
+}
+
+// NUEVA 2026-07-17 — CU-O21/22/23 (extras de reserva ya incluían "asiento"
+// en tipo_extra desde v2, pero sin un mapa de asientos real detrás).
+// Ninguna fuente probada da mapa de asientos real (ni Google Flights, ni
+// AviationStack, ni el sandbox de Duffel, que además resultó ser sintético)
+// — se genera como regla de negocio propia, igual que la disponibilidad de
+// Actividades/Cruceros/tarifas_vuelo. La distribución de filas/columnas se
+// arma a partir de avion_modelo (ej. "Airbus A321neo" -> config 3-3,
+// "Canadair RJ 900" -> config 2-2) para que al menos la FORMA del avión sea
+// realista, aunque el asiento específico no lo sea.
+Enum tipo_asiento {
+  ventana
+  pasillo
+  medio
+}
+
+// NUEVA 2026-07-17 — reglas reales confirmadas por el usuario sobre
+// selección de asiento en aerolíneas tradicionales: por defecto es gratis
+// elegir un asiento estándar (solo la ZONA premium cuesta extra, ver
+// asientos_vuelo.es_premium); si el pasajero nunca elige, la aerolínea
+// asigna uno automáticamente, típicamente cerca del check-in.
+Enum asiento_asignado_por {
+  pasajero
+  sistema
+}
+
+Enum tipo_extra {
+  equipaje
+  asiento
+  seguro
+  traslado_aeropuerto
+}
+
+Enum fuente_disrupcion {
+  simulador_estadistico
+  api_real
+  monitor_correo
+}
+
+Enum tipo_cambio_disrupcion {
+  retraso
+  cancelacion
+  cambio_horario
+  cambio_puerta
+  desvio
+}
+
+Enum estado_disrupcion {
+  activa
+  resuelta
+}
+
+Enum canal_notificacion {
+  email
+  sms
+}
+
+Enum estado_envio_notificacion {
+  pendiente
+  enviado
+  fallido
+  fallido_definitivo
+}
+
+Enum estado_pago {
+  pendiente
+  autorizado
+  exitoso
+  fallido
+  reembolsado
+}
+
+Enum estado_comision {
+  pendiente_cobro
+  cobrada
+}
+
+Enum estado_remesa {
+  pendiente
+  enviada
+  confirmada
+}
+
+Enum estado_reembolso {
+  pendiente
+  procesado
+  rechazado
+}
+
+
+// ── ENUMS NUEVOS (soporte de los 10 módulos añadidos en v3) ────────────────
+
+Enum tipo_producto {
+  vuelo
+  hotel
+  auto
+  actividad
+  crucero
+}
+
+// NUEVO valor 2026-07-17: `regla_negocio_interna` — para cuando NINGUNA API
+// da el dato (disponibilidad de Actividades y Cruceros, confirmado sin
+// fuente real en ninguna de las probadas) pero igual queremos el mismo
+// gobierno de "cada cuánto se regenera" + quién lo configuró + bitácora,
+// que ya existe para las fuentes reales. `host_env_var` queda nulo en estas
+// filas (no hay host que consultar). Los valores concretos de la regla
+// (cuántos cupos, cuántos horarios por día) NO viven aquí — viven en
+// `configuracion_sistema` (categorías `disponibilidad_actividades` /
+// `disponibilidad_cruceros`), esta tabla solo gobierna el CADA CUÁNTO se
+// vuelve a generar, igual que para las fuentes que sí son una API real.
+Enum tipo_uso_fuente {
+  constante
+  catalogo_periodico
+  cache_bajo_demanda
+  regla_negocio_interna
+}
+
+Enum estado_sincronizacion {
+  exitoso
+  fallido
+  parcial
+}
+
+Enum estado_carrito {
+  activo
+  convertido
+  abandonado
+}
+
+Enum modalidad_pago_item {
+  pagar_ahora
+  pagar_al_recoger
+  pago_diferido
+}
+
+Enum estado_item_reserva {
+  pendiente
+  confirmado
+  modificado
+  cancelado
+  completado
+}
+
+Enum tipo_documento_viaje {
+  pasaporte
+  cedula
+  otro
+}
+
+Enum tipo_producto_favorito {
+  destino
+  hotel
+  actividad
+}
+
+Enum rol_mensaje_ia {
+  usuario
+  asistente
+}
+
+Enum calificacion_pulgar {
+  arriba
+  abajo
+}
+
+Enum estado_caso_ayuda {
+  abierto
+  en_proceso
+  resuelto
+}
+
+Enum tipo_cupon {
+  monto_fijo
+  porcentaje
+}
+
+Enum tipo_movimiento_puntos {
+  acumulacion
+  redencion
+}
+
+Enum tipo_valor_cargo {
+  monto_fijo
+  porcentaje
+}
+
+
+// ============================================================================
+// TI / SEGURIDAD — sin cambios estructurales (CU-O01-13, O41-43, O112-113)
+// ============================================================================
+// CU-O112/O113 (nuevos en v3) NO requieren tabla nueva: ya existen
+// roles_permisos (nivel módulo) y roles_permisos_tablas (nivel tabla) desde
+// v2. Lo único que cambia es DATA: modulos y modulo_tablas necesitan filas
+// nuevas para los 10 módulos añadidos (hoteles, autos, actividades,
+// cruceros, paquetes, cuenta_mis_viajes, carrito, centro_ayuda,
+// ofertas_promociones, asistente_ia, integraciones) — no es cambio de
+// esquema, es seed de datos al implementar.
+
+Table roles {
+  id            varchar   [pk]
+  nombre        varchar   [not null]
+  descripcion   text
+  es_sistema    boolean   [default: false]
+  created       datetime
+  updated       datetime
+}
+
+Table modulos {
+  id              varchar   [pk]
+  clave           varchar   [not null, unique]
+  nombre_display  varchar   [not null]
+  descripcion     text
+  orden           int
+  created         datetime
+  updated         datetime
+}
+
+Table permisos {
+  id          varchar         [pk]
+  modulo_id   varchar         [not null]
+  accion      accion_permiso  [not null]
+  created     datetime
+  updated     datetime
+}
+
+Table roles_permisos {
+  id          varchar   [pk]
+  rol_id      varchar   [not null]
+  permiso_id  varchar   [not null]
+  created     datetime
+}
+
+Table roles_permisos_tablas {
+  id          varchar   [pk]
+  rol_id      varchar   [not null]
+  modulo_id   varchar   [not null]
+  tabla       varchar   [not null]
+  created     datetime
+}
+
+Table modulo_tablas {
+  id            varchar   [pk]
+  modulo_id     varchar   [not null]
+  tabla         varchar   [not null]
+  descripcion   text
+  created       datetime
+}
+
+// MODIFICADA 2026-07-17 — se agrega foto_perfil, faltaba por completo
+// (CU-O05 "Ver y editar perfil propio"). Ver nota de ALMACENAMIENTO DE
+// ARCHIVOS abajo — el campo es el mismo sin importar dónde PocketBase
+// guarde el archivo físicamente (disco local vs. S3/MinIO), esa decisión
+// es de infraestructura/implementación, no de este esquema.
+Table usuarios {
+  id                  varchar     [pk]
+  email               varchar     [not null, unique]
+  nombre_completo     varchar     [not null]
+  tipo_actor          tipo_actor  [not null]
+  rol_id              varchar     [note: 'nullable para pasajero']
+  foto_perfil         varchar     [note: 'NUEVO — file field de PocketBase, CU-O05. Faltaba por completo en la versión anterior de este archivo.']
+  activo              boolean     [default: true]
+  created             datetime
+  updated             datetime
+}
+
+// ============================================================================
+// ALMACENAMIENTO DE ARCHIVOS (infraestructura, no cambia este esquema) —
+// investigado 2026-07-17 tras pregunta del usuario. Todos los "file field"
+// de este archivo (usuarios.foto_perfil, documentos_viaje.archivo,
+// facturas.archivo_pdf, reservas.voucher_pdf, barcos.planos_cubierta)
+// pasan por el mismo mecanismo nativo de PocketBase — la pregunta es DÓNDE
+// vive el byte real, y eso se configura en PocketBase, no en el DBML.
+//
+// CONFIRMADO en vivo contra la instancia real (`GET /api/settings` con
+// token de superusuario): `pocketbase-travel` (PocketBase 0.22.4) SÍ
+// soporta backend S3 nativo para archivos (`s3.enabled`), pero está
+// **desactivado hoy** (`"enabled": false`) — todo se guarda en disco local
+// dentro del volumen Docker `pocketbase-travel-data` (confirmado en
+// `docker-compose.yml`: `volumes: - pocketbase-travel-data:/pb_data`), NO
+// en `minio-travel` (que ya está corriendo, mismo `travel-network`).
+//
+// DECISIÓN CONFIRMADA 2026-07-17: **opción B** — activar el backend S3 de
+// PocketBase apuntando a minio-travel (ya corriendo, mismo
+// `travel-network`), coherente con que el proyecto prefiere integraciones
+// reales en vez de soluciones de juguete. Falta al implementar: crear un
+// bucket nuevo (ej. "aerotrack-travel-files", separado de
+// "aerotrack-travel-dims" que es de solo lectura para los Parquet) y
+// llenar s3.endpoint/bucket/accessKey/secret desde el admin de PocketBase.
+// Es un cambio de infraestructura/configuración, no de este esquema — se
+// aplica cuando se pase a la fase de implementación, no ahora.
+// Nota aparte de seguridad, aplica sin importar la opción elegida:
+// documentos_viaje.archivo puede contener escaneo de pasaporte/cédula
+// (PII sensible) — evaluar controles de acceso adicionales al implementar,
+// más allá de las reglas de colección normales de PocketBase.
+
+Table auditoria {
+  id            varchar   [pk]
+  usuario_id    varchar   [note: 'nullable: acciones automáticas del sistema']
+  accion        varchar   [not null]
+  tabla         varchar   [not null]
+  registro_id   varchar
+  detalle       json
+  ip            varchar
+  created       datetime
+}
+
+Table configuracion_sistema {
+  id                varchar   [pk]
+  clave             varchar   [not null, unique]
+  valor             text      [not null]
+  categoria         varchar   [not null, note: 'smtp | api_estado_vuelo | gmail_api | stripe | tarifas_comisiones | politicas_reembolso | simulador_disrupciones | expiraciones | plantillas_documentos | canales_notificacion | pipeline_elt | asistente_ia | carrito_abandonado | programa_beneficios | politica_contrasenas | disponibilidad_actividades | disponibilidad_cruceros | disponibilidad_tarifas_vuelo | disponibilidad_asientos | cupones — las 4 de disponibilidad son NUEVAS 2026-07-17: parámetros de la regla de negocio fija de cupos/asientos (ej. disponibilidad_actividades.cupos_default, disponibilidad_asientos.recargo_premium, disponibilidad_asientos.pct_filas_premium, disponibilidad_asientos.horas_antes_checkin_gratis [NUEVO — confirmado por el usuario: 24-48h antes del vuelo se abre la selección gratuita de asiento estándar para tarifas Light, aunque para entonces los mejores asientos ya suelen estar ocupados]) para los productos sin fuente real de inventario. "cupones" es NUEVA 2026-07-18 (CU-T44): clave "cupones.acumulable_con_paquete_default" (boolean como texto "true"/"false") — default global de si un cupón es acumulable con el descuento de un paquete cuando el cupón mismo no trae una excepción explícita en cupones_descuento.acumulable_con_paquete']
+  descripcion       text
+  modificado_por    varchar   [not null]
+  created           datetime
+  updated           datetime
+}
+
+
+// ============================================================================
+// INTEGRACIONES — NUEVO módulo transversal (no está en el catálogo de CU
+// como módulo propio, pero es el mecanismo que pediste explícitamente:
+// "un apartado para ver si estas APIs reciben actualizaciones y configurar
+// cada que tanto actualizamos". Vive bajo Tecnología y Sistemas / TI, mismo
+// departamento que Seguridad. Alimenta CU-T06/T07 (antes solo-vuelos, ahora
+// generalizado a los 5 tipos de producto) y da trazabilidad de cuota
+// consumida (relevante para AeroDataBox 600u/mes, HotelLens rate-limit,
+// Countries59 25/mes).
+// ============================================================================
+
+Table fuentes_datos_externas {
+  id                              varchar         [pk]
+  nombre                          varchar         [not null, unique, note: 'ej. HotelLens, AeroDataBox, Global Rental Cars, Cruise Pricing API, Travel Advisor, Skyscanner, Google Flights (SerpApi), AviationStack, ExchangeRate-API, Visa Requirement, SendGrid, Gmail API, OpenSky Network, Stripe, Groq, Gemini, OpenWeatherMap, Duffel, Countries59. También filas tipo_uso=regla_negocio_interna sin host real: "Disponibilidad Actividades (regla fija)", "Disponibilidad Cruceros (regla fija)", "Disponibilidad tarifas_vuelo (regla fija)"']
+  tipo_uso                        tipo_uso_fuente [not null, note: 'constante = se llama en cada acción del app (SendGrid/Gmail/Stripe/Groq/Gemini/OpenSky/Duffel); catalogo_periodico = alimenta una tabla local por sync programado (HotelLens/AeroDataBox/GlobalRentalCars/CruisePricing/TravelAdvisor/Skyscanner); cache_bajo_demanda = se llama la primera vez que se necesita un dato puntual y se cachea (Visa Requirement, ExchangeRate, OpenWeatherMap)']
+  host_env_var                    varchar         [note: 'nombre de la var de entorno del host, ej. HOTELLENS_API_HOST — nunca el valor']
+  tipo_producto_alimentado        tipo_producto   [note: 'nullable; solo aplica si tipo_uso = catalogo_periodico']
+  frecuencia_sincronizacion_horas int             [note: 'nullable; solo aplica a catalogo_periodico. Ver notas de cuota por API en docs/apis-reference.md antes de bajar este número']
+  activa                          boolean         [default: true]
+  notas                           text            [note: 'gotchas operativos: rate limits, endpoints rotos, workarounds — resumen de docs/apis-reference.md']
+  ultima_sincronizacion_exitosa   datetime
+  modificado_por                  varchar         [not null, note: 'quién configuró/ajustó esta fuente por última vez']
+  created                         datetime
+  updated                         datetime
+}
+
+// Bitácora de cada corrida de sincronización — generaliza CU-T07
+// ("Monitorear estado del DAG de catálogo de vuelos y alertar si falla") a
+// las 5 fuentes catalogo_periodico. ejecutado_por nullable = corrida
+// automática de Airflow; poblado = re-sync manual disparado por un Admin.
+Table sincronizaciones_log {
+  id                          varchar               [pk]
+  fuente_id                   varchar               [not null]
+  tipo_producto                tipo_producto        [not null]
+  fecha_inicio                 datetime             [not null]
+  fecha_fin                    datetime
+  estado                       estado_sincronizacion [not null]
+  registros_procesados         int                  [default: 0]
+  registros_nuevos             int                  [default: 0]
+  registros_actualizados       int                  [default: 0]
+  unidades_cuota_consumidas    int                  [note: 'nullable; solo para fuentes con cuota medible, ej. AeroDataBox']
+  error_detalle                text
+  ejecutado_por                varchar              [note: 'nullable = automático (Airflow); usuarios.id si fue re-sync manual']
+  created                      datetime
+}
+
+
+// ============================================================================
+// GESTIÓN DE CLIENTES — Pasajeros (CU-O14-16, O49-50)
+// ============================================================================
+
+Table pasajeros {
+  id                      varchar       [pk]
+  usuario_id              varchar       [not null, unique, note: 'FIX v3: ahora sí único a nivel de esquema (antes no estaba forzado en PocketBase pese a decirlo el DBML v2)']
+  fecha_nacimiento        date          [not null]
+  telefono                varchar       [not null]
+  genero                  genero_enum
+  numero_documento        varchar
+  direccion_facturacion   text
+  contacto_emergencia     varchar
+  created                 datetime
+  updated                 datetime
+}
+
+// NUEVA — CU-O49 "Gestionar documentos de viaje (pasaporte, cédula, fecha
+// de vencimiento)". También es lo que hace útil requisitos_visa_cache más
+// abajo: sin país de emisión del pasaporte no hay consulta de visa posible.
+Table documentos_viaje {
+  id                  varchar               [pk]
+  pasajero_id         varchar               [not null]
+  tipo                tipo_documento_viaje  [not null]
+  numero              varchar               [not null]
+  pais_emision        varchar               [not null, note: 'ISO alpha-2, ej. US — mismo formato que usa Visa Requirement API']
+  fecha_vencimiento    date
+  archivo              varchar              [note: 'file field de PocketBase, foto/escaneo opcional']
+  created              datetime
+  updated              datetime
+}
+
+// NUEVA — CU-O50 "Gestionar viajeros frecuentes guardados". Permite
+// prellenar el checkout (CU-O21) con acompañantes recurrentes sin que cada
+// uno tenga su propia cuenta de usuario.
+Table viajeros_frecuentes {
+  id                  varchar   [pk]
+  pasajero_id         varchar   [not null, note: 'dueño de la lista']
+  nombre_completo     varchar   [not null]
+  fecha_nacimiento    date
+  numero_documento    varchar
+  relacion            varchar   [note: 'ej. cónyuge, hijo/a, colega — texto libre']
+  created             datetime
+  updated             datetime
+}
+
+
+// ============================================================================
+// VENTAS Y RESERVAS — Vuelos (CU-O17-20, O45, O48, O51-53)
+// ============================================================================
+
+Table aerolineas {
+  id                    varchar   [pk]
+  nombre                varchar   [not null]
+  codigo_iata           varchar   [not null, note: 'SOFT-REF -> dim_aerolinea.IATA_CODE_Reporting_Airline (MinIO)']
+  comision_pactada_pct  decimal   [not null]
+  contacto              varchar
+  fecha_contrato        date
+  activa                boolean   [default: true]
+  created               datetime
+  updated               datetime
+}
+
+// MODIFICADA — se agrega tipo_producto para que CU-T18 ("Configurar
+// política de reembolsos por tipo de producto y tarifa") pueda gestionar
+// políticas de vuelo/hotel/auto/actividad/crucero desde un solo lugar en
+// vez de reinventar un booleano "reembolsable" distinto por módulo.
+Table politicas_reembolso {
+  id                      varchar         [pk]
+  tipo_producto           tipo_producto   [not null, default: 'vuelo']
+  nombre                  varchar         [not null]
+  condiciones             text            [not null]
+  porcentaje_reembolso    decimal         [not null]
+  ventana_horas           int             [not null]
+  created                 datetime
+  updated                 datetime
+}
+
+// MODIFICADA 2026-07-17 — se agrega seleccion_asiento_temprana según reglas
+// reales de la industria que confirmó el usuario: en aerolíneas
+// tradicionales, elegir asiento ESTÁNDAR (no premium) suele ser gratis
+// incluso en tarifa básica, PERO muchas aerolíneas solo lo permiten desde
+// que abre el check-in gratuito (24-48h antes del vuelo) si la tarifa es
+// la más económica — las tarifas más caras sí permiten elegir apenas se
+// reserva. Si no se elige nunca, la aerolínea asigna automáticamente (ver
+// asientos_vuelo/reserva_pasajeros más abajo).
+Table niveles_tarifa {
+  id                            varchar   [pk]
+  nombre                        varchar   [not null, note: 'Light | Standard | Flex']
+  descripcion                   text
+  equipaje_incluido             boolean   [default: false]
+  cambios_permitidos            boolean   [default: false]
+  seleccion_asiento_temprana    boolean   [default: false, note: 'NUEVO — true (Standard/Flex): puede elegir asiento estándar desde el momento de la reserva. false (Light): solo puede elegir cuando abre el check-in gratuito (ver configuracion_sistema.disponibilidad_asientos.horas_antes_checkin_gratis) — antes de eso, sin costo adicional, solo se puede pedir un asiento PREMIUM pagando recargo inmediatamente; el estándar espera al check-in']
+  politica_reembolso_id         varchar   [not null]
+  created                       datetime
+  updated                       datetime
+}
+
+// MODIFICADA — se agrega avion_icao24 (CU-O84, OpenSky identifica
+// aeronaves por ICAO24, no por tail number) y campos de risk score
+// (CU-O52/O83). numero_vuelo/aerolinea_id/avion_modelo ahora se pueblan con
+// datos REALES de AeroDataBox FIDS (fuente primaria, ver nota completa del
+// enum origen_generacion arriba); precio_base con Google Flights (única
+// fuente de precio real que tenemos) — resuelve la inconsistencia con
+// Disrupciones (CU-O27/O29) descubierta 2026-07-17. Se agregan también
+// emisiones_co2_kg/fuente_busqueda_ref/detalles_extra: datos reales
+// adicionales que trae Google Flights y son coherentes con lo que un OTA
+// real le muestra al pasajero, aunque ningún CU-O los pida campo por campo
+// todavía (eso se redacta en detalle más adelante en las specs).
+Table vuelos_catalogo {
+  id                          varchar             [pk]
+  numero_vuelo                varchar             [not null, note: 'CORREGIDO 2026-07-17: cuando generado_por=sistema_api_real, es el campo "number" REAL de AeroDataBox FIDS (ej. "DL 466" — quitar el espacio al guardar), cruzado y confirmado también contra AviationStack/Google Flights en pruebas anteriores — no un patrón fabricado']
+  aerolinea_id                varchar             [not null]
+  origen_codigo               varchar             [not null, note: 'SOFT-REF -> dim_aeropuerto.AirportCode (MinIO)']
+  destino_codigo               varchar            [not null, note: 'SOFT-REF -> dim_aeropuerto.AirportCode (MinIO)']
+  fecha_salida                date                [not null]
+  hora_salida_programada      varchar             [not null]
+  hora_llegada_programada     varchar             [not null]
+  duracion_min                int
+  avion_tail_number           varchar             [note: 'SOFT-REF -> dim_avion.Tail_Number (MinIO)']
+  avion_icao24                varchar(6)          [note: 'Se resuelve del campo "aircraft.icao24" de AviationStack (confirmado en vivo 2026-07-17, ej. "A47D05"). Formato también verificado contra OpenSky (hex, ej. "a77ec5") — normalizar a minúscula al guardar, AviationStack lo da en mayúscula.']
+  avion_modelo                varchar             [note: 'CORREGIDO 2026-07-17: viene GRATIS en la misma llamada de AeroDataBox FIDS (campo "aircraft.model", ej. "Boeing 757") — no hace falta gastar una consulta aparte de Google Flights ("airplane") para esto, aunque el campo es equivalente si alguna vez se prefiere esa fuente.']
+  emisiones_co2_kg             decimal            [note: 'NUEVO — campo "carbon_emissions.this_flight" real de Google Flights, viene en gramos ("this_flight":92000) — convertir a kg al guardar (92.0)']
+  fuente_busqueda_ref          varchar            [note: 'NUEVO — SOFT-REF al "booking_token" real de Google Flights de esta búsqueda, para re-consultar booking_options/baggage_prices después sin rebuscar']
+  detalles_extra               json                [note: 'NUEVO — catch-all para atributos reales que no ameritan columna propia: legroom ("28 in"), extensions (notas libres tipo "Below average legroom", política de equipaje del vuelo real), price_level de other_flights, etc. NO se probó travel_class=Business/First de forma sistemática — si se decide ofrecer cabinas reales distintas a futuro, hace falta una consulta adicional por travel_class con Google Flights, con impacto en su cuota de 250/mes, evaluar entonces']
+  precio_base                 decimal             [not null, note: 'Viene del campo "price" real de Google Flights para esa ruta/fecha — AeroDataBox no da precio, así que Google Flights sigue siendo necesaria para este campo específico aunque ya no sea la fuente primaria del número de vuelo']
+  estado                       estado_vuelo       [not null, default: 'programado']
+  generado_por                origen_generacion   [not null, default: 'sistema_formula']
+  fecha_actualizacion_estado  datetime
+  risk_score                  decimal             [note: 'NUEVO — CU-O52/O83, 0-1, recalculado por el mismo job de catálogo']
+  risk_score_fuente           varchar             [note: 'NUEVO — historico_us (MinIO agg_otp_aerolinea_mes / agg_causas_retraso_mes) | estimado_intl (AeroDataBox /delays, única fuente disponible para rutas fuera de EE. UU.). RESUELTO 2026-07-17 (ya no pendiente): campo real confirmado en vivo es `departuresDelayInformation.delayIndex` / `arrivalsDelayInformation.delayIndex` (ej. 4.42/3.08), junto con `medianDelay` y `numCancelled` del mismo objeto — ese es el insumo real para calcular risk_score. `/stats/routes/daily` da contexto de frecuencia (`averageDailyFlights`, `operators[]`) pero no un índice de riesgo directo, es secundario.']
+  risk_score_actualizado      datetime
+  created                      datetime
+  updated                      datetime
+}
+
+// MODIFICADA — se agrega clase_cabina (dimensión real, ver enum arriba).
+Table tarifas_vuelo {
+  id                    varchar       [pk]
+  vuelo_id              varchar       [not null]
+  nivel_tarifa_id       varchar       [not null]
+  clase_cabina          clase_cabina  [not null, default: 'economy', note: 'CONFIRMADO real (Economy/Business/First, mismo vuelo F9 4732 con precios $134/$326 en vivo). DECISIÓN 2026-07-17: el usuario confirmó que SÍ se incluyen Business/First. Plan de cuota concreto (AeroDataBox ya no acota esto — clase de cabina es 100% Google Flights, presupuesto separado de 250/mes): con solo 20 rutas fijas, refrescar precio+clase de 2-3 rutas/día rotando (todas las rutas, las 3 clases) ≈ 6-9 llamadas/día ≈ 200-270/mes — cada ruta se refresca completa (Economy+Business+First) aproximadamente una vez por semana en vez de a diario. Ver fuentes_datos_externas para trackear qué ruta le toca rotar cada día.']
+  precio_final          decimal       [not null]
+  cupos_disponibles     int           [note: 'CONFIRMADO 2026-07-17: sintético desde siempre — el DAG ya implementado usa valores fijos (Light=120/Standard=80/Flex=30) y confirmé que ni Google Flights ni AviationStack dan señal de asientos disponibles. Mismo patrón que Actividades/Cruceros — ver configuracion_sistema.disponibilidad_tarifas_vuelo y fuentes_datos_externas (tipo_uso=regla_negocio_interna). No es un gap nuevo, ya era así, solo queda documentado con el mismo mecanismo ahora']
+  created               datetime
+  updated               datetime
+}
+
+// NUEVA 2026-07-17 — mapa de asientos real POR VUELO (no por modelo de
+// avión en abstracto — cada vuelo_id tiene su propia fila de asientos
+// ocupados/libres, ya que la ocupación es específica de esa salida). Se
+// genera junto con el vuelo por el mismo job de catálogo, como regla de
+// negocio (ver enum tipo_asiento). CU-O21/22/23 vía reserva_extras
+// (tipo=asiento) cuando el asiento elegido tiene recargo.
+// CORREGIDO 2026-07-17 con las reglas reales que confirmó el usuario: el
+// recargo NO es automático por ser ventana/pasillo — la mayoría de
+// asientos estándar (cualquier tipo_asiento) son gratis. Lo que cuesta
+// extra es la ZONA (salida de emergencia, extra legroom, primeras filas) —
+// por eso es_premium es el campo que de verdad determina si hay recargo,
+// independiente de si es ventana/pasillo/medio.
+Table asientos_vuelo {
+  id            varchar       [pk]
+  vuelo_id      varchar       [not null]
+  fila          int           [not null]
+  columna       varchar       [not null, note: 'A-F típico en config 3-3, A-D en 2-2, según avion_modelo']
+  tipo_asiento  tipo_asiento  [not null]
+  es_premium    boolean       [default: false, note: 'CORREGIDO — salida de emergencia / extra legroom / primeras filas. Es ESTE campo el que determina recargo, no tipo_asiento — un asiento de ventana estándar (no premium) es gratis, igual que uno de pasillo o medio']
+  recargo       decimal       [default: 0, note: 'CORREGIDO: >0 únicamente si es_premium=true; los asientos estándar (la gran mayoría) son 0 sin importar tipo_asiento']
+  disponible    boolean       [default: true, note: 'se pone false al confirmarse la reserva del pasajero que lo eligió']
+  created       datetime
+}
+
+// NUEVA — CU-O51 "Ver predicción de precio de vuelo". Tabla de resultados
+// pre-calculados (no se computa en el momento de la búsqueda del pasajero).
+// CORREGIDO 2026-07-17: la fuente PRIMARIA ya no son los agg_* de MinIO —
+// resulta que Google Flights (SerpApi) trae exactamente esto con datos
+// reales dentro de la MISMA respuesta que ya consultamos para el número de
+// vuelo (`price_insights`, verificado en vivo): `lowest_price` (precio más
+// bajo visto), `price_level` ("typical"/"low"/"high", clasificación de
+// Google), `typical_price_range` [min,max], y `price_history[]` — un
+// histórico real de [timestamp_unix, precio] de varios meses. Es mejor
+// insumo que agg_otp_aerolinea_mes (que es de puntualidad, no de precio) —
+// los agg_* de MinIO quedan como señal secundaria/contexto, no como fuente
+// primaria de precio.
+Table predicciones_precio_ruta {
+  id                       varchar   [pk]
+  origen_codigo            varchar   [not null, note: 'SOFT-REF -> dim_aeropuerto.AirportCode']
+  destino_codigo           varchar   [not null, note: 'SOFT-REF -> dim_aeropuerto.AirportCode']
+  fecha_objetivo           date      [not null]
+  precio_minimo_historico  decimal   [note: 'NUEVO, campo "lowest_price" real de Google Flights']
+  nivel_precio             varchar   [note: 'NUEVO, campo "price_level" real: typical | low | high (valores tal como los devuelve Google)']
+  rango_tipico_min         decimal   [note: 'NUEVO, "typical_price_range[0]"']
+  rango_tipico_max         decimal   [note: 'NUEVO, "typical_price_range[1]"']
+  historico_precios        json      [note: 'NUEVO, array real [timestamp_unix, precio] de "price_history" — insumo para graficar tendencia, CU-O51']
+  precio_predicho          decimal   [not null, note: 'calculado por nuestro propio job a partir de historico_precios + rango_tipico, no viene directo de la API']
+  tendencia                varchar   [note: 'subir | bajar | estable — derivado de historico_precios']
+  confianza                decimal   [note: '0-1']
+  fecha_calculo     datetime  [not null]
+  created           datetime
+}
+
+
+// ============================================================================
+// VENTAS Y RESERVAS — Hoteles (NUEVO módulo, CU-O54-60)
+//
+// Fuente ELEGIDA para el catálogo: HotelLens. Decisión verificada con datos
+// reales en vivo (2026-07-16, no solo por recordar la sesión de pruebas
+// anterior), comparando las 3 APIs que devuelven hoteles:
+//   1. HotelLens (Google Hotels): JSON plano — search da
+//      {name,price,currency,rating,reviews,stars,image_url,url}; /details da
+//      {address,phone,website,latitude,longitude,country_code,stars,
+//      rating_breakdown[],category_scores{Value,Location,Rooms,Cleanliness,
+//      Service},summary,about[],check_in_time,check_out_time,photos[]}.
+//      Prácticamente 1:1 mapeable a columnas relacionales.
+//   2. TripAdvisor (tripadvisor16): su propio resolver de geoId
+//      (searchLocation) se deshabilitó del lado del proveedor justo hoy
+//      (2026-07-16, ver docs/apis-reference.md sección 6) — sigue vivo
+//      searchHotels si se le da un geoId por otra vía, pero devuelve una
+//      estructura GraphQL anidada de "tarjetas" (cardPhotos, bubbleRating,
+//      commerceInfo.priceForDisplay a 3-4 niveles de profundidad).
+//   3. Travel Advisor (hotels/v2/list): datos reales, pero LA MISMA
+//      estructura de tarjetas anidadas que TripAdvisor — probablemente
+//      ambos wrappers scrapean el mismo backend de tripadvisor.com.
+// HotelLens gana por dos razones concretas, no solo intuición: (a) forma de
+// respuesta plana, mucho más barata de mantener que desenvolver 4 niveles
+// de "Card"/"__typename"; (b) ya trae Booking.com y Agoda en el mismo
+// contrato (aunque sus búsquedas nativas estén caídas, ver workaround en
+// hoteles_tarifas). Travel Advisor queda como candidato secundario/fallback
+// si HotelLens no cubre un destino, no como fuente co-primaria — el costo
+// de parsear su forma de card no se justifica mientras HotelLens alcance.
+// CORRECCIÓN IMPORTANTE (2026-07-16, tras una duda válida del usuario sobre
+// si "no hay inventario real" aplicaba también a hoteles): **SÍ hay
+// inventario real de habitaciones** — la nota anterior de este archivo
+// estaba mal. La cadena completa verificada con datos reales es:
+//   1. `GET /api/v1/hotels?location=` (Google Hotels, búsqueda) -> nombre +
+//      `url` de entidad.
+//   2. `GET /api/v1/hotels/prices?url=` (comparador) -> 20 ofertas de OTAs
+//      distintas (Agoda, Booking.com, Expedia, momondo, etc.), cada una con
+//      un `booking_url` que trae el ID interno del proveedor embebido en la
+//      query string (ej. Booking.com: `dest_id=721193&highlighted_hotels=
+//      721193&show_room=72119303_91938297_0_2_0` -> hotel_id=721193).
+//   3. `GET /api/v1/booking/hotels/details?hotel_id=721193&check_in=&
+//      check_out=` -> **`room_offers[]` con datos reales de inventario**:
+//      `room_name` ("Classic Double or Twin Room"), `free_cancellation`
+//      (boolean), `rooms_left` (**cupo real, no aproximado** — vino `6` en
+//      la prueba), `max_occupancy`, `room_size_m2`, `bed_type`,
+//      `breakfast_included`, `mealplan`, `deposit_required`. También trae
+//      `city` LIMPIO (a diferencia del `/details` de Google Hotels, que solo
+//      da dirección en texto libre), `amenities[]`, `policies`,
+//      `nearby_landmarks`, `featured_reviews`, `qanda` — más rico que el
+//      `/details` nativo de Google Hotels para casi todo excepto fotos.
+//   Probado también el mismo workaround con Agoda (`/api/v1/agoda/hotels/
+//   details`): SÍ tiene el concepto `rooms[]` (room_id/room_name/
+//   cancellation/max_occupancy), pero en la prueba real esos campos vinieron
+//   `null` (solo el precio total llegó poblado) — la estructura existe pero
+//   es menos confiable que Booking.com. Por eso **Booking.com (vía este
+//   workaround) es la fuente PRIMARIA de hoteles_tarifas, no Agoda**.
+// Conclusión de arquitectura: usar Google Hotels solo para DESCUBRIR el
+// hotel (paso 1) y como fallback de fotos/summary; usar el `/prices` (paso
+// 2) para extraer el `hotel_id` real de Booking.com; usar `/booking/hotels/
+// details` (paso 3) como fuente principal de ciudad limpia, habitaciones,
+// cupos reales y política de cancelación real. `ciudad` YA NO es un campo
+// parseado/geocodificado — viene limpio del paso 3.
+// ============================================================================
+
+Table hoteles_catalogo {
+  id                        varchar   [pk]
+  nombre                    varchar   [not null]
+  direccion                 text      [not null, note: 'texto libre del /details de Google Hotels']
+  ciudad                    varchar   [not null, note: 'CORREGIDO: viene LIMPIO del campo "city" de /api/v1/booking/hotels/details (paso 3 del flujo, ver nota del módulo) — no hace falta parsear/geocodificar']
+  pais                      varchar   [not null, note: 'country_code ISO2, limpio tanto en Google Hotels /details como en booking/hotels/details']
+  latitud                   decimal
+  longitud                  decimal
+  estrellas                 int
+  calificacion_promedio     decimal
+  cantidad_resenas          int       [note: 'NUEVO, campo "reviews" de HotelLens']
+  category_scores           json      [note: 'NUEVO — {Value,Location,Rooms,Cleanliness,Service}, tal como los devuelve HotelLens /details']
+  descripcion_corta         varchar   [note: 'NUEVO, campo "summary" de HotelLens']
+  descripcion               text      [note: 'campo "about" de HotelLens, viene como array de párrafos — concatenar o guardar como json']
+  servicios                 json      [note: 'array de amenidades']
+  hora_checkin              varchar   [note: 'NUEVO, campo "check_in_time" de HotelLens']
+  hora_checkout             varchar   [note: 'NUEVO, campo "check_out_time" de HotelLens']
+  imagen_principal          varchar   [note: 'URL, de HotelLens (array "photos") o Unsplash como fallback']
+  proveedor_comercial_id    varchar   [note: 'nullable; solo si hay comisión pactada directamente con este hotel/cadena']
+  fuente_entity_url         varchar   [note: 'SOFT-REF -> url de entidad Google Hotels, para re-consultar /details /reviews /prices sin rebuscar']
+  fecha_actualizacion       datetime  [not null]
+  created                   datetime
+  updated                   datetime
+}
+
+// CU-O57 "Seleccionar habitación y tarifa (reembolsable vs no reembolsable)".
+// Fuente: campo `room_offers[]` de /api/v1/booking/hotels/details (ver nota
+// del módulo) — CORREGIDO: `cupos_disponibles` es un cupo REAL (`rooms_left`
+// del proveedor, ej. 6), no una aproximación. Igual con `reembolsable` y
+// `cancelacion_hasta`: son el dato real de Booking.com para ESA habitación,
+// no una política interna — `politica_reembolso_id` queda como capa OPCIONAL
+// encima, solo si la agencia decide aplicar una regla propia adicional
+// (ej. seguro de cancelación de pago extra), no como sustituto del dato real.
+Table hoteles_tarifas {
+  id                      varchar   [pk]
+  hotel_id                varchar   [not null]
+  tipo_habitacion         varchar   [not null, note: 'campo "room_name" real, ej. "Classic Double or Twin Room"']
+  bed_type                varchar   [note: 'NUEVO, campo "bed_type" — nullable, el proveedor no siempre lo puebla']
+  max_ocupantes           int       [note: 'NUEVO, campo "max_occupancy"']
+  tamano_m2               decimal   [note: 'NUEVO, campo "room_size_m2"']
+  desayuno_incluido       boolean   [note: 'NUEVO, campo "breakfast_included"']
+  precio_final            decimal   [not null]
+  moneda                  varchar   [not null, default: 'USD']
+  reembolsable            boolean   [not null, note: 'NUEVO — dato REAL del proveedor ("free_cancellation"), no una política interna']
+  cancelacion_hasta        datetime [note: 'NUEVO, campo "refundable_until" cuando reembolsable = true']
+  politica_reembolso_id   varchar   [note: 'nullable — SOLO si la agencia superpone una regla propia (ver nota arriba); el dato real ya está en reembolsable/cancelacion_hasta']
+  cupos_disponibles       int       [note: 'CORREGIDO: cupo REAL, campo "rooms_left" del proveedor (ej. 6 en la prueba) — no es aproximado']
+  fecha_actualizacion     datetime  [not null]
+  created                 datetime
+  updated                 datetime
+}
+
+// CU-O58 "Ver reseñas verificadas". Cache local, refrescado junto con el
+// catálogo — evita pegarle a /reviews o /reviews/complete por cada vista de
+// detalle (rate limit BASIC de HotelLens es estricto por minuto).
+// CORREGIDO 2026-07-17 con JSON real de /api/v1/hotels/reviews: la fuente
+// (campo "source") NO es un set cerrado de 4 valores — viene abierto y
+// varía por hotel (visto en la prueba real: "Trip.com", "Tripadvisor",
+// "Google" — puede incluir Booking.com/Agoda en otros hoteles), así que
+// `fuente` es varchar libre, no enum. Y la API **no da fecha absoluta**: el
+// campo real es "relative_date", texto tipo "2 months ago" / "6 months ago"
+// — no hay campo de fecha parseable directo.
+Table hoteles_resenas {
+  id                    varchar   [pk]
+  hotel_id              varchar   [not null]
+  autor                 varchar   [note: 'campo "author"']
+  calificacion          decimal   [note: 'campo "rating"']
+  escala_calificacion   decimal   [note: 'NUEVO, campo "rating_scale" — no todas las fuentes usan escala de 5, hay que guardarla junto al rating para interpretarlo bien']
+  comentario            text      [note: 'campo "text"']
+  fecha_relativa_texto  varchar   [note: 'CORREGIDO: la API NO da fecha absoluta, solo texto relativo tipo "2 months ago" (campo "relative_date") — guardar tal cual, cualquier fecha absoluta calculada a partir de esto es una aproximación al momento de la sincronización, no un dato exacto']
+  fuente                varchar   [note: 'CORREGIDO: texto libre, no enum — valores reales vistos: "Trip.com", "Tripadvisor", "Google"; varía por hotel, puede incluir otros']
+  fecha_actualizacion   datetime  [not null]
+  created               datetime
+}
+
+// NUEVA — CU-O59 "Consultar cargos adicionales en destino (impuestos
+// municipales, tasas locales)". Ninguna API probada devuelve esto de forma
+// estructurada (confirmado: ni HotelLens ni TripAdvisor lo exponen). SÍ hay
+// una fuente real y usable: fuentes_extra/holidu_tourist_tax_por_ciudad.csv
+// (100 ciudades, snapshot de Holidu) — importación única/manual, no una API,
+// así que no se modela en fuentes_datos_externas. Ojo: las reglas reales no
+// son un simple monto-o-porcentaje — varían por categoría de hotel (Roma:
+// 1★=€4 ... 5★=€10), por rango de precio (Bologna) o son estacionales
+// (Grecia solo abr-oct) — por eso regla_texto es el campo autoritativo para
+// mostrar al pasajero, y monto/porcentaje quedan como estimado rápido
+// ("desde $X") cuando la regla es simple, no como fuente de verdad.
+Table cargos_locales_destino {
+  id                    varchar           [pk]
+  ciudad                varchar           [not null]
+  pais                  varchar           [not null]
+  tipo_cargo            varchar           [not null, note: 'ej. "Impuesto municipal de hospedaje"']
+  regla_texto           text              [not null, note: 'regla completa tal como la publica la fuente, ej. "1star: €4; 2star: €5; ...; 5star: €10" — autoritativa para mostrar al pasajero']
+  tipo_valor_estimado   tipo_valor_cargo  [note: 'nullable si la regla es demasiado compuesta para reducirla a un solo valor']
+  monto_estimado        decimal           [note: 'estimado "desde", solo si tipo_valor_estimado = monto_fijo']
+  porcentaje_estimado   decimal           [note: 'estimado "desde", solo si tipo_valor_estimado = porcentaje']
+  fuente                varchar           [default: 'holidu_csv_2026', note: 'trazabilidad del origen del dato']
+  activo                boolean           [default: true]
+  created               datetime
+  updated               datetime
+}
+
+
+// ============================================================================
+// VENTAS Y RESERVAS — Autos (NUEVO módulo, CU-O61-64)
+// Fuente principal: Global Rental Cars — Expedia es el sub-proveedor con
+// flujo 100% limpio (auto-complete -> search -> details, sin caveats).
+//
+// ACLARACIÓN sobre "disponibilidad" (para no confundirlo con el gap real de
+// Actividades): este NO es un gap de "sin datos" — las 3 búsquedas vivas
+// (Priceline, Booking, Expedia) devuelven inventario de vehículos REAL con
+// precio real (Expedia: 339 vehículos reales en una sola búsqueda). El
+// matiz real es más angosto: Priceline devuelve un vehículo real pero
+// **ignora las fechas de recogida/devolución pedidas** (siempre resuelve a
+// "mañana, 2 días"), y Booking devuelve un vehículo real pero **ignora las
+// coordenadas pedidas** (siempre EWR/Newark). O sea: SÍ hay auto e
+// inventario, pero para Priceline/Booking no hay garantía de que corresponda
+// exactamente a la fecha/ubicación que pidió el pasajero — hay que
+// revalidar antes de cobrar, no simplemente confiar en el snapshot del
+// catálogo. Expedia es el único de los 3 sin este problema. Kiwi está
+// descartado por completo (los 4 endpoints caídos, sin workaround).
+// ============================================================================
+
+Table autos_catalogo {
+  id                        varchar               [pk]
+  proveedor_agregador       varchar               [not null, note: 'priceline | booking | expedia — de cuál sub-API vino esta oferta']
+  proveedor_comercial_id    varchar               [note: 'nullable; la rentadora real (ej. Hertz/Avis) cuando el detalle de supplier la identifica']
+  marca                     varchar
+  modelo                    varchar
+  categoria                 varchar               [note: 'económico | SUV | lujo | ...']
+  transmision               varchar
+  ciudad_recogida            varchar              [not null]
+  aeropuerto_codigo          varchar              [note: 'SOFT-REF -> dim_aeropuerto.AirportCode, si la recogida es en aeropuerto']
+  precio_dia                 decimal              [not null]
+  moneda                     varchar              [not null, default: 'USD']
+  modalidad_pago_disponible  modalidad_pago_item  [note: 'pagar_ahora | pagar_al_recoger, según lo que ofrezca el proveedor']
+  politica_reembolso_id      varchar
+  fuente_oferta_ref          varchar              [note: 'SOFT-REF -> token/id de oferta del proveedor, para re-cotizar antes de confirmar (los precios de estas APIs son point-in-time)']
+  fecha_actualizacion        datetime             [not null]
+  created                    datetime
+  updated                    datetime
+}
+
+
+// ============================================================================
+// VENTAS Y RESERVAS — Actividades (NUEVO módulo, CU-O65-70)
+//
+// Fuente: Travel Advisor. Verificado con datos reales en vivo (2026-07-16):
+//   1. `attraction-products/v2/list {geoId}` -> tarjetas; el campo `trackingKey`
+//      (string JSON) trae {prc,cur,lid,br,rc,apc} planos — más barato de leer
+//      que los campos de presentación anidados (cardTitle/bubbleRating).
+//      `lid` (= contentId) es el id a usar para el detalle.
+//   2. `attractions/get-details?location_id={contentId}` (legacy, NO el
+//      `v2/get-details` que está roto) -> SÍ funciona con el mismo id del
+//      paso 1 (confirmado: comparten namespace) y trae name/description real/
+//      rating/address_obj{city,country} limpios/supplier_location_name
+//      (operador turístico real)/reviews[] YA EMBEBIDAS (no hace falta
+//      reviews/v2/list, que además está roto — 204 confirmado 2026-07-16).
+// GAP REAL, sin workaround: `attraction-products/v2/check-availability`
+// reconfirmado roto (204) con fechas reales — NINGUNA fuente probada da
+// disponibilidad/horarios reales por fecha para actividades. actividades_
+// horarios no se puede poblar de una API; hay que generarla con una regla de
+// negocio (cupos aproximados fijos, ej. "todos los días, cupo estándar"),
+// exactamente como ya se hace con cupos_disponibles aproximado en hoteles/
+// autos — no es dato real de inventario, es una simulación igual que el
+// resto del sistema. Documentar esto de cara al pasajero si hace falta.
+// Tampoco hay "inclusiones"/"punto_encuentro"/"condiciones" como campos
+// separados en ninguna fuente — solo un bloque de `description` en texto
+// libre; se dejan como campos nullable para curación manual, no automática.
+// ============================================================================
+
+Table actividades_catalogo {
+  id                        varchar   [pk]
+  nombre                    varchar   [not null, note: 'limpiar el prefijo "N. " que trae attraction-products/v2/list antes de guardar']
+  ciudad                    varchar   [not null, note: 'SÍ viene limpio: address_obj.city del legacy get-details (a diferencia de hoteles)']
+  pais                      varchar   [not null, note: 'address_obj.country del legacy get-details']
+  categoria                 varchar   [note: 'primaryInfo.text de v2/list, ej. "Sightseeing Cruises" — más específico que category.name del detalle ("Activity")']
+  calificacion_promedio     decimal
+  cantidad_resenas          int       [note: 'NUEVO, campo "rc" de trackingKey / "num_reviews" del detalle']
+  descripcion               text      [note: 'campo "description" del legacy get-details — único bloque de texto libre real, no hay inclusiones/condiciones separadas en ninguna fuente']
+  inclusiones               text      [note: 'nullable — sin fuente automática confirmada, curación manual si se necesita']
+  punto_encuentro           text      [note: 'nullable — sin fuente automática confirmada, curación manual si se necesita']
+  condiciones               text      [note: 'nullable — sin fuente automática confirmada, curación manual si se necesita']
+  precio_desde              decimal   [note: 'NUEVO, campo "prc" de trackingKey, precio de referencia "desde"']
+  moneda                    varchar   [default: 'USD']
+  imagen_principal          varchar
+  proveedor_comercial_id    varchar   [note: 'nullable; "supplier_location_name" del detalle SÍ identifica el operador turístico real']
+  politica_reembolso_id     varchar
+  fuente_content_id         varchar   [note: 'SOFT-REF -> contentId/lid real de Travel Advisor, para re-consultar detalle']
+  fecha_actualizacion       datetime  [not null]
+  created                   datetime
+  updated                   datetime
+}
+
+// CU-O68 "Verificar disponibilidad y horarios de actividad por fecha".
+// SIN fuente automática confirmada (ver nota del módulo) — se puebla por
+// regla de negocio, no por sync real de disponibilidad de un proveedor.
+Table actividades_horarios {
+  id                    varchar   [pk]
+  actividad_id          varchar   [not null]
+  fecha                 date      [not null]
+  hora                  varchar
+  cupos_disponibles     int       [note: 'aproximado/regla de negocio, no inventario real de proveedor']
+  precio                decimal   [not null]
+  moneda                varchar   [not null, default: 'USD']
+  fecha_actualizacion   datetime  [not null]
+  created               datetime
+}
+
+// Fuente: embebidas dentro de la MISMA llamada a attractions/get-details
+// (campo reviews[]) — no una API de reseñas separada.
+Table actividades_resenas {
+  id                  varchar   [pk]
+  actividad_id        varchar   [not null]
+  autor               varchar
+  calificacion        decimal
+  comentario          text
+  fecha_resena        date
+  fecha_actualizacion datetime  [not null]
+  created             datetime
+}
+
+
+// ============================================================================
+// VENTAS Y RESERVAS — Cruceros (NUEVO módulo, CU-O71-75)
+// Fuente: Cruise Pricing API — 10/11 endpoints funcionales, solo
+// /price-history requiere plan PRO (no usado aquí).
+// ============================================================================
+
+Table navieras {
+  id                        varchar   [pk]
+  nombre                    varchar   [not null]
+  slug_proveedor             varchar  [not null, unique, note: 'SOFT-REF -> slug real de /cruise-lines, ej. "msc"']
+  destinos                   json     [note: 'cache de /cruise-lines/{slug}/destinations']
+  proveedor_comercial_id     varchar  [note: 'nullable; si hay comisión pactada directa con la naviera']
+  fecha_actualizacion        datetime [not null]
+  created                    datetime
+  updated                    datetime
+}
+
+// CU-O74 "Ver información del barco".
+Table barcos {
+  id                    varchar   [pk]
+  naviera_id            varchar   [not null]
+  nombre                varchar   [not null]
+  servicios_abordo      json
+  planos_cubierta       varchar   [note: 'file field, si está disponible']
+  politicas             text
+  fecha_actualizacion   datetime  [not null]
+  created               datetime
+  updated               datetime
+}
+
+Table cruceros_catalogo {
+  id                    varchar   [pk]
+  naviera_id             varchar  [not null]
+  barco_id               varchar [not null]
+  fuente_cruise_id        varchar [not null, note: 'SOFT-REF -> cruise_id real de Cruise Pricing API, ej. "AX20260717BDSBDS"']
+  fecha_zarpe             date    [not null]
+  duracion_dias           int
+  itinerario_puertos      json    [note: 'orden de puertos día a día, CU-O72']
+  precio_base             decimal [not null]
+  moneda                  varchar [not null, default: 'USD']
+  fecha_actualizacion     datetime [not null]
+  created                 datetime
+  updated                 datetime
+}
+
+// CU-O75 "Seleccionar tipo de camarote y tarifa".
+Table cruceros_camarotes_tarifa {
+  id                      varchar   [pk]
+  crucero_id              varchar   [not null]
+  tipo_camarote           varchar   [not null, note: 'BALCONY | OCEANVIEW | INTERIOR | SUITE, tal como los devuelve la API']
+  precio_por_persona      decimal   [not null]
+  cupos_disponibles       int       [note: 'NUEVO 2026-07-17 — CORREGIDO: faltaba por completo. Revisé el JSON completo de /cruises/{id} (no solo el resumen) y confirmé que Cruise Pricing API NO trae ningún campo de inventario, solo precio por tipo de camarote. Mismo gap que Actividades — regla de negocio fija, ver configuracion_sistema.disponibilidad_cruceros y fuentes_datos_externas (tipo_uso=regla_negocio_interna)']
+  politica_reembolso_id   varchar
+  fecha_actualizacion     datetime  [not null]
+  created                 datetime
+  updated                 datetime
+}
+
+
+// ============================================================================
+// VENTAS Y RESERVAS — Paquetes (NUEVO módulo, CU-O76-80)
+// No necesita catálogo propio: un paquete ES una reserva con ≥2 tipos de
+// producto distintos en reserva_items (ver más abajo, reservas.es_paquete).
+// Lo único nuevo es la configuración de descuento por combinación (CU-T14).
+// ============================================================================
+
+Table tipos_paquete_descuento {
+  id                      varchar   [pk]
+  combinacion             varchar   [not null, unique, note: 'ej. "vuelo+hotel", "vuelo+hotel+auto", "vuelo+hotel+actividad" — texto controlado por la UI de administración, no enum cerrado para no migrar esquema cada vez que se agregue una combinación']
+  porcentaje_descuento    decimal   [not null]
+  activo                  boolean   [default: true]
+  created                 datetime
+  updated                 datetime
+}
+
+
+// ============================================================================
+// VENTAS Y RESERVAS — proveedor comercial compartido (NUEVO, transversal)
+// Generaliza el concepto de "con quién se concilia comisión/remesa" para
+// Hoteles/Autos/Actividades (los vuelos siguen usando `aerolineas`, los
+// cruceros `navieras`, ambos ya tenían/necesitaban su propio catálogo con
+// campos específicos de dominio).
+// ============================================================================
+
+Table proveedores_comerciales {
+  id                    varchar         [pk]
+  nombre                varchar         [not null]
+  tipo_producto         tipo_producto   [not null, note: 'hotel | auto | actividad en la práctica (vuelo y crucero usan aerolineas/navieras)']
+  comision_pactada_pct  decimal
+  contacto              varchar
+  fecha_contrato        date
+  activo                boolean         [default: true]
+  created               datetime
+  updated               datetime
+}
+
+
+// ============================================================================
+// VENTAS Y RESERVAS — Reservas (CU-O21-25, O44, O47, O81-82) — REDISEÑO
+// ============================================================================
+// CAMBIO ESTRUCTURAL más grande de esta propuesta: `reservas` deja de tener
+// vuelo_id/tarifa_id directos (eso era válido cuando el sistema solo vendía
+// vuelos). Ahora es un header genérico; el/los producto(s) reservados viven
+// en la nueva `reserva_items`, uno por línea, con tipo_producto + un solo
+// par de relation fields poblado según el tipo (patrón estándar en
+// PocketBase para "polimorfismo", ya que una relation field solo puede
+// apuntar a UNA colección). Esto es lo que permite que Paquetes (CU-O76,
+// vuelo+hotel obligatorio, auto/actividad opcional) y Carrito (mezcla libre
+// de tipos) existan sin siete tablas de reserva paralelas.
+
+Table reservas {
+  id                        varchar         [pk]
+  codigo_reserva            varchar         [not null, unique, note: 'PNR. FIX v3: ahora sí único a nivel de esquema PocketBase (antes no estaba forzado)']
+  pasajero_titular_id       varchar         [not null]
+  agente_id                 varchar         [note: 'nullable; solo si canal = asistida']
+  canal                     canal_reserva   [not null]
+  estado                    estado_reserva  [not null, default: 'pendiente_pago']
+  es_paquete                boolean         [default: false, note: 'true si reserva_items tiene ≥2 tipo_producto distintos, CU-O76']
+  descuento_paquete_pct     decimal         [note: 'copiado de tipos_paquete_descuento al momento del checkout, para no perder el valor si luego cambia la config']
+  total_pagar               decimal         [not null]
+  fecha_reserva             datetime        [not null]
+  fecha_expiracion_pago     datetime
+  voucher_pdf               varchar         [note: 'NUEVO — file field, CU-O82, mismo patrón que facturas.archivo_pdf']
+  created                   datetime
+  updated                   datetime
+}
+
+// NUEVA — el corazón del rediseño. Solo se llenan los campos de contexto +
+// tarifa correspondientes al tipo_producto de la fila; el resto queda null.
+Table reserva_items {
+  id                        varchar               [pk]
+  reserva_id                varchar               [not null]
+  tipo_producto              tipo_producto        [not null]
+
+  vuelo_id                   varchar              [note: 'poblado si tipo_producto = vuelo']
+  tarifa_vuelo_id             varchar             [note: 'poblado si tipo_producto = vuelo']
+
+  hotel_id                    varchar             [note: 'poblado si tipo_producto = hotel']
+  hotel_tarifa_id              varchar            [note: 'poblado si tipo_producto = hotel']
+
+  auto_id                      varchar            [note: 'poblado si tipo_producto = auto']
+
+  actividad_id                  varchar           [note: 'poblado si tipo_producto = actividad']
+  actividad_horario_id           varchar          [note: 'poblado si tipo_producto = actividad']
+
+  crucero_id                    varchar           [note: 'poblado si tipo_producto = crucero']
+  crucero_camarote_id            varchar          [note: 'poblado si tipo_producto = crucero']
+
+  modalidad_pago               modalidad_pago_item [note: 'CU-O60/O64 — pagar_ahora | pagar_al_recoger | pago_diferido, aplica a hotel/auto']
+  fecha_inicio                  date               [note: 'check-in / fecha de recogida / fecha de actividad / fecha de zarpe, según tipo_producto']
+  fecha_fin                     date               [note: 'check-out / fecha de devolución, si aplica']
+  precio_final                  decimal            [not null]
+  estado_item                   estado_item_reserva [not null, default: 'pendiente']
+  created                       datetime
+  updated                       datetime
+}
+
+Table reserva_pasajeros {
+  id                    varchar                 [pk]
+  reserva_id            varchar                 [not null]
+  pasajero_id           varchar                 [not null]
+  tipo_pasajero         tipo_pasajero_reserva   [not null, default: 'adulto']
+  asiento_id            varchar                 [note: 'CORREGIDO 2026-07-17: relation real a asientos_vuelo (antes era texto libre) — permite seleccionar asientos contiguos en grupo (query: N asientos libres consecutivos en la misma fila) y cobrar recargo real vía reserva_extras cuando aplica. Nullable: no todas las tarifas obligan a elegir asiento al reservar, y si nunca se elige, el sistema lo asigna automáticamente cerca del vuelo (ver asiento_asignado_por).']
+  asiento_asignado_por  asiento_asignado_por    [note: 'NUEVO — pasajero (lo eligió) | sistema (nunca eligió, se le asignó automático, ej. al abrir check-in u otro momento configurado). Regla real confirmada por el usuario: en vuelos llenos, la asignación automática puede separar a un grupo que viaja junto si no eligieron a tiempo — comportamiento esperado, no un bug a prevenir.']
+  created               datetime
+}
+
+Table reserva_extras {
+  id            varchar     [pk]
+  reserva_id    varchar     [not null]
+  tipo          tipo_extra  [not null]
+  descripcion   varchar
+  precio        decimal     [not null]
+  created       datetime
+}
+
+Table alertas_precio {
+  id                varchar   [pk]
+  pasajero_id       varchar   [not null]
+  origen_codigo     varchar   [not null, note: 'SOFT-REF -> dim_aeropuerto.AirportCode']
+  destino_codigo    varchar   [not null, note: 'SOFT-REF -> dim_aeropuerto.AirportCode']
+  fecha_objetivo    date      [not null]
+  precio_umbral     decimal   [not null]
+  activa            boolean   [default: true]
+  created           datetime
+  updated           datetime
+}
+
+// NUEVA — CU-O81 "Consultar requisitos de documentación y visa por
+// destino". Cache bajo demanda (no catálogo periódico): el universo
+// pasaporte×destino es demasiado grande para pre-computar (~211 destinos
+// por la propia doc de Visa Requirement), así que solo se guarda lo que
+// alguien realmente consultó, y se refresca si fecha_consulta es vieja.
+Table requisitos_visa_cache {
+  id                  varchar   [pk]
+  pasaporte_pais       varchar  [not null, note: 'ISO alpha-2']
+  destino_pais          varchar [not null, note: 'ISO alpha-2']
+  resultado             json    [not null, note: 'respuesta de POST /v2/visa/check']
+  fecha_consulta         datetime [not null]
+  created                datetime
+}
+
+
+// ============================================================================
+// VENTAS Y RESERVAS — Carrito (NUEVO módulo, CU-O93-96)
+// Deliberadamente separado de `reservas` (no reutiliza estado
+// pendiente_pago): un carrito no es un PNR, no bloquea cupo, y su ciclo de
+// vida (activo -> convertido | abandonado) es lo que necesitan CU-T26/T27
+// para medir recuperación de carritos abandonados.
+// ============================================================================
+
+Table carritos {
+  id                        varchar         [pk]
+  pasajero_id               varchar         [not null]
+  estado                    estado_carrito  [not null, default: 'activo']
+  fecha_creacion             datetime       [not null]
+  fecha_ultima_actividad     datetime       [not null]
+  created                    datetime
+  updated                    datetime
+}
+
+// Mismo patrón polimórfico que reserva_items — a propósito, para que
+// convertir carrito -> reserva (CU-O96) sea un mapeo 1:1 campo a campo.
+Table carrito_items {
+  id                        varchar   [pk]
+  carrito_id                 varchar  [not null]
+  tipo_producto               tipo_producto [not null]
+
+  vuelo_id                    varchar  [note: 'poblado si tipo_producto = vuelo']
+  tarifa_vuelo_id               varchar [note: 'poblado si tipo_producto = vuelo']
+  hotel_id                      varchar [note: 'poblado si tipo_producto = hotel']
+  hotel_tarifa_id                 varchar [note: 'poblado si tipo_producto = hotel']
+  auto_id                         varchar [note: 'poblado si tipo_producto = auto']
+  actividad_id                     varchar [note: 'poblado si tipo_producto = actividad']
+  actividad_horario_id               varchar [note: 'poblado si tipo_producto = actividad']
+  crucero_id                         varchar [note: 'poblado si tipo_producto = crucero']
+  crucero_camarote_id                  varchar [note: 'poblado si tipo_producto = crucero']
+
+  precio_snapshot            decimal   [not null, note: 'precio al momento de agregar al carrito — puede haber cambiado en el catálogo al hacer checkout, la app debe re-validar']
+  fecha_agregado              datetime [not null]
+  created                     datetime
+}
+
+
+// ============================================================================
+// OPERACIONES — Disrupciones y Notificaciones (CU-O27-31, O46, O83-84)
+// ============================================================================
+// Sin cambios estructurales: las disrupciones son un concepto exclusivo de
+// vuelos (hoteles/autos/actividades/cruceros no tienen "estado operacional"
+// en el mismo sentido), así que vuelo_id directo sigue siendo correcto.
+// CU-O83 (risk score) quedó modelado como campos nuevos en vuelos_catalogo,
+// no como tabla aparte (ver arriba). CU-O84 (posición en tiempo real) no
+// necesita tabla: es un proxy en vivo contra OpenSky Network usando
+// vuelos_catalogo.avion_icao24, sin persistir nada.
+
+Table disrupciones {
+  id                  varchar                   [pk]
+  vuelo_id            varchar                   [not null]
+  fuente_deteccion    fuente_disrupcion         [not null]
+  tipo_cambio         tipo_cambio_disrupcion    [not null]
+  probabilidad        decimal
+  detalle             text
+  estado              estado_disrupcion         [not null, default: 'activa']
+  fecha_deteccion      datetime                 [not null]
+  created              datetime
+  updated               datetime
+}
+
+Table notificaciones {
+  id                varchar                     [pk]
+  pasajero_id       varchar                     [not null]
+  reserva_id        varchar                     [not null]
+  disrupcion_id     varchar                     [note: 'nullable']
+  canal             canal_notificacion          [not null]
+  asunto            varchar                     [not null]
+  contenido         text                        [not null]
+  estado_envio      estado_envio_notificacion   [not null, default: 'pendiente']
+  intentos_envio    int                         [default: 0]
+  leida             boolean                     [default: false]
+  fecha_envio       datetime
+  created           datetime
+}
+
+
+// ============================================================================
+// FINANZAS — Facturación (CU-O32-40, O85-86)
+// ============================================================================
+
+Table metodos_pago {
+  id            varchar   [pk]
+  nombre        varchar   [not null]
+  tipo          varchar   [not null]
+  procesador    varchar   [not null, default: 'stripe']
+  activo        boolean   [default: true]
+  created       datetime
+  updated       datetime
+}
+
+// MODIFICADA — CU-O86 "Capturar pago diferido de hotel". Stripe soporta
+// authorize-then-capture nativo; se modela con el nuevo estado 'autorizado'
+// (ver enum estado_pago) + los dos campos de fecha.
+Table pagos {
+  id                          varchar     [pk]
+  reserva_id                  varchar     [not null]
+  monto                       decimal     [not null]
+  moneda                      varchar     [not null, default: 'USD']
+  metodo_pago_id              varchar     [not null]
+  stripe_payment_intent_id    varchar
+  estado                      estado_pago [not null, default: 'pendiente']
+  captura_diferida            boolean     [default: false, note: 'NUEVO — true cuando el item es hotel/auto con modalidad_pago = pago_diferido/pagar_al_recoger']
+  fecha_autorizacion          datetime    [note: 'NUEVO']
+  fecha_pago                  datetime    [note: 'fecha de captura real']
+  created                     datetime
+  updated                     datetime
+}
+
+// MODIFICADA — ahora referencia reserva_items (no reservas) porque una
+// reserva-paquete puede deber comisión a proveedores distintos por línea
+// (ej. aerolínea por el vuelo, hotel por la habitación). tipo_producto +
+// exactamente una de las tres relations queda poblada.
+Table comisiones {
+  id                      varchar         [pk]
+  reserva_item_id          varchar        [not null]
+  tipo_producto             tipo_producto [not null]
+  aerolinea_id              varchar       [note: 'poblado si tipo_producto = vuelo']
+  naviera_id                 varchar      [note: 'poblado si tipo_producto = crucero']
+  proveedor_comercial_id      varchar     [note: 'poblado si tipo_producto = hotel | auto | actividad']
+  monto                       decimal     [not null]
+  estado                      estado_comision [not null, default: 'pendiente_cobro']
+  fecha_esperada_cobro         date
+  fecha_cobro_real             date
+  created                      datetime
+  updated                       datetime
+}
+
+// MODIFICADA — mismo polimorfismo que comisiones (CU-O36: "remesa simulada
+// a aerolínea U HOTEL", explícito en v3).
+Table remesas {
+  id                    varchar         [pk]
+  tipo_producto          tipo_producto  [not null]
+  aerolinea_id            varchar       [note: 'poblado si tipo_producto = vuelo']
+  naviera_id               varchar      [note: 'poblado si tipo_producto = crucero']
+  proveedor_comercial_id     varchar    [note: 'poblado si tipo_producto = hotel | auto | actividad']
+  periodo                    varchar    [not null, note: 'ej. "2026-07"']
+  monto_total                 decimal   [not null]
+  estado                       estado_remesa [not null, default: 'pendiente']
+  fecha_generacion              datetime
+  created                       datetime
+  updated                        datetime
+}
+
+Table remesa_comisiones {
+  id            varchar   [pk]
+  remesa_id     varchar   [not null]
+  comision_id   varchar   [not null]
+  created       datetime
+}
+
+// MODIFICADA — reserva_item_id nullable: null = reembolso de toda la
+// reserva (ej. cancelación completa), poblado = reembolso parcial de un
+// solo componente (ej. se cancela solo el hotel de un paquete).
+Table reembolsos {
+  id                    varchar           [pk]
+  pago_id               varchar           [not null]
+  reserva_id            varchar           [not null]
+  reserva_item_id        varchar          [note: 'NUEVO, nullable']
+  politica_aplicada_id  varchar           [not null]
+  motivo                text              [not null]
+  monto                 decimal           [not null]
+  estado                estado_reembolso  [not null, default: 'pendiente']
+  stripe_refund_id      varchar
+  fecha_solicitud       datetime          [not null]
+  fecha_procesado       datetime
+  created               datetime
+  updated                datetime
+}
+
+Table facturas {
+  id                varchar   [pk]
+  reserva_id        varchar   [not null]
+  pago_id           varchar   [not null]
+  numero_factura    varchar   [not null, unique, note: 'FIX v3: ahora sí único a nivel de esquema (antes no estaba forzado)']
+  total             decimal   [not null]
+  archivo_pdf       varchar
+  fecha_emision     datetime  [not null]
+  created           datetime
+}
+
+// NUEVA — CU-O85 "Convertir moneda para presentación de precios (1×/día)".
+// Job diario contra ExchangeRate-API (RapidAPI), confirmado funcionando.
+Table tasas_cambio {
+  id                    varchar   [pk]
+  moneda_origen         varchar   [not null, default: 'USD']
+  moneda_destino        varchar   [not null]
+  tasa                  decimal   [not null]
+  fecha_actualizacion   datetime  [not null]
+  created               datetime
+}
+
+
+// ============================================================================
+// GESTIÓN DE CLIENTES — Cuenta de usuario / Mis Viajes (NUEVO módulo,
+// CU-O87-92)
+// ============================================================================
+// CU-O87 (Ver Mis Viajes) no necesita tabla propia: es una vista que
+// consulta reservas + reserva_items filtrado por pasajero_titular_id.
+
+Table favoritos {
+  id                varchar                 [pk]
+  pasajero_id       varchar                 [not null]
+  tipo              tipo_producto_favorito  [not null]
+  producto_ref      varchar                 [not null, note: 'id del hotel/actividad favorito, o texto libre de destino si tipo = destino']
+  fecha_guardado    datetime                [not null]
+  created           datetime
+}
+
+// CU-O89 "Ver y retomar búsquedas recientes por producto".
+Table busquedas_recientes {
+  id            varchar         [pk]
+  pasajero_id   varchar         [not null]
+  tipo_producto tipo_producto   [not null]
+  criterios     json            [not null, note: 'parámetros de búsqueda tal como se enviaron, para poder relanzarla']
+  fecha         datetime        [not null]
+  created       datetime
+}
+
+// CU-O90 "Crear viaje personalizado (planificación libre)".
+Table viajes_personalizados {
+  id            varchar   [pk]
+  pasajero_id   varchar   [not null]
+  nombre        varchar   [not null]
+  descripcion   text
+  created       datetime
+  updated       datetime
+}
+
+// CU-T24 "Configurar programa de beneficios (reglas de acumulación,
+// niveles, vencimiento)".
+Table programa_beneficios_niveles {
+  id                varchar   [pk]
+  nombre_nivel      varchar   [not null]
+  puntos_minimos    int       [not null]
+  beneficios        text
+  puntos_por_dolar  decimal   [not null, note: 'regla de acumulación para este nivel']
+  vencimiento_meses int       [note: 'nullable = puntos no vencen']
+  created           datetime
+  updated           datetime
+}
+
+// CU-O92 "Consultar saldo y movimientos del programa de beneficios".
+Table programa_beneficios_movimientos {
+  id            varchar               [pk]
+  pasajero_id   varchar               [not null]
+  tipo          tipo_movimiento_puntos [not null]
+  puntos        int                   [not null]
+  reserva_id    varchar               [note: 'nullable; poblado si el movimiento viene de una compra']
+  descripcion   varchar
+  fecha         datetime              [not null]
+  created       datetime
+}
+
+
+// ============================================================================
+// OPERACIONES — Centro de Ayuda (NUEVO módulo, CU-O97-100, T28, T36)
+// ============================================================================
+
+Table articulos_ayuda {
+  id                  varchar   [pk]
+  categoria           varchar   [not null]
+  titulo              varchar   [not null]
+  contenido           text      [not null]
+  autor_id            varchar   [not null, note: 'usuarios.id del Administrador que lo escribió']
+  activo              boolean   [default: true]
+  fecha_publicacion   datetime  [not null]
+  created             datetime
+  updated             datetime
+}
+
+Table articulo_calificaciones {
+  id            varchar             [pk]
+  articulo_id   varchar             [not null]
+  pasajero_id   varchar             [note: 'nullable; calificación anónima permitida']
+  util          calificacion_pulgar [not null]
+  fecha         datetime            [not null]
+  created       datetime
+}
+
+// CU-O100/T36 — escalación vía email (Gmail API, uso constante).
+Table casos_escalados {
+  id                  varchar             [pk]
+  pasajero_id         varchar             [not null]
+  asunto              varchar             [not null]
+  mensaje             text                [not null]
+  gmail_thread_id      varchar            [note: 'SOFT-REF -> hilo de Gmail donde vive la conversación real']
+  estado               estado_caso_ayuda  [not null, default: 'abierto']
+  agente_asignado_id    varchar           [note: 'nullable']
+  fecha_creacion         datetime         [not null]
+  fecha_resolucion       datetime
+  created                 datetime
+  updated                  datetime
+}
+
+
+// ============================================================================
+// COMERCIAL Y MARKETING — Ofertas y Promociones (NUEVO módulo, CU-O101-105)
+// ============================================================================
+
+Table ofertas_destacadas {
+  id              varchar         [pk]
+  tipo_producto   tipo_producto   [not null]
+  producto_ref    varchar         [not null, note: 'id del catálogo correspondiente según tipo_producto']
+  titulo          varchar         [not null]
+  descripcion     text
+  imagen          varchar
+  fecha_inicio    date            [not null]
+  fecha_fin       date            [not null]
+  activa          boolean         [default: true]
+  created         datetime
+  updated         datetime
+}
+
+Table cupones_descuento {
+  id                        varchar     [pk]
+  codigo                    varchar     [not null, unique]
+  tipo                      tipo_cupon  [not null]
+  valor                     decimal     [not null]
+  producto_aplicable        tipo_producto [note: 'nullable = aplica a cualquier producto']
+  fecha_expiracion          date        [not null]
+  usos_maximos              int
+  usos_actuales             int         [default: 0]
+  activo                    boolean     [default: true]
+  acumulable_con_paquete    boolean     [note: 'NUEVO 2026-07-18 — CU-T44, resuelve QP-18. Nullable: null = hereda el default global (configuracion_sistema clave "cupones.acumulable_con_paquete_default"); true/false = excepción explícita para ESTE cupón, tiene prioridad sobre el default global. Se evalúa en CU-O103 (aplicar cupón) solo cuando reservas.es_paquete = true — si la reserva no es un paquete, este campo no aplica.']
+  created                   datetime
+  updated                   datetime
+}
+
+// Junction — trazabilidad de canje (evita doble uso y alimenta CU-T32).
+Table cupones_uso {
+  id                varchar   [pk]
+  cupon_id          varchar   [not null]
+  reserva_id        varchar   [not null]
+  fecha_uso         datetime  [not null]
+  monto_descontado  decimal   [not null]
+  created           datetime
+}
+
+Table newsletter_suscripciones {
+  id                  varchar   [pk]
+  pasajero_id         varchar   [note: 'nullable; puede suscribirse sin cuenta con solo el email']
+  email               varchar   [not null]
+  fecha_suscripcion   datetime  [not null]
+  activo              boolean   [default: true]
+  created             datetime
+  updated             datetime
+}
+
+// CU-T31 — usa SendGrid (uso constante) para el envío real.
+Table campanas_email {
+  id                  varchar   [pk]
+  nombre              varchar   [not null]
+  segmento_criterio   json      [not null, note: 'filtros para armar el segmento de destinatarios']
+  plantilla           text      [not null]
+  fecha_envio         datetime
+  estado              varchar   [note: 'borrador | programada | enviada']
+  creado_por          varchar   [not null]
+  created             datetime
+  updated             datetime
+}
+
+
+// ============================================================================
+// COMERCIAL Y MARKETING — Asistente IA (NUEVO módulo, CU-O106-111)
+// Usa Groq/Gemini (uso constante, no catálogo).
+// ============================================================================
+
+Table conversaciones_ia {
+  id                      varchar   [pk]
+  pasajero_id             varchar   [not null]
+  titulo                  varchar
+  fecha_inicio             datetime [not null]
+  fecha_ultima_actividad   datetime [not null]
+  activa                   boolean  [default: true]
+  created                  datetime
+  updated                   datetime
+}
+
+Table mensajes_ia {
+  id                varchar             [pk]
+  conversacion_id   varchar             [not null]
+  rol               rol_mensaje_ia      [not null]
+  contenido         text                [not null]
+  calificacion      calificacion_pulgar [note: 'nullable; solo aplica a rol = asistente, CU-O110']
+  fecha             datetime            [not null]
+  created           datetime
+}
+
+
+// ============================================================================
+// RELACIONES ENTRE TABLAS (relation fields reales de PocketBase)
+// ============================================================================
+
+// -- Seguridad --
+Ref: permisos.modulo_id > modulos.id
+Ref: roles_permisos.rol_id > roles.id
+Ref: roles_permisos.permiso_id > permisos.id
+Ref: roles_permisos_tablas.rol_id > roles.id
+Ref: roles_permisos_tablas.modulo_id > modulos.id
+Ref: modulo_tablas.modulo_id > modulos.id
+Ref: usuarios.rol_id > roles.id
+Ref: auditoria.usuario_id > usuarios.id
+Ref: configuracion_sistema.modificado_por > usuarios.id
+
+// -- Integraciones --
+Ref: fuentes_datos_externas.modificado_por > usuarios.id
+Ref: sincronizaciones_log.fuente_id > fuentes_datos_externas.id
+Ref: sincronizaciones_log.ejecutado_por > usuarios.id
+
+// -- Pasajeros --
+Ref: pasajeros.usuario_id - usuarios.id
+Ref: documentos_viaje.pasajero_id > pasajeros.id
+Ref: viajeros_frecuentes.pasajero_id > pasajeros.id
+
+// -- Vuelos --
+Ref: niveles_tarifa.politica_reembolso_id > politicas_reembolso.id
+Ref: vuelos_catalogo.aerolinea_id > aerolineas.id
+Ref: tarifas_vuelo.vuelo_id > vuelos_catalogo.id
+Ref: tarifas_vuelo.nivel_tarifa_id > niveles_tarifa.id
+
+// -- Hoteles --
+Ref: hoteles_catalogo.proveedor_comercial_id > proveedores_comerciales.id
+Ref: hoteles_tarifas.hotel_id > hoteles_catalogo.id
+Ref: hoteles_tarifas.politica_reembolso_id > politicas_reembolso.id
+Ref: hoteles_resenas.hotel_id > hoteles_catalogo.id
+
+// -- Autos --
+Ref: autos_catalogo.proveedor_comercial_id > proveedores_comerciales.id
+Ref: autos_catalogo.politica_reembolso_id > politicas_reembolso.id
+
+// -- Actividades --
+Ref: actividades_catalogo.proveedor_comercial_id > proveedores_comerciales.id
+Ref: actividades_catalogo.politica_reembolso_id > politicas_reembolso.id
+Ref: actividades_horarios.actividad_id > actividades_catalogo.id
+Ref: actividades_resenas.actividad_id > actividades_catalogo.id
+
+// -- Cruceros --
+Ref: navieras.proveedor_comercial_id > proveedores_comerciales.id
+Ref: barcos.naviera_id > navieras.id
+Ref: cruceros_catalogo.naviera_id > navieras.id
+Ref: cruceros_catalogo.barco_id > barcos.id
+Ref: cruceros_camarotes_tarifa.crucero_id > cruceros_catalogo.id
+Ref: cruceros_camarotes_tarifa.politica_reembolso_id > politicas_reembolso.id
+
+// -- Reservas (incluye carrito, incluye polimorfismo de items) --
+Ref: reservas.pasajero_titular_id > pasajeros.id
+Ref: reservas.agente_id > usuarios.id
+Ref: reserva_items.reserva_id > reservas.id
+Ref: reserva_items.vuelo_id > vuelos_catalogo.id
+Ref: reserva_items.tarifa_vuelo_id > tarifas_vuelo.id
+Ref: reserva_items.hotel_id > hoteles_catalogo.id
+Ref: reserva_items.hotel_tarifa_id > hoteles_tarifas.id
+Ref: reserva_items.auto_id > autos_catalogo.id
+Ref: reserva_items.actividad_id > actividades_catalogo.id
+Ref: reserva_items.actividad_horario_id > actividades_horarios.id
+Ref: reserva_items.crucero_id > cruceros_catalogo.id
+Ref: reserva_items.crucero_camarote_id > cruceros_camarotes_tarifa.id
+Ref: reserva_pasajeros.reserva_id > reservas.id
+Ref: reserva_pasajeros.pasajero_id > pasajeros.id
+Ref: reserva_pasajeros.asiento_id > asientos_vuelo.id
+Ref: asientos_vuelo.vuelo_id > vuelos_catalogo.id
+Ref: reserva_extras.reserva_id > reservas.id
+Ref: alertas_precio.pasajero_id > pasajeros.id
+// requisitos_visa_cache NO lleva Ref a documentos_viaje: pasaporte_pais es un
+// código ISO alpha-2 de texto libre (puede consultarse sin tener un
+// documento cargado, ej. un agente cotizando para un pasajero potencial),
+// no una relation field real — se resuelve en la app, no en el esquema.
+
+Ref: carritos.pasajero_id > pasajeros.id
+Ref: carrito_items.carrito_id > carritos.id
+Ref: carrito_items.vuelo_id > vuelos_catalogo.id
+Ref: carrito_items.tarifa_vuelo_id > tarifas_vuelo.id
+Ref: carrito_items.hotel_id > hoteles_catalogo.id
+Ref: carrito_items.hotel_tarifa_id > hoteles_tarifas.id
+Ref: carrito_items.auto_id > autos_catalogo.id
+Ref: carrito_items.actividad_id > actividades_catalogo.id
+Ref: carrito_items.actividad_horario_id > actividades_horarios.id
+Ref: carrito_items.crucero_id > cruceros_catalogo.id
+Ref: carrito_items.crucero_camarote_id > cruceros_camarotes_tarifa.id
+
+// -- Disrupciones --
+Ref: disrupciones.vuelo_id > vuelos_catalogo.id
+Ref: notificaciones.pasajero_id > pasajeros.id
+Ref: notificaciones.reserva_id > reservas.id
+Ref: notificaciones.disrupcion_id > disrupciones.id
+
+// -- Facturación --
+Ref: pagos.reserva_id > reservas.id
+Ref: pagos.metodo_pago_id > metodos_pago.id
+Ref: comisiones.reserva_item_id > reserva_items.id
+Ref: comisiones.aerolinea_id > aerolineas.id
+Ref: comisiones.naviera_id > navieras.id
+Ref: comisiones.proveedor_comercial_id > proveedores_comerciales.id
+Ref: remesas.aerolinea_id > aerolineas.id
+Ref: remesas.naviera_id > navieras.id
+Ref: remesas.proveedor_comercial_id > proveedores_comerciales.id
+Ref: remesa_comisiones.remesa_id > remesas.id
+Ref: remesa_comisiones.comision_id > comisiones.id
+Ref: reembolsos.pago_id > pagos.id
+Ref: reembolsos.reserva_id > reservas.id
+Ref: reembolsos.reserva_item_id > reserva_items.id
+Ref: reembolsos.politica_aplicada_id > politicas_reembolso.id
+Ref: facturas.reserva_id > reservas.id
+Ref: facturas.pago_id > pagos.id
+
+// -- Cuenta / Mis Viajes --
+Ref: favoritos.pasajero_id > pasajeros.id
+Ref: busquedas_recientes.pasajero_id > pasajeros.id
+Ref: viajes_personalizados.pasajero_id > pasajeros.id
+Ref: programa_beneficios_movimientos.pasajero_id > pasajeros.id
+Ref: programa_beneficios_movimientos.reserva_id > reservas.id
+
+// -- Centro de Ayuda --
+Ref: articulos_ayuda.autor_id > usuarios.id
+Ref: articulo_calificaciones.articulo_id > articulos_ayuda.id
+Ref: articulo_calificaciones.pasajero_id > pasajeros.id
+Ref: casos_escalados.pasajero_id > pasajeros.id
+Ref: casos_escalados.agente_asignado_id > usuarios.id
+
+// -- Ofertas y Promociones --
+Ref: cupones_uso.cupon_id > cupones_descuento.id
+Ref: cupones_uso.reserva_id > reservas.id
+Ref: newsletter_suscripciones.pasajero_id > pasajeros.id
+Ref: campanas_email.creado_por > usuarios.id
+
+// -- Asistente IA --
+Ref: conversaciones_ia.pasajero_id > pasajeros.id
+Ref: mensajes_ia.conversacion_id > conversaciones_ia.id
+
+
+// ============================================================================
+// REFERENCIAS BLANDAS AL MODELO DIMENSIONAL HEREDADO (solo lectura, MinIO,
+// aerotrack-travel-dims — SIN CAMBIOS respecto a la propuesta v2)
+// ============================================================================
+//   aerolineas.codigo_iata            -> dim_aerolinea.IATA_CODE_Reporting_Airline
+//   vuelos_catalogo.origen_codigo     -> dim_aeropuerto.AirportCode
+//   vuelos_catalogo.destino_codigo    -> dim_aeropuerto.AirportCode
+//   vuelos_catalogo.avion_tail_number -> dim_avion.Tail_Number
+//   alertas_precio.origen_codigo      -> dim_aeropuerto.AirportCode
+//   alertas_precio.destino_codigo     -> dim_aeropuerto.AirportCode
+//   predicciones_precio_ruta.origen_codigo  -> dim_aeropuerto.AirportCode
+//   predicciones_precio_ruta.destino_codigo -> dim_aeropuerto.AirportCode
+//   autos_catalogo.aeropuerto_codigo  -> dim_aeropuerto.AirportCode
+//
+// vuelos_catalogo.risk_score, cuando risk_score_fuente = 'historico_us', se
+// calcula a partir de agg_otp_aerolinea_mes / agg_causas_retraso_mes
+// (MinIO). Cuando risk_score_fuente = 'estimado_intl', se calcula desde
+// AeroDataBox (/airports/{code}/delays, /stats/routes/daily) porque el
+// dataset BTS/FAA es exclusivamente de rutas domésticas de EE. UU. — no hay
+// SOFT-REF a MinIO en ese caso, la fuente es 100% la API externa.

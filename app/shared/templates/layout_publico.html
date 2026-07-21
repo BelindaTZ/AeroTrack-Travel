@@ -1,40 +1,79 @@
 {% extends "base.html" %}
 {% block body %}
 <div class="login-split">
+
+    <!-- ══ PANEL IZQUIERDO — imagen de fondo + contenido ══ -->
     <div class="login-dark-panel">
-        <a href="/" class="login-brand text-decoration-none text-white">
-            <img src="/static/assets/images/LogoAeroTrackTravel.png" alt="">
+        <!-- Overlay de color sobre la imagen -->
+        <div class="login-panel-overlay"></div>
+
+        <!-- Marca superior -->
+        <a href="/" class="login-brand text-decoration-none">
+            <img src="/static/assets/images/LogoAeroTrackTravel.png" alt="AeroTrack Travel logo" height="40">
             <div>
                 <div class="name">AeroTrack</div>
                 <div class="suite">Travel</div>
             </div>
         </a>
 
+        <!-- Cuerpo central -->
         <div>
-            <h1 class="login-headline">Reserva vuelos.<br><span class="accent">Sin fricción.</span></h1>
+            <!-- Eyebrow -->
+            <div style="display:inline-flex;align-items:center;gap:7px;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.16);border-radius:999px;padding:5px 15px;font-size:11.5px;font-weight:600;color:rgba(255,255,255,.8);letter-spacing:.3px;margin-bottom:20px">
+                <i class="bi bi-airplane-fill" style="color:var(--amber-400)"></i>
+                Vuelos domésticos · EE. UU.
+            </div>
+
+            <h1 class="login-headline">
+                Reserva vuelos.<br><span class="accent">Sin fricción.</span>
+            </h1>
             <p class="login-tagline">
-                Busca, compara y gestiona tus reservas de vuelo con transparencia total de precio,
-                desde una sola cuenta.
+                Busca, compara y gestiona tus reservas de vuelo con transparencia total
+                de precio desde una sola cuenta. Sin sorpresas.
             </p>
-            <div class="login-pills">
-                <div class="login-pill"><i class="bi bi-shield-check"></i> Acceso auditado</div>
-                <div class="login-pill"><i class="bi bi-cash-coin"></i> Precio transparente</div>
-                <div class="login-pill"><i class="bi bi-bell"></i> Alertas de vuelo</div>
+
+            <!-- Features highlight -->
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:26px">
+                <div style="background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.11);border-radius:12px;padding:14px;backdrop-filter:blur(6px)">
+                    <i class="bi bi-shield-check" style="color:var(--amber-400);font-size:18px;display:block;margin-bottom:6px"></i>
+                    <div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:3px">Acceso seguro</div>
+                    <div style="font-size:11.5px;color:rgba(255,255,255,.55)">Autenticación con JWT y auditoría</div>
+                </div>
+                <div style="background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.11);border-radius:12px;padding:14px;backdrop-filter:blur(6px)">
+                    <i class="bi bi-cash-coin" style="color:var(--amber-400);font-size:18px;display:block;margin-bottom:6px"></i>
+                    <div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:3px">Precio final</div>
+                    <div style="font-size:11.5px;color:rgba(255,255,255,.55)">Sin cargos ocultos, siempre</div>
+                </div>
+                <div style="background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.11);border-radius:12px;padding:14px;backdrop-filter:blur(6px)">
+                    <i class="bi bi-bell" style="color:var(--amber-400);font-size:18px;display:block;margin-bottom:6px"></i>
+                    <div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:3px">Alertas proactivas</div>
+                    <div style="font-size:11.5px;color:rgba(255,255,255,.55)">Cambios de vuelo en tiempo real</div>
+                </div>
+                <div style="background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.11);border-radius:12px;padding:14px;backdrop-filter:blur(6px)">
+                    <i class="bi bi-globe-americas" style="color:var(--amber-400);font-size:18px;display:block;margin-bottom:6px"></i>
+                    <div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:3px">15 aeropuertos</div>
+                    <div style="font-size:11.5px;color:rgba(255,255,255,.55)">Cobertura doméstica USA</div>
+                </div>
             </div>
         </div>
 
-        <div class="login-foot">© 2026 AeroTrack Travel</div>
+        <div class="login-foot">© 2026 AeroTrack Travel · Miami, FL</div>
     </div>
 
+    <!-- ══ PANEL DERECHO — formulario ══ -->
     <div class="login-light-panel">
         <div class="login-form-card {% block portal_card_class %}{% endblock %}">
             {% if request.query_params.get('mensaje') %}
             <div class="flash-bar" role="status">
-                <div class="flash-success toast-autodismiss"><i class="bi bi-check-circle-fill" aria-hidden="true"></i>{{ request.query_params.get('mensaje') }}</div>
+                <div class="flash-success toast-autodismiss">
+                    <i class="bi bi-check-circle-fill" aria-hidden="true"></i>
+                    {{ request.query_params.get('mensaje') }}
+                </div>
             </div>
             {% endif %}
             {% block content %}{% endblock %}
         </div>
     </div>
+
 </div>
 {% endblock %}

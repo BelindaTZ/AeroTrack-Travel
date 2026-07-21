@@ -1,0 +1,49 @@
+{% extends "layout_portal.html" %}
+{% block title %}Destinos populares — AeroTrack Travel{% endblock %}
+{% block content %}
+<h1 class="h5 mb-1" style="font-family:var(--font-display)">Destinos populares</h1>
+<p style="font-size:13px;color:var(--at-muted);margin:0 0 4px">
+    Estadística real de búsquedas y reservas — no es una selección editorial.
+</p>
+
+{% if not origen %}
+<form method="get" action="/destinos-populares" class="search-card mt-3" style="background:var(--at-surface);border:1px solid var(--at-border)">
+    <div class="row g-3 align-items-end">
+        <div class="col-8 col-md-4">
+            <label class="form-label-at" for="dp-origen">Tu origen habitual</label>
+            <input type="text" class="form-control-at text-uppercase" id="dp-origen" name="origen" maxlength="3" placeholder="JFK" required>
+        </div>
+        <div class="col-4 col-md-2">
+            <button type="submit" class="btn-at-primary w-100 justify-content-center"><i class="bi bi-search"></i></button>
+        </div>
+    </div>
+</form>
+{% if usuario and usuario.tipo_actor == 'pasajero' %}
+<p style="font-size:12px;color:var(--at-sub);margin-top:8px">
+    No encontramos un origen habitual en tu historial de búsquedas todavía — indícalo arriba.
+</p>
+{% endif %}
+{% endif %}
+
+{% if origen %}
+<p style="font-size:13px;margin-top:12px">Desde <strong>{{ origen }}</strong>:</p>
+{% if destinos %}
+<div class="destinos-grid">
+    {% for d in destinos %}
+    <a class="destino-card at-card at-card-hover" href="/vuelos/buscar?origen={{ origen }}&destino={{ d.codigo }}">
+        <div>
+            <div class="codigo">{{ d.codigo }}</div>
+            <div class="legible">{{ d.legible }}</div>
+        </div>
+        <div class="conteo">volumen {{ d.volumen }}</div>
+    </a>
+    {% endfor %}
+</div>
+{% else %}
+<div class="at-empty">
+    <i class="bi bi-geo-alt at-empty-icon" aria-hidden="true"></i>
+    <strong>Todavía no hay suficiente actividad real desde {{ origen }}</strong>
+</div>
+{% endif %}
+{% endif %}
+{% endblock %}

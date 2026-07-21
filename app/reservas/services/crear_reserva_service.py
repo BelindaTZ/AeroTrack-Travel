@@ -96,6 +96,21 @@ async def _crear_reserva_interno(
         reserva_data["agente_id"] = agente_id
 
     reserva = await repo.crear_reserva(reserva_data)
+    # Rediseño v3 (reserva_items): dual-write mientras el único flujo de
+    # creación real es Vuelos — la cabecera sigue teniendo vuelo_id/tarifa_id
+    # (compatibilidad con Facturación/Disrupciones, que los leen directo),
+    # y en paralelo se registra el ítem polimórfico del que dependen
+    # Paquetes/Carrito/Cuenta-Mis-Viajes.
+    await repo.crear_item(
+        {
+            "reserva_id": reserva["id"],
+            "tipo_producto": "vuelo",
+            "vuelo_id": tarifa["vuelo_id"],
+            "tarifa_vuelo_id": tarifa_id,
+            "precio_final": tarifa["precio_final"],
+            "estado_item": "pendiente",
+        }
+    )
     await repo.agregar_pasajero(reserva["id"], pasajero_id)
     for extra in extras:
         await repo.agregar_extra(

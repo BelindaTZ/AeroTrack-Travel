@@ -1,0 +1,75 @@
+{% extends layout_base %}
+{% block title %}Notificaciones — AeroTrack Travel{% endblock %}
+{% block content %}
+{% if es_backoffice %}
+<div class="page-heading">
+    <h1><span class="heading-icon"><i class="bi bi-bell"></i></span>Notificaciones</h1>
+    <p>Historial de notificaciones enviadas a pasajeros por disrupciones de vuelo.</p>
+</div>
+{% else %}
+<h1 class="h5 mb-3" style="font-family:var(--font-display)">Mis notificaciones</h1>
+{% endif %}
+
+<div class="{{ 'at-table-wrapper' if es_backoffice else '' }}">
+    <div class="{{ 'at-table-header' if es_backoffice else 'd-flex gap-2 align-items-center flex-wrap mb-3' }}">
+        <form method="get" action="{{ '/backoffice/notificaciones' if es_backoffice else '/notificaciones' }}"
+              id="form-filtros" class="d-flex gap-2 align-items-center flex-wrap">
+            <select class="form-control-at" name="canal" style="width:160px">
+                <option value="">Todos los canales</option>
+                <option value="email" {% if filtro_canal == 'email' %}selected{% endif %}>Email</option>
+                <option value="sms" {% if filtro_canal == 'sms' %}selected{% endif %}>SMS</option>
+            </select>
+            <select class="form-control-at" name="estado_envio" style="width:190px">
+                <option value="">Todos los estados</option>
+                <option value="pendiente" {% if filtro_estado == 'pendiente' %}selected{% endif %}>Pendiente</option>
+                <option value="enviado" {% if filtro_estado == 'enviado' %}selected{% endif %}>Enviado</option>
+                <option value="fallido" {% if filtro_estado == 'fallido' %}selected{% endif %}>Fallido</option>
+                <option value="fallido_definitivo" {% if filtro_estado == 'fallido_definitivo' %}selected{% endif %}>Fallo definitivo</option>
+            </select>
+        </form>
+    </div>
+
+    {% if notificaciones %}
+    <div class="{{ 'at-table-scroll' if es_backoffice else '' }}">
+        <table class="at-table">
+            <thead><tr><th>Fecha</th><th>Reserva</th><th>Canal</th><th>Asunto</th><th>Estado</th></tr></thead>
+            <tbody>
+                {% for n in notificaciones %}
+                <tr>
+                    <td class="at-mono" style="font-size:12px">{{ n.created[:16] if n.created else "" }}</td>
+                    <td><a href="/reservas/{{ n.reserva_id }}">{{ n.codigo_reserva }}</a></td>
+                    <td style="text-transform:uppercase;font-size:12px">{{ n.canal }}</td>
+                    <td>{{ n.asunto }}</td>
+                    <td>
+                        {% if n.estado_envio == "enviado" %}
+                        <span class="badge-sistema" style="background:var(--at-success-bg);color:var(--at-success-fg)"><i class="bi bi-check-circle"></i> enviado</span>
+                        {% elif n.estado_envio == "fallido" %}
+                        <span class="badge-sistema" style="background:var(--at-warning-bg);color:var(--at-warning-fg)"><i class="bi bi-arrow-repeat"></i> fallido (reintentable)</span>
+                        {% elif n.estado_envio == "fallido_definitivo" %}
+                        <span class="badge-sistema" style="background:var(--at-failed-bg);color:var(--at-danger)"><i class="bi bi-x-circle"></i> fallo definitivo</span>
+                        {% else %}
+                        <span class="badge-sistema"><i class="bi bi-hourglass-split"></i> pendiente</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="at-empty">
+        <i class="bi bi-bell-slash at-empty-icon" aria-hidden="true"></i>
+        <strong>Sin notificaciones para el filtro actual</strong>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+document.querySelectorAll('#form-filtros select').forEach(function (el) {
+    el.addEventListener('change', function () { document.getElementById('form-filtros').requestSubmit(); });
+});
+</script>
+{% endblock %}

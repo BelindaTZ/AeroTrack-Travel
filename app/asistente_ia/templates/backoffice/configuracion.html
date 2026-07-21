@@ -1,0 +1,40 @@
+{% extends "layout_app.html" %}
+{% block title %}Configurar Asistente IA — AeroTrack Travel{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <h1><span class="heading-icon"><i class="bi bi-robot"></i></span>Configurar Asistente IA</h1>
+    <p>Los temas permitidos son una restricción activa (RN-IA-T01) — fuera de esa lista, el asistente rechaza la consulta explícitamente. Vacío = sin restricción configurada todavía.</p>
+</div>
+
+<form method="post" action="/backoffice/asistente/configuracion" class="at-card" style="max-width:640px">
+    <div class="row g-3">
+        <div class="col-12">
+            <label class="form-label-at" for="ai-tono">Tono de respuesta</label>
+            <input type="text" class="form-control-at" id="ai-tono" name="tono" value="{{ config.tono }}" required>
+        </div>
+        <div class="col-12">
+            <label class="form-label-at" for="ai-temas">Temas permitidos (separados por coma)</label>
+            <input type="text" class="form-control-at" id="ai-temas" name="temas_permitidos"
+                   value="{{ config.temas_permitidos | join(', ') }}" placeholder="vuelos, pagos, disrupciones, documentos">
+        </div>
+        <div class="col-12">
+            <label class="form-label-at">Respuestas predefinidas (palabra clave → respuesta fija)</label>
+            <div id="ai-predefinidas">
+                {% for clave, valor in config.respuestas_predefinidas.items() %}
+                <div class="row g-2 mb-2">
+                    <div class="col-4"><input type="text" class="form-control-at" name="respuestas_clave" value="{{ clave }}"></div>
+                    <div class="col-8"><input type="text" class="form-control-at" name="respuestas_valor" value="{{ valor }}"></div>
+                </div>
+                {% endfor %}
+                <div class="row g-2 mb-2">
+                    <div class="col-4"><input type="text" class="form-control-at" name="respuestas_clave" placeholder="ej. horario de atención"></div>
+                    <div class="col-8"><input type="text" class="form-control-at" name="respuestas_valor" placeholder="Respuesta fija..."></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-12">
+            <button type="submit" class="btn-at-primary"><i class="bi bi-check-lg"></i> Guardar</button>
+        </div>
+    </div>
+</form>
+{% endblock %}

@@ -1,0 +1,73 @@
+{% extends "layout_portal.html" %}
+{% block title %}Tu carrito — AeroTrack Travel{% endblock %}
+
+{% block content %}
+<h1 style="font-size:22px;font-weight:800;letter-spacing:-.02em;margin-bottom:18px">Tu carrito</h1>
+
+{% if not items %}
+<div class="at-empty" style="border:1px solid var(--at-border);border-radius:var(--at-r-lg);background:var(--at-surface)">
+    <i class="bi bi-cart at-empty-icon" aria-hidden="true"></i>
+    <strong>Tu carrito está vacío</strong>
+    <p>Busca vuelos o autos y agrégalos aquí antes de confirmar la compra.</p>
+    <a href="/vuelos/buscar" class="btn-at-ghost mt-2"><i class="bi bi-search"></i> Buscar vuelos</a>
+</div>
+{% else %}
+<div class="row g-4">
+    <div class="col-12 col-md-8">
+        {% for item in items %}
+        <div class="at-card mb-3 d-flex align-items-center justify-content-between flex-wrap gap-2">
+            <div>
+                <div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--at-muted);font-weight:700;margin-bottom:2px">
+                    {{ item.tipo_producto }}
+                </div>
+                {% if item.href %}
+                <a href="{{ item.href }}" style="font-size:14.5px;font-weight:700;color:var(--at-text);text-decoration:none">{{ item.titulo }}</a>
+                {% else %}
+                <span style="font-size:14.5px;font-weight:700">{{ item.titulo }}</span>
+                {% endif %}
+                {% if item.cantidad and item.cantidad > 1 %}
+                <div style="font-size:12px;color:var(--at-muted)">{{ item.cantidad }} × ${{ "%.2f"|format(item.precio_snapshot) }}</div>
+                {% endif %}
+                {% if item.cambio %}
+                <div class="badge-status warning mt-2" style="font-size:11px">
+                    Precio actualizado: ${{ "%.2f"|format(item.cambio.precio_vigente) }} (antes ${{ "%.2f"|format(item.cambio.precio_snapshot) }})
+                </div>
+                {% endif %}
+            </div>
+            <div class="d-flex align-items-center gap-3">
+                <div class="at-mono" style="font-size:17px;font-weight:800;color:var(--at-primary)">
+                    ${{ "%.2f"|format(item.precio_snapshot * (item.cantidad or 1)) }}
+                </div>
+                <form method="post" action="/carrito/eliminar/{{ item.id }}">
+                    <button type="submit" class="btn-at-ghost" style="padding:6px 10px" aria-label="Eliminar del carrito">
+                        <i class="bi bi-trash3" aria-hidden="true"></i>
+                    </button>
+                </form>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="col-12 col-md-4">
+        <div class="at-card" style="position:sticky;top:16px">
+            <strong style="font-size:15px;font-weight:700;display:block;margin-bottom:12px">Resumen</strong>
+            <div class="d-flex justify-content-between" style="font-size:13px;color:var(--at-muted);margin-bottom:8px">
+                <span>{{ items | length }} ítem(s)</span>
+            </div>
+            <div class="d-flex justify-content-between align-items-baseline pt-3" style="border-top:1px solid var(--at-border);margin-bottom:16px">
+                <span style="font-size:13px;font-weight:600">Total</span>
+                <span class="at-mono" style="font-size:22px;font-weight:800;color:var(--at-primary)">${{ "%.2f"|format(total) }}</span>
+            </div>
+            <form method="post" action="/carrito/confirmar">
+                <button type="submit" class="btn-at-accent w-100 justify-content-center" style="padding:10px;font-size:14px;font-weight:700">
+                    <i class="bi bi-check-circle" aria-hidden="true"></i>Confirmar compra
+                </button>
+            </form>
+            <p style="font-size:11px;color:var(--at-sub);margin-top:10px;margin-bottom:0">
+                El precio se revalida contra el catálogo vigente antes de cobrar.
+            </p>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

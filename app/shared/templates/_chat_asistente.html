@@ -1,0 +1,110 @@
+{# Chat flotante del Asistente IA (RF-IA-001..006) — visible en todo el
+   portal, autenticado o no (CU-O106). Patrón de UI confirmado en el
+   canvas de diseño v4: panel fijo bottom:0;right:24px;width:360px,
+   borde de 2px, burbujas alineadas por rol. #}
+<div id="at-chat-widget">
+    <button id="at-chat-toggle" type="button" aria-label="Abrir Asistente IA" aria-expanded="false">
+        <i class="bi bi-robot" aria-hidden="true"></i>
+    </button>
+    <div id="at-chat-panel" hidden>
+        <header id="at-chat-header">
+            <span><i class="bi bi-robot" aria-hidden="true"></i> Asistente AeroTrack</span>
+            <div class="d-flex align-items-center gap-2">
+                <button type="button" id="at-chat-nueva" title="Nueva conversación"><i class="bi bi-plus-lg"></i></button>
+                <button type="button" id="at-chat-close" aria-label="Cerrar"><i class="bi bi-x-lg"></i></button>
+            </div>
+        </header>
+        <div id="at-chat-mensajes" role="log" aria-live="polite">
+            <div class="at-chat-bubble asistente">
+                <div class="at-chat-bubble-texto">Hola — puedo ayudarte con consultas informativas o sobre tu propia reserva. ¿En qué te ayudo?</div>
+            </div>
+        </div>
+        <form id="at-chat-form">
+            <input type="text" id="at-chat-input" name="mensaje" placeholder="Escribe tu consulta..." autocomplete="off" required>
+            <button type="submit" aria-label="Enviar"><i class="bi bi-send"></i></button>
+        </form>
+    </div>
+</div>
+
+<script>
+(function () {
+    var toggle = document.getElementById('at-chat-toggle');
+    var panel = document.getElementById('at-chat-panel');
+    var closeBtn = document.getElementById('at-chat-close');
+    var nuevaBtn = document.getElementById('at-chat-nueva');
+    var form = document.getElementById('at-chat-form');
+    var input = document.getElementById('at-chat-input');
+    var lista = document.getElementById('at-chat-mensajes');
+
+    function abrir() {
+        panel.hidden = false;
+        toggle.setAttribute('aria-expanded', 'true');
+        input.focus();
+    }
+    function cerrar() {
+        panel.hidden = true;
+        toggle.setAttribute('aria-expanded', 'false');
+    }
+    toggle.addEventListener('click', function () { panel.hidden ? abrir() : cerrar(); });
+    closeBtn.addEventListener('click', cerrar);
+
+    function agregarBurbuja(rol, texto, mensajeId) {
+        var burbuja = document.createElement('div');
+        burbuja.className = 'at-chat-bubble ' + rol;
+        var contenido = document.createElement('div');
+        contenido.className = 'at-chat-bubble-texto';
+        contenido.textContent = texto;
+        burbuja.appendChild(contenido);
+        if (rol === 'asistente' && mensajeId) {
+            var acciones = document.createElement('div');
+            acciones.className = 'at-chat-bubble-acciones';
+            ['arriba', 'abajo'].forEach(function (cal) {
+                var btn = document.createElement('button');
+                btn.type = 'button';
+                btn.innerHTML = cal === 'arriba' ? '<i class="bi bi-hand-thumbs-up"></i>' : '<i class="bi bi-hand-thumbs-down"></i>';
+                btn.addEventListener('click', function () {
+                    var body = new URLSearchParams();
+                    body.set('calificacion', cal);
+                    fetch('/asistente/mensajes/' + mensajeId + '/calificar', { method: 'POST', body: body });
+                    acciones.querySelectorAll('button').forEach(function (b) { b.disabled = true; });
+                });
+                acciones.appendChild(btn);
+            });
+            burbuja.appendChild(acciones);
+        }
+        lista.appendChild(burbuja);
+        lista.scrollTop = lista.scrollHeight;
+    }
+
+    form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var texto = input.value.trim();
+        if (!texto) return;
+        agregarBurbuja('usuario', texto);
+        input.value = '';
+        input.disabled = true;
+
+        var body = new URLSearchParams();
+        body.set('mensaje', texto);
+        fetch('/asistente/conversar', { method: 'POST', body: body })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                agregarBurbuja('asistente', data.respuesta, data.mensaje_id);
+            })
+            .catch(function () {
+                agregarBurbuja('asistente', 'Hubo un problema de conexión — intenta de nuevo en un momento.');
+            })
+            .finally(function () {
+                input.disabled = false;
+                input.focus();
+            });
+    });
+
+    nuevaBtn.addEventListener('click', function () {
+        fetch('/asistente/nueva-conversacion', { method: 'POST' }).then(function () {
+            lista.innerHTML = '';
+            agregarBurbuja('asistente', 'Nueva conversación — ¿en qué te ayudo?');
+        });
+    });
+})();
+</script>

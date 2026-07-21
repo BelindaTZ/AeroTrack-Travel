@@ -97,6 +97,18 @@ async def modificar_reserva(usuario: dict, reserva_id: str, nueva_tarifa_id: str
             "total_pagar": nuevo_total,
         },
     )
+    # Mantener reserva_items en sincronía con el dual-write de crear_reserva_service.
+    item_vuelo = await repo.item_de_reserva_por_tipo(reserva_id, "vuelo")
+    if item_vuelo is not None:
+        await repo.actualizar_item(
+            item_vuelo["id"],
+            {
+                "vuelo_id": nueva_tarifa["vuelo_id"],
+                "tarifa_vuelo_id": nueva_tarifa_id,
+                "precio_final": nueva_tarifa["precio_final"],
+                "estado_item": "modificado",
+            },
+        )
 
     detalle = {"tarifa_anterior": reserva["tarifa_id"], "tarifa_nueva": nueva_tarifa_id}
     if diferencia != 0:

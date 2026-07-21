@@ -1,0 +1,64 @@
+{% extends "layout_portal.html" %}
+{% block title %}Comparar fechas de zarpe — AeroTrack Travel{% endblock %}
+
+{% block content %}
+{% if barco is none %}
+<div class="at-empty" style="border:1px solid var(--at-border);border-radius:var(--at-r-lg);background:var(--at-surface)">
+    <i class="bi bi-water at-empty-icon" aria-hidden="true"></i>
+    <strong>Barco no encontrado</strong>
+    <a href="/cruceros/buscar" class="btn-at-ghost mt-2"><i class="bi bi-arrow-left"></i> Volver a la búsqueda</a>
+</div>
+
+{% else %}
+<h1 style="font-size:22px;font-weight:800;letter-spacing:-.02em;margin-bottom:4px">{{ barco.nombre }}</h1>
+<p style="font-size:13px;color:var(--at-muted);margin-bottom:22px">
+    {{ naviera.nombre if naviera else "" }} · {{ salidas | length }} fecha(s) de zarpe disponibles
+</p>
+
+{% if salidas %}
+<div class="at-table-wrapper">
+    <div class="at-table-scroll">
+        <table class="at-table">
+            <thead>
+                <tr>
+                    <th>Zarpe</th>
+                    <th>Duración</th>
+                    <th>Precio desde</th>
+                    <th>Camarotes desde</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in salidas %}
+                <tr>
+                    <td>{{ s.crucero.fecha_zarpe[:10] }}</td>
+                    <td>{{ s.crucero.duracion_dias | int if s.crucero.duracion_dias else "—" }} días</td>
+                    <td class="at-mono">${{ "%.0f"|format(s.crucero.precio_base) }}</td>
+                    <td>
+                        {% if s.camarotes %}
+                        {% for cam in s.camarotes %}
+                        <span class="badge-status success" style="font-size:10px;margin-right:4px">{{ cam.tipo_camarote }} ${{ "%.0f"|format(cam.precio_por_persona) }}</span>
+                        {% endfor %}
+                        {% else %}
+                        <span style="color:var(--at-sub);font-size:12px">Sin camarotes</span>
+                        {% endif %}
+                    </td>
+                    <td class="actions-col">
+                        <a href="/cruceros/{{ s.crucero.id }}" class="btn-at-ghost" style="padding:6px 12px;font-size:12px">
+                            Ver detalle
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="at-empty" style="border:1px solid var(--at-border);border-radius:var(--at-r-lg);background:var(--at-surface)">
+    <i class="bi bi-calendar-x at-empty-icon" aria-hidden="true"></i>
+    <strong>Sin otras fechas de zarpe</strong>
+</div>
+{% endif %}
+{% endif %}
+{% endblock %}

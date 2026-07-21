@@ -11,7 +11,7 @@
 
 ## Resumen
 
-Procesar todo movimiento de dinero del sistema: pago de reserva, factura, comisión, conciliación, remesa simulada, reembolso, y el mecanismo de cobro/reembolso de diferencia de tarifa disparado desde Reservas — todo vía Stripe test mode, con idempotencia y trazabilidad completas. Cubre 10 RF y 2 RNF sobre 9 CU (CU-O32–O40, O47).
+Procesar todo movimiento de dinero del sistema: pago de reserva, factura, comisión, conciliación, remesa simulada, reembolso, y el mecanismo de cobro/reembolso de diferencia de tarifa disparado desde Reservas — todo vía Stripe test mode, con idempotencia y trazabilidad completas. Cubre 10 RF y 2 RNF sobre 9 CU (CU-O32–O40, O47) — **implementados y probados**. Ampliado en el catálogo v3.0 con CU-O85/O86 (RF-FAC-011/012, sección "Extensión pendiente" abajo) — no implementados todavía.
 
 ---
 
@@ -155,6 +155,11 @@ Las 7 colecciones de este módulo ya existen en PocketBase (mismo patrón que lo
 - **`pagos.monto` = `reservas.total_pagar` completo** (no se modela un "cargo de servicio" separado del precio de tarifa — ese desglose no existe como campo en el modelo de datos actual). La comisión de aerolínea (RF-FAC-003) se calcula sobre ese mismo monto. RN-FAC-004 (cargo inmediato vs. comisión diferida) se respeta en el *momento* de cada registro (pago inmediato, comisión `pendiente_cobro`), no en una partición contable del monto que el modelo no soporta hoy.
 - **Cierre real de los 3 puntos de integración que Reservas dejó documentados como `"pendiente_de_modulo_facturacion"`:** cuando cada fase de Facturación queda lista, se actualiza el código de Reservas (no solo Facturación) para que llame de verdad en vez de solo auditar la intención — y se actualiza `reservas/checklist.md`/`errores-conocidos.md` para cerrar esos ítems. Ver Fases 1, 4 y 5.
 - **Disrupciones sigue sin existir** — CU-O30 → CU-O37 (reembolso disparado por una disrupción) quedará como punto de integración documentado, igual que los demás módulos han hecho con Disrupciones.
+
+## Extensión pendiente — catálogo v3.0 (2026-07-18, no iniciada)
+
+- **Fase 7 — Conversión de moneda (RF-FAC-011, CU-O85):** ✅ **Hecho 2026-07-19** — `dags/dag_actualizar_tasas_cambio.py` (`@daily`) + `dags/tasas_cambio_tasks.py`, sobre `tasas_cambio` (ya en esquema). Verificado con corrida real contra ExchangeRate-API (RapidAPI). Solo el lado de escritura — el de lectura se agrega cuando alguna vertical muestre precio localizado.
+- **Fase 8 (futura) — Pago diferido de hotel (RF-FAC-012, CU-O86):** requiere el flujo `authorize`/`capture` de Stripe (nuevo para este módulo, hoy solo usa charge directo) y el nuevo estado `autorizado` en `pagos`. Depende de que Hoteles implemente CU-O60 (no existe todavía) para tener un disparador real; puede desarrollarse antes con un disparador simulado, mismo patrón que se usó para Reservas/Disrupciones en la primera ronda de este módulo.
 
 ## Complexity Tracking
 

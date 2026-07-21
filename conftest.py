@@ -97,6 +97,18 @@ async def admin_client(client, usuario_factory, rol_administrador):
 
 
 @pytest.fixture
+async def agente_client(client, usuario_factory, rol_agente):
+    """Cliente ya autenticado como Agente (rol sembrado, permisos según RBAC de cada módulo)."""
+    usuario = await usuario_factory(tipo_actor="agente", rol_id=rol_agente["id"])
+    resp = await client.post(
+        "/login", data={"email": usuario["email"], "password": usuario["_password"]}
+    )
+    assert resp.status_code == 303
+    client.agente_usuario = usuario
+    return client
+
+
+@pytest.fixture
 async def vuelo_factory(pb):
     """Crea vuelos_catalogo desechables para pruebas; los borra al finalizar."""
     creados: list[str] = []
@@ -190,13 +202,35 @@ async def pasajero_factory(pb, usuario_factory):
 
 
 @pytest.fixture
+async def pasajero_client(client, pasajero_factory):
+    """Cliente ya autenticado como un pasajero recién creado — para probar
+    routers HTML que dependen de `verificar_sesion` (p. ej. Carrito, Autos)
+    sin repetir el login en cada módulo."""
+    usuario, pasajero = await pasajero_factory()
+    resp = await client.post(
+        "/login", data={"email": usuario["email"], "password": usuario["_password"]}
+    )
+    assert resp.status_code == 303
+    client.pasajero = pasajero
+    client.pasajero_usuario = usuario
+    return client
+
+
+@pytest.fixture
 async def reserva_factory(pb):
     """Crea una `reservas` desechable directamente (sin pasar por el
-    servicio) — para pruebas que necesitan una reserva ya existente."""
+    servicio) — para pruebas que necesitan una reserva ya existente.
+
+    También crea el `reserva_items` correspondiente (tipo_producto=vuelo),
+    mismo dual-write que `crear_reserva_service.py` — para que las pruebas
+    que arman datos con esta fábrica reflejen el modelo v3 real, no solo el
+    campo legado `reservas.vuelo_id`."""
     creadas: list[str] = []
+    items_creados: list[str] = []
 
     async def _crear(pasajero_id: str, vuelo_id: str, tarifa_id: str, **extra) -> dict:
         ahora = datetime.datetime.now(datetime.timezone.utc)
+        precio_final = extra.get("total_pagar", 199.0)
         data = {
             "codigo_reserva": f"PNR{uuid.uuid4().hex[:8].upper()}",
             "pasajero_titular_id": pasajero_id,
@@ -213,9 +247,27 @@ async def reserva_factory(pb):
         data.update(extra)
         reserva = await pb.create_record("reservas", data)
         creadas.append(reserva["id"])
+        item = await pb.create_record(
+            "reserva_items",
+            {
+                "reserva_id": reserva["id"],
+                "tipo_producto": "vuelo",
+                "vuelo_id": vuelo_id,
+                "tarifa_vuelo_id": tarifa_id,
+                "precio_final": precio_final,
+                "estado_item": "pendiente",
+            },
+        )
+        items_creados.append(item["id"])
         return reserva
 
     yield _crear
+
+    for item_id in items_creados:
+        try:
+            await pb.delete_record("reserva_items", item_id)
+        except Exception:
+            pass
 
     for reserva_id in creadas:
         try:
