@@ -66,6 +66,18 @@ CLAVES = [
         "categoria": "hoteles",
         "descripcion": "RF-HOT-004 — tope de hoteles a resolver en detalle (hasta 3 llamadas reales c/u: prices+booking_details+reviews) por corrida y por ciudad; con el límite duro de 100 req/mes, mantenerlo bajo estira el presupuesto a más ciudades distintas",
     },
+    {
+        "clave": "disponibilidad_hoteles.dias_adelante",
+        "valor": "60",
+        "categoria": "disponibilidad_hoteles",
+        "descripcion": "Cuántas noches hacia adelante se genera disponibilidad sintética por tipo de habitación (hoteles_disponibilidad) — antes check-in/check-out eran cosméticos, ver errores-conocidos.md",
+    },
+    {
+        "clave": "disponibilidad_hoteles.cupos_default",
+        "valor": "10",
+        "categoria": "disponibilidad_hoteles",
+        "descripcion": "Cupo por noche cuando HotelLens no da un rooms_left real para esa tarifa (fallback, no inventario real de proveedor)",
+    },
 ]
 
 
@@ -85,9 +97,19 @@ def main() -> None:
 
     headers = {"Authorization": admin_token()}
 
+    rol_admin = httpx.get(
+        f"{PB_URL}/api/collections/roles/records",
+        params={"filter": 'nombre="Administrador"', "perPage": 1},
+        headers=headers,
+        timeout=10,
+    )
+    rol_admin.raise_for_status()
+    roles_items = rol_admin.json()["items"]
+    if not roles_items:
+        raise RuntimeError("No existe el rol 'Administrador' — correr scripts/seed_seguridad.py primero")
     resp = httpx.get(
         f"{PB_URL}/api/collections/usuarios/records",
-        params={"filter": 'tipo_actor="administrador"', "perPage": 1},
+        params={"filter": f'rol_id="{roles_items[0]["id"]}"', "perPage": 1},
         headers=headers,
         timeout=10,
     )

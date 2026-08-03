@@ -1,0 +1,100 @@
+{% extends "layout_portal.html" %}
+{% block title %}Paquetes — arma tu viaje y ahorra — AeroTrack Travel{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-start justify-content-between flex-wrap gap-3 mb-4">
+    <div>
+        <div class="d-inline-flex align-items-center gap-2 mb-2" style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--at-muted);font-weight:700">
+            <i class="bi bi-box-seam" aria-hidden="true"></i>Paquetes
+        </div>
+        <h1 style="font-size:24px;font-weight:800;letter-spacing:-.03em;margin-bottom:6px">
+            Vuelo + hotel, armado por ti — y con descuento
+        </h1>
+        <p style="font-size:14px;color:var(--at-muted);max-width:58ch;margin:0">
+            Combina tu vuelo con hotel, auto y actividades en una sola reserva.
+            Mientras más sumes, más baja el precio final — el ahorro se calcula
+            sobre el precio real de cada componente, nunca se esconde ni se reparte.
+        </p>
+    </div>
+</div>
+
+<!-- Combinaciones de descuento vigentes -->
+{% if combinaciones %}
+<div class="row g-3 mb-5">
+    {% for c in combinaciones %}
+    <div class="col-12 col-sm-6 col-lg-3">
+        <div class="at-card h-100 d-flex flex-column align-items-center text-center"
+             style="{% if loop.last %}border-color:var(--navy-300);box-shadow:var(--at-shadow-md){% endif %}">
+            <div class="d-flex align-items-center gap-1 mb-2" style="flex-wrap:wrap;justify-content:center">
+                {% for tipo in c.combinacion.split('+') %}
+                {% set iconos = {'vuelo': 'bi-airplane', 'hotel': 'bi-building', 'auto': 'bi-car-front', 'actividad': 'bi-compass'} %}
+                <i class="bi {{ iconos.get(tipo, 'bi-check') }}" style="font-size:15px;color:var(--navy-600)" aria-hidden="true"></i>
+                {% if not loop.last %}<span style="color:var(--at-sub);font-size:11px">+</span>{% endif %}
+                {% endfor %}
+            </div>
+            <div style="font-size:12.5px;font-weight:600;text-transform:capitalize;color:var(--at-text);margin-bottom:10px">
+                {{ c.combinacion.replace('+', ' + ') }}
+            </div>
+            <div class="at-mono" style="font-size:28px;font-weight:800;color:var(--at-primary);letter-spacing:-.02em">
+                {{ c.porcentaje_descuento | int }}%
+            </div>
+            <div style="font-size:11px;color:var(--at-sub)">de ahorro</div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="at-empty mb-5">
+    <i class="bi bi-box-seam at-empty-icon" aria-hidden="true"></i>
+    <strong>Todavía no hay combinaciones de descuento configuradas</strong>
+    <p>Vuelve a intentarlo más tarde.</p>
+</div>
+{% endif %}
+
+<!-- Cómo funciona -->
+<div class="at-card mb-4" style="border-left:4px solid var(--navy-600)">
+    <h2 style="font-size:15px;font-weight:700;margin-bottom:14px;letter-spacing:-.01em">Cómo armar tu paquete</h2>
+    <div class="row g-3">
+        <div class="col-12 col-md-4">
+            <div class="d-flex align-items-start gap-2">
+                <div class="type-chip" style="flex-shrink:0">1</div>
+                <div>
+                    <strong style="font-size:13.5px">Elige tu vuelo</strong>
+                    <p style="font-size:12.5px;color:var(--at-muted);margin:2px 0 0">
+                        Busca y selecciona una tarifa — cada tarifa tiene un botón para
+                        arrancar tu paquete desde ahí.
+                    </p>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-md-4">
+            <div class="d-flex align-items-start gap-2">
+                <div class="type-chip" style="flex-shrink:0">2</div>
+                <div>
+                    <strong style="font-size:13.5px">Suma hotel, auto o actividades</strong>
+                    <p style="font-size:12.5px;color:var(--at-muted);margin:2px 0 0">
+                        Hotel es obligatorio para confirmar; auto y actividades son
+                        opcionales y suman más descuento.
+                    </p>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-md-4">
+            <div class="d-flex align-items-start gap-2">
+                <div class="type-chip" style="flex-shrink:0">3</div>
+                <div>
+                    <strong style="font-size:13.5px">Revisa el ahorro y confirma</strong>
+                    <p style="font-size:12.5px;color:var(--at-muted);margin:2px 0 0">
+                        Ves el desglose real de cada componente antes de pagar — nunca
+                        un precio final sin explicación.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<a href="/vuelos/buscar" class="btn-at-accent" style="padding:12px 22px;font-size:14.5px;font-weight:700">
+    <i class="bi bi-search" aria-hidden="true"></i>Buscar vuelos para empezar
+</a>
+{% endblock %}

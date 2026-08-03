@@ -1,13 +1,25 @@
-"""Consultas de Carrito sobre `carritos`/`carrito_items` en PocketBase,
-más lectura de precio vigente y reserva/liberación de cupo en las 5
-colecciones dueñas de catálogo (RN-CAR-001 precio; cupo generalizado
-2026-07-19 vía `app.shared.cupo_service`, mismo mecanismo que ya usaba
-Vuelos en solitario) — nunca escritura directa de precio, cupo siempre a
-través del servicio compartido para no perder atomicidad."""
+"""`carritos`/`carrito_items` son OPERACIONAL — migrados a MinIO como par
+(carrito_items depende de carritos, confirmado en el barrido de relation
+fields de la sesión). Precio vigente y cupo siguen contra las 5
+colecciones STAGING dueñas de catálogo en PocketBase (RN-CAR-001 precio;
+cupo vía `app.shared.cupo_service`) — el split de `cupos_disponibles` a
+tier operacional en MinIO queda fuera de alcance de esta fase (ver nota en
+el plan de migración sobre `asientos_vuelo`, mismo criterio: no se toca
+hasta su propia fase dedicada)."""
 
+import datetime
+
+from app.shared import minio_operational_client as moc
+from app.shared import cupo_rango_service
 from app.shared.catalogo_producto import CATALOGO_POR_TIPO
-from app.shared.cupo_service import liberar_cupo, verificar_y_reservar_cupo
 from app.shared.pocketbase_client import PocketBaseClient, PocketBaseError, get_pocketbase_client
+
+ENTIDAD_CARRITOS = "carritos"
+ENTIDAD_ITEMS = "carrito_items"
+
+
+def _timestamp() -> str:
+    return datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%d %H:%M:%S.000Z")
 
 
 class CarritoRepository:
@@ -15,41 +27,95 @@ class CarritoRepository:
         self._client = client or get_pocketbase_client()
 
     # ── carritos ─────────────────────────────────────────────────────
-    async def carrito_activo_de_pasajero(self, pasajero_id: str) -> dict | None:
-        return await self._client.get_first(
-            "carritos", f'pasajero_id="{pasajero_id}" && estado="activo"'
+    async def carrito_de_trabajo(self, pasajero_id: str) -> dict | None:
+        """Carrito vigente del pasajero para ver/agregar/pagar — incluye uno
+        `abandonado` (RN-CAR-T01: solo `convertido` queda fuera, ese ciclo
+        ya cerró). Volver a interactuar con un carrito `abandonado` es
+        exactamente la señal de recuperación que persigue CU-T27, así que
+        se reactiva a `activo` aquí mismo, en el único punto de entrada
+        real — sin esto, un carrito abandonado nunca podría completar
+        checkout ni contar como recuperado."""
+        carritos = await moc.listar_todos(ENTIDAD_CARRITOS)
+        carrito = next(
+            (
+                c for c in carritos
+                if c.get("pasajero_id") == pasajero_id and c.get("estado") in ("activo", "abandonado")
+            ),
+            None,
+        )
+        if carrito is None:
+            return None
+        if carrito["estado"] == "abandonado":
+            carrito = await self.actualizar_carrito(carrito["id"], {"estado": "activo"})
+        return carrito
+
+    async def carritos_activos_inactivos_desde(self, limite_iso: str) -> list[dict]:
+        carritos = await moc.listar_todos(ENTIDAD_CARRITOS)
+        return [
+            c for c in carritos
+            if c.get("estado") == "activo" and (c.get("fecha_ultima_actividad") or "") <= limite_iso
+        ]
+
+    async def carritos_abandonados_desde(self, fecha_iso: str) -> list[dict]:
+        carritos = await moc.listar_todos(ENTIDAD_CARRITOS)
+        return [
+            c for c in carritos
+            if c.get("fue_abandonado") and (c.get("fecha_marcado_abandonado") or "") >= fecha_iso
+        ]
+
+    async def config(self, clave: str) -> dict | None:
+        safe = clave.replace('"', '\\"')
+        return await self._client.get_first("configuracion_sistema", f'clave="{safe}"')
+
+    async def actualizar_config(self, clave: str, valor: str, usuario_id: str) -> dict | None:
+        safe = clave.replace('"', '\\"')
+        registro = await self._client.get_first("configuracion_sistema", f'clave="{safe}"')
+        if registro is None:
+            return None
+        return await self._client.update_record(
+            "configuracion_sistema", registro["id"], {"valor": valor, "modificado_por": usuario_id}
         )
 
     async def crear_carrito(self, data: dict) -> dict:
-        return await self._client.create_record("carritos", data)
+        id_ = moc.generar_id()
+        registro = {"id": id_, "created": _timestamp(), "updated": _timestamp(), **data}
+        return await moc.crear(ENTIDAD_CARRITOS, id_, registro)
 
     async def actualizar_carrito(self, carrito_id: str, data: dict) -> dict:
-        return await self._client.update_record("carritos", carrito_id, data)
+        def _mutar(actual: dict) -> dict:
+            actual.update(data)
+            actual["updated"] = _timestamp()
+            return actual
+
+        return await moc.actualizar_con_reintento(ENTIDAD_CARRITOS, carrito_id, _mutar)
 
     async def obtener_carrito(self, carrito_id: str) -> dict | None:
-        try:
-            return await self._client.get_record("carritos", carrito_id)
-        except PocketBaseError:
-            return None
+        return await moc.obtener(ENTIDAD_CARRITOS, carrito_id)
 
     # ── carrito_items ────────────────────────────────────────────────
     async def crear_item(self, data: dict) -> dict:
-        return await self._client.create_record("carrito_items", data)
+        id_ = moc.generar_id()
+        registro = {"id": id_, "created": _timestamp(), "updated": _timestamp(), **data}
+        return await moc.crear(ENTIDAD_ITEMS, id_, registro)
 
     async def eliminar_item(self, item_id: str) -> None:
-        await self._client.delete_record("carrito_items", item_id)
+        await moc.eliminar(ENTIDAD_ITEMS, item_id)
 
     async def obtener_item(self, item_id: str) -> dict | None:
-        try:
-            return await self._client.get_record("carrito_items", item_id)
-        except PocketBaseError:
-            return None
+        return await moc.obtener(ENTIDAD_ITEMS, item_id)
 
     async def items_de_carrito(self, carrito_id: str) -> list[dict]:
-        resultado = await self._client.list_records(
-            "carrito_items", {"filter": f'carrito_id="{carrito_id}"', "perPage": 50}
-        )
-        return resultado["items"]
+        items = await moc.listar_todos(ENTIDAD_ITEMS)
+        return [i for i in items if i.get("carrito_id") == carrito_id]
+
+    async def listar_todos_items(self) -> list[dict]:
+        """ETL comercial (Fase B, sesión 2026-08-02) — todos los
+        `carrito_items` sin acotar a un carrito, para el funnel de
+        conversión búsqueda→carrito→checkout→reserva."""
+        return await moc.listar_todos(ENTIDAD_ITEMS)
+
+    async def listar_todos_carritos(self) -> list[dict]:
+        return await moc.listar_todos(ENTIDAD_CARRITOS)
 
     # ── revalidación de precio vigente (RN-CAR-001) ─────────────────
     async def precio_vigente(self, tipo_producto: str, item: dict) -> float | None:
@@ -68,30 +134,14 @@ class CarritoRepository:
 
     # ── reserva/liberación de cupo (generaliza RF-VUE-005 al resto de
     # verticales) — nunca se decrementa/incrementa el dato directo aquí,
-    # siempre vía app.shared.cupo_service para conservar atomicidad ────
+    # siempre vía app.shared.cupo_service para conservar atomicidad.
+    # Hotel/Auto delegan a cupo_rango_service (una fila por noche/día del
+    # rango, ver ese módulo) — dispatchers finos, sin lógica propia. ─────
     async def reservar_cupo(self, tipo_producto: str, item: dict, cantidad: int = 1) -> bool:
         """True si hay cupo suficiente (o el tipo de producto no modela
         cupo) — en ese caso ya quedó decrementado. False si no alcanza,
         sin tocar nada."""
-        info = CATALOGO_POR_TIPO.get(tipo_producto)
-        if info is None:
-            return True
-        coleccion, _, campo_id, campo_cupo = info
-        if campo_cupo is None:
-            return True
-        registro_id = item.get(campo_id)
-        if not registro_id:
-            return True
-        return await verificar_y_reservar_cupo(coleccion, registro_id, campo_cupo, cantidad)
+        return await cupo_rango_service.reservar_cupo_item(tipo_producto, item, cantidad)
 
     async def liberar_cupo_item(self, tipo_producto: str, item: dict, cantidad: int = 1) -> None:
-        info = CATALOGO_POR_TIPO.get(tipo_producto)
-        if info is None:
-            return
-        coleccion, _, campo_id, campo_cupo = info
-        if campo_cupo is None:
-            return
-        registro_id = item.get(campo_id)
-        if not registro_id:
-            return
-        await liberar_cupo(coleccion, registro_id, campo_cupo, cantidad)
+        await cupo_rango_service.liberar_cupo_item(tipo_producto, item, cantidad)

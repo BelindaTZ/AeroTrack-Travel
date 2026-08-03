@@ -1,0 +1,125 @@
+{% extends "layout_app.html" %}
+{% block title %}Calidad de Soporte — AeroTrack Travel{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <h1><span class="heading-icon"><i class="bi bi-headset"></i></span>Calidad de Soporte y Atención</h1>
+    <p>Satisfacción, escalación y tiempos de resolución del Centro de Ayuda.</p>
+</div>
+
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <div id="selector-periodo" class="filter-bar mb-0"></div>
+    <button type="button" class="btn-at-ghost" onclick="window.print()"><i class="bi bi-file-earmark-pdf"></i> Exportar PDF</button>
+</div>
+
+<div id="db-soporte-cargando" style="text-align:center;padding:50px 0;color:var(--at-muted)">
+    <div class="spinner-border" style="color:var(--at-primary)" role="status"></div>
+</div>
+
+<div id="db-soporte-contenido" style="display:none">
+    <div class="row g-3 mb-3">
+        <div class="col-12 col-md-4">
+            <div class="at-card" style="height:100%">
+                <div style="font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--at-sub)">Calificación promedio</div>
+                <div class="at-mono" id="kpi-calificacion" style="font-size:26px;font-weight:700;color:var(--at-primary)">—</div>
+                <div id="kpi-estrellas" style="color:#f5a623;font-size:14px"></div>
+            </div>
+        </div>
+        <div class="col-12 col-md-4">
+            <div class="at-card" style="height:100%">
+                <div style="font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--at-sub)">Tasa de escalación</div>
+                <div class="at-mono" id="kpi-escalacion" style="font-size:30px;font-weight:700;color:var(--at-text)">—</div>
+            </div>
+        </div>
+        <div class="col-12 col-md-4">
+            <div class="at-card" style="height:100%">
+                <div style="font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--at-sub)">Tiempo promedio de resolución</div>
+                <div class="at-mono" id="kpi-resolucion" style="font-size:30px;font-weight:700;color:var(--at-text)">—</div>
+                <div style="font-size:11.5px;color:var(--at-muted)">horas</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-12 col-lg-6">
+            <div class="at-card">
+                <div style="font-size:12.5px;font-weight:700;margin-bottom:6px">Calificación por categoría</div>
+                <div id="chart-calificacion-categoria" style="height:220px"></div>
+            </div>
+        </div>
+        <div class="col-12 col-lg-6">
+            <div class="at-card">
+                <div style="font-size:12.5px;font-weight:700;margin-bottom:6px">Satisfacción en el tiempo <span style="font-weight:400;color:var(--at-muted);font-size:11.5px">(por mes — no hay fuente semanal)</span></div>
+                <div id="chart-satisfaccion-tiempo" style="height:220px"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-12 col-lg-5">
+            <div class="at-card" style="height:100%">
+                <div style="font-size:12.5px;font-weight:700;margin-bottom:6px">Consultas por categoría</div>
+                <div id="chart-consultas-categoria" style="height:220px"></div>
+            </div>
+        </div>
+        <div class="col-12 col-lg-7">
+            <div class="at-table-wrapper" style="height:100%">
+                <div class="at-table-header">
+                    <span class="at-table-title">Artículos más consultados</span>
+                    <span style="font-size:11px;color:var(--at-sub)" title="No existe contador de vistas en el esquema — se usa la cantidad de calificaciones como proxy de interacción real.">
+                        <i class="bi bi-info-circle"></i> "Consultado" = calificado
+                    </span>
+                </div>
+                <table class="table" style="font-size:12.5px;margin-bottom:0">
+                    <thead><tr><th>Título</th><th class="text-end">Calificaciones</th><th class="text-end">% útil</th></tr></thead>
+                    <tbody id="tabla-articulos"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+var chartsSoporte = [];
+function cargarDatosSoporte(desde, hasta) {
+    document.getElementById('db-soporte-cargando').style.display = '';
+    document.getElementById('db-soporte-contenido').style.display = 'none';
+    fetch('/backoffice/dashboards/soporte/datos?desde=' + desde + '&hasta=' + hasta).then(function (r) { return r.json(); }).then(renderSoporte);
+}
+function renderSoporte(d) {
+    document.getElementById('db-soporte-cargando').style.display = 'none';
+    document.getElementById('db-soporte-contenido').style.display = '';
+    chartsSoporte.forEach(function (c) { c && c.dispose(); });
+    chartsSoporte = [];
+
+    document.getElementById('kpi-calificacion').textContent = d.calificacion_promedio + '/5';
+    document.getElementById('kpi-estrellas').innerHTML = '<i class="bi bi-star-fill"></i>'.repeat(Math.round(d.calificacion_promedio)) + '<i class="bi bi-star"></i>'.repeat(5 - Math.round(d.calificacion_promedio));
+    document.getElementById('kpi-escalacion').textContent = d.tasa_escalacion + '%';
+    document.getElementById('kpi-resolucion').textContent = d.tiempo_promedio_resolucion;
+
+    chartsSoporte.push(initChart('chart-calificacion-categoria', {
+        xAxis: { type: 'category', data: d.por_categoria.map(function (c) { return c.categoria; }) },
+        yAxis: { type: 'value', max: 5 },
+        series: [{ type: 'bar', data: d.por_categoria.map(function (c) { return c.calificacion; }) }],
+    }));
+
+    chartsSoporte.push(initChart('chart-satisfaccion-tiempo', {
+        xAxis: { type: 'category', data: d.tendencia_mensual.map(function (t) { return t.periodo.slice(0, 7); }) },
+        yAxis: { type: 'value', max: 5 },
+        series: [{ type: 'line', smooth: true, data: d.tendencia_mensual.map(function (t) { return t.calificacion; }) }],
+    }));
+
+    chartsSoporte.push(initChart('chart-consultas-categoria', {
+        legend: { bottom: 0 },
+        series: [{ type: 'pie', radius: ['45%', '70%'], data: d.por_categoria.map(function (c) { return { name: c.categoria, value: c.total_consultas }; }), label: { formatter: '{b}\n{d}%' } }],
+    }));
+
+    document.getElementById('tabla-articulos').innerHTML = d.articulos_top.map(function (a) {
+        return '<tr><td>' + a.titulo + '</td><td class="text-end">' + a.calificaciones_total + '</td>' +
+               '<td class="text-end">' + (a.porcentaje_util !== null ? a.porcentaje_util + '%' : '—') + '</td></tr>';
+    }).join('') || '<tr><td colspan="3" class="text-center" style="color:var(--at-muted)">Sin artículos calificados</td></tr>';
+}
+initSelectorPeriodo('selector-periodo', function (periodo) { cargarDatosSoporte(periodo.desde, periodo.hasta); });
+</script>
+{% endblock %}

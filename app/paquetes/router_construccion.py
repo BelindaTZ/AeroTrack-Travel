@@ -8,6 +8,7 @@ de selección real todavía), no una construcción guiada paso a paso."""
 from fastapi import APIRouter, Depends, Form, HTTPException
 
 from app.paquetes.services.paquete_service import (
+    CupoNoDisponible,
     ReservaNoEncontrada,
     SinPermiso,
     agregar_componente,
@@ -37,7 +38,10 @@ async def iniciar(
     usuario: dict = Depends(verificar_sesion),
 ) -> dict:
     pasajero_id = await _pasajero_id(usuario)
-    reserva = await iniciar_paquete(pasajero_id, vuelo_id, tarifa_vuelo_id, precio_final)
+    try:
+        reserva = await iniciar_paquete(pasajero_id, vuelo_id, tarifa_vuelo_id, precio_final)
+    except CupoNoDisponible:
+        raise HTTPException(status_code=409, detail="Esa tarifa ya no tiene cupo disponible")
     await AuditService().insertar("iniciar_paquete", "reservas", usuario_id=usuario["id"], registro_id=reserva["id"])
     return reserva
 
@@ -70,6 +74,8 @@ async def agregar(
         raise HTTPException(status_code=404, detail="Paquete no encontrado")
     except SinPermiso:
         raise HTTPException(status_code=403, detail="Sin permiso sobre ese paquete")
+    except CupoNoDisponible:
+        raise HTTPException(status_code=409, detail="Ese producto ya no tiene cupo disponible")
 
     await AuditService().insertar("agregar_componente", "reserva_items", usuario_id=usuario["id"], registro_id=item["id"])
     return item
@@ -103,6 +109,8 @@ async def cambiar(
         raise HTTPException(status_code=404, detail="Paquete no encontrado")
     except SinPermiso:
         raise HTTPException(status_code=403, detail="Sin permiso sobre ese paquete")
+    except CupoNoDisponible:
+        raise HTTPException(status_code=409, detail="Ese producto ya no tiene cupo disponible")
 
     await AuditService().insertar("cambiar_componente", "reserva_items", usuario_id=usuario["id"], registro_id=item["id"])
     return item

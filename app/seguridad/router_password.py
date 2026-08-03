@@ -6,6 +6,7 @@ from fastapi.responses import RedirectResponse
 from app.seguridad.repositories.seguridad_repo import SeguridadRepository
 from app.seguridad.services.audit_service import AuditService
 from app.seguridad.services.password_service import PasswordDebil, PasswordService, TokenInvalido
+from app.seguridad.services.plantillas_service import plantilla
 from app.shared.email_sender import enviar_correo
 from app.shared.templating import templates
 
@@ -32,11 +33,12 @@ async def recuperar_password_submit(request: Request, email: str = Form(...)):
     if usuario is not None and usuario.get("activo", False):
         token = await password_service.generar_token_recuperacion(usuario["id"])
         enlace = str(request.url_for("restablecer_password_form", token=token))
-        await enviar_correo(
-            email,
-            "Recuperación de contraseña — AeroTrack Travel",
-            f"Usa este enlace para restablecer tu contraseña (válido por tiempo limitado): {enlace}",
+        asunto = await plantilla("password_recovery.plantilla_asunto", "Recuperación de contraseña — AeroTrack Travel")
+        cuerpo = await plantilla(
+            "password_recovery.plantilla_cuerpo",
+            "Usa este enlace para restablecer tu contraseña (válido por tiempo limitado): {enlace}",
         )
+        await enviar_correo(email, asunto, cuerpo.format(enlace=enlace))
         await AuditService().insertar(
             "solicitud_recuperacion_password", "usuarios", usuario_id=usuario["id"], registro_id=usuario["id"]
         )
@@ -79,7 +81,7 @@ async def restablecer_password_submit(
         )
 
     try:
-        password_service.validar_fortaleza(password)
+        await password_service.validar_fortaleza(password)
     except PasswordDebil as exc:
         return templates.TemplateResponse(
             request, "restablecer_password.html", {"token": token, "error": exc.motivo}, status_code=400

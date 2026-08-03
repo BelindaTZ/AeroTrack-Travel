@@ -8,6 +8,8 @@ import datetime
 
 from app.carrito.services.carrito_service import agregar_item, confirmar_checkout
 from app.cuenta.services.cuenta_service import mis_viajes_agrupados
+from app.reservas.repositories.reservas_repo import ReservasRepository
+from app.shared import minio_operational_client as moc
 
 
 async def _crear_actividad_con_horario(pb, fecha: str) -> tuple[dict, dict]:
@@ -29,11 +31,11 @@ async def _crear_actividad_con_horario(pb, fecha: str) -> tuple[dict, dict]:
     return actividad, horario
 
 
-async def _limpiar_reserva(pb, reserva_id: str) -> None:
-    items = await pb.list_records("reserva_items", {"filter": f'reserva_id="{reserva_id}"'})
-    for ri in items["items"]:
-        await pb.delete_record("reserva_items", ri["id"])
-    await pb.delete_record("reservas", reserva_id)
+async def _limpiar_reserva(reserva_id: str) -> None:
+    items = await ReservasRepository().items_de_reserva(reserva_id)
+    for ri in items:
+        await moc.eliminar("reserva_items", ri["id"])
+    await moc.eliminar("reservas", reserva_id)
 
 
 async def test_reserva_de_actividad_futura_cae_en_proximas(client, pb, pasajero_factory):
@@ -51,7 +53,7 @@ async def test_reserva_de_actividad_futura_cae_en_proximas(client, pb, pasajero_
     assert reserva["id"] in [g.id for g in grupos["proximas"]]
     assert reserva["id"] not in [g.id for g in grupos["pasadas"]] + [g.id for g in grupos["activas"]]
 
-    await _limpiar_reserva(pb, reserva["id"])
+    await _limpiar_reserva(reserva["id"])
     await pb.delete_record("actividades_horarios", horario["id"])
     await pb.delete_record("actividades_catalogo", actividad["id"])
 
@@ -70,7 +72,7 @@ async def test_reserva_de_actividad_pasada_cae_en_pasadas(client, pb, pasajero_f
     grupos = await mis_viajes_agrupados(pasajero["id"])
     assert reserva["id"] in [g.id for g in grupos["pasadas"]]
 
-    await _limpiar_reserva(pb, reserva["id"])
+    await _limpiar_reserva(reserva["id"])
     await pb.delete_record("actividades_horarios", horario["id"])
     await pb.delete_record("actividades_catalogo", actividad["id"])
 
@@ -89,7 +91,7 @@ async def test_reserva_de_actividad_hoy_cae_en_activas(client, pb, pasajero_fact
     grupos = await mis_viajes_agrupados(pasajero["id"])
     assert reserva["id"] in [g.id for g in grupos["activas"]]
 
-    await _limpiar_reserva(pb, reserva["id"])
+    await _limpiar_reserva(reserva["id"])
     await pb.delete_record("actividades_horarios", horario["id"])
     await pb.delete_record("actividades_catalogo", actividad["id"])
 
@@ -114,7 +116,7 @@ async def test_reserva_de_auto_sin_fecha_cae_en_sin_fecha(client, pb, pasajero_f
     grupos = await mis_viajes_agrupados(pasajero["id"])
     assert reserva["id"] in [g.id for g in grupos["sin_fecha"]]
 
-    await _limpiar_reserva(pb, reserva["id"])
+    await _limpiar_reserva(reserva["id"])
     await pb.delete_record("autos_catalogo", auto["id"])
 
 
@@ -140,6 +142,6 @@ async def test_endpoint_mis_viajes_lista_seccion_proxima(client, pb, pasajero_fa
     assert reserva["codigo_reserva"] in resp.text
     assert "Próximas" in resp.text
 
-    await _limpiar_reserva(pb, reserva["id"])
+    await _limpiar_reserva(reserva["id"])
     await pb.delete_record("actividades_horarios", horario["id"])
     await pb.delete_record("actividades_catalogo", actividad["id"])

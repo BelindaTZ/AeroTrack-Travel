@@ -19,6 +19,7 @@ from app.carrito.services.carrito_service import (
     CarritoVacio,
     CupoInsuficiente,
     ItemNoEncontrado,
+    RangoFechasInvalido,
     SinPermiso,
     TipoProductoInvalido,
     agregar_item,
@@ -77,6 +78,10 @@ async def agregar(
     actividad_horario_id: str | None = Form(None),
     crucero_id: str | None = Form(None),
     crucero_camarote_id: str | None = Form(None),
+    modalidad_pago: str | None = Form(None),
+    fecha_inicio: str | None = Form(None),
+    fecha_fin: str | None = Form(None),
+    unidades: int = Form(1),
     usuario: dict = Depends(verificar_sesion),
 ):
     pasajero_id = await _pasajero_id(usuario)
@@ -93,9 +98,14 @@ async def agregar(
     ids = {k: v for k, v in ids.items() if v}
 
     try:
-        item = await agregar_item(pasajero_id, tipo_producto, ids, precio_snapshot, cantidad)
+        item = await agregar_item(
+            pasajero_id, tipo_producto, ids, precio_snapshot, cantidad, modalidad_pago,
+            fecha_inicio, fecha_fin, unidades,
+        )
     except TipoProductoInvalido:
         return RedirectResponse("/carrito/ver?mensaje=Producto inválido", status_code=303)
+    except RangoFechasInvalido:
+        return RedirectResponse("/carrito/ver?mensaje=Rango de fechas inválido", status_code=303)
 
     await AuditService().insertar("agregar_item", "carrito_items", usuario_id=usuario["id"], registro_id=item["id"])
     return RedirectResponse("/carrito/ver?mensaje=Agregado al carrito", status_code=303)

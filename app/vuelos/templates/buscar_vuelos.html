@@ -5,8 +5,9 @@
 {# ══════════════════════════════════════════
    HERO SEARCH — full-width (antes de resultados)
 ══════════════════════════════════════════ #}
+{% import "_selector_lugar.html" as sel %}
 {% block hero %}
-<section class="at-hero-search {% if resultados is not none %}compact{% endif %}" aria-label="Buscador de vuelos">
+<section class="at-hero-search hero-vuelos {% if resultados is not none %}compact{% endif %}" aria-label="Buscador de vuelos">
     {% if not resultados %}
     <div class="hero-route-deco" aria-hidden="true">
         <svg viewBox="0 0 1200 320" preserveAspectRatio="xMidYMid slice">
@@ -33,31 +34,30 @@
         <p class="hero-sub">Compara tarifas y reserva en minutos. Precio final garantizado.</p>
         {% endif %}
 
-        <datalist id="lista-aeropuertos">
-            {% for a in aeropuertos %}<option value="{{ a.codigo }}">{{ a.legible }}</option>{% endfor %}
-        </datalist>
-
         <form method="get" action="/vuelos/buscar" id="form-busqueda"
               class="{% if resultados %}search-card-compact{% else %}search-card{% endif %}">
             <div class="row g-3 align-items-end">
                 <div class="col-6 col-md">
-                    <label class="form-label-at" for="origen">Origen</label>
-                    <input type="text" class="form-control-at text-uppercase"
-                           id="origen" name="origen" list="lista-aeropuertos"
-                           maxlength="3" placeholder="JFK"
-                           value="{{ filtros.origen }}" required autocomplete="off">
+                    {{ sel.campo('origen', 'origen', filtros.origen, aeropuertos, 'Origen', 'Ciudad o aeropuerto', 'airplane') }}
                 </div>
                 <div class="col-6 col-md">
-                    <label class="form-label-at" for="destino">Destino</label>
-                    <input type="text" class="form-control-at text-uppercase"
-                           id="destino" name="destino" list="lista-aeropuertos"
-                           maxlength="3" placeholder="LAX"
-                           value="{{ filtros.destino }}" required autocomplete="off">
+                    {{ sel.campo('destino', 'destino', filtros.destino, aeropuertos, 'Destino', 'Ciudad o aeropuerto', 'geo-alt') }}
                 </div>
-                <div class="col-6 col-md">
+                <div class="col-6 col-md" id="campo-fecha-exacta" {% if filtros.mes %}hidden{% endif %}>
                     <label class="form-label-at" for="fecha">Salida</label>
                     <input type="date" class="form-control-at" id="fecha" name="fecha"
-                           value="{{ filtros.fecha }}" required>
+                           value="{{ filtros.fecha }}"
+                           {% if not filtros.mes %}required{% else %}disabled{% endif %}>
+                </div>
+                <div class="col-6 col-md" id="campo-mes-flexible" {% if not filtros.mes %}hidden{% endif %}>
+                    <label class="form-label-at" for="mes">Mes</label>
+                    <select class="form-control-at" id="mes" name="mes"
+                            {% if filtros.mes %}required{% else %}disabled{% endif %}>
+                        <option value="" disabled {% if not filtros.mes %}selected{% endif %}>Elegí un mes…</option>
+                        {% for m in meses %}
+                        <option value="{{ m.valor }}" {% if filtros.mes == m.valor %}selected{% endif %}>{{ m.legible | capitalize }}</option>
+                        {% endfor %}
+                    </select>
                 </div>
                 <div class="col-4 col-md-2">
                     <label class="form-label-at" for="pasajeros">Pasajeros</label>
@@ -69,6 +69,12 @@
                             class="btn-search-hero w-100 justify-content-center">
                         <i class="bi bi-search" aria-hidden="true"></i> Buscar vuelos
                     </button>
+                </div>
+                <div class="col-12">
+                    <label class="d-flex align-items-center gap-2" style="font-size:12.5px;color:var(--at-sub);cursor:pointer">
+                        <input type="checkbox" id="chk-fecha-flexible" {% if filtros.mes %}checked{% endif %}>
+                        Aún no definí la fecha — buscar por mes
+                    </label>
                 </div>
             </div>
         </form>
@@ -82,14 +88,18 @@
 {% block content %}
 {% if resultados is not none %}
 
-{# Filtros ocultos para form #}
+{# Filtros ocultos para form — los checkboxes de la sidebar viven fuera de
+   este <form> pero se asocian con form="form-filtros" (HTML5), así que se
+   envían igual sin necesitar inputs ocultos duplicados ni JS que los sincronice. #}
 <form id="form-filtros" method="get" action="/vuelos/buscar" style="display:none">
     <input type="hidden" name="origen"    value="{{ filtros.origen }}">
     <input type="hidden" name="destino"   value="{{ filtros.destino }}">
     <input type="hidden" name="fecha"     value="{{ filtros.fecha }}">
+    <input type="hidden" name="mes"       value="{{ filtros.mes }}">
     <input type="hidden" name="pasajeros" value="{{ filtros.pasajeros }}">
     <input type="hidden" name="orden"     id="f-orden" value="{{ filtros.orden or 'precio' }}">
     <input type="hidden" name="aerolinea_id" id="f-aerolinea" value="{{ filtros.aerolinea_id or '' }}">
+    <input type="hidden" name="precio_max" id="f-precio-max" value="{{ filtros.precio_max or '' }}">
 </form>
 
 <div class="search-layout">
@@ -103,30 +113,35 @@
                 {{ filtros.origen }} → {{ filtros.destino }}
             </div>
             <div style="font-size:11.5px;color:var(--at-muted)">
-                {{ filtros.fecha }} · {{ filtros.pasajeros }} pasajero(s)
+                {{ busqueda_mes_legible | capitalize if busqueda_mes_legible else filtros.fecha }} · {{ filtros.pasajeros }} pasajero(s)
             </div>
         </div>
 
-        <!-- Escalas -->
+        <!-- Precio -->
+        {% if precio_max_disponible and precio_max_disponible > precio_min_disponible %}
         <div class="sidebar-section">
             <div class="sidebar-section-title">
-                Escalas <i class="bi bi-chevron-down"></i>
+                Precio <i class="bi bi-chevron-down"></i>
             </div>
             <div class="sidebar-check-list">
-                <label class="sidebar-check-item">
-                    <input type="checkbox" checked onchange="applyFilters()">
-                    Directo <span class="count">—</span>
-                </label>
-                <label class="sidebar-check-item">
-                    <input type="checkbox" checked onchange="applyFilters()">
-                    1 escala <span class="count">—</span>
-                </label>
-                <label class="sidebar-check-item">
-                    <input type="checkbox" checked onchange="applyFilters()">
-                    2+ escalas <span class="count">—</span>
-                </label>
+                <div class="d-flex justify-content-between" style="font-size:12px;color:var(--at-muted);margin-bottom:2px">
+                    <span>Hasta</span>
+                    <strong id="precio-max-label" style="color:var(--at-text)">
+                        ${{ "%.0f"|format(filtros.precio_max or precio_max_disponible) }}
+                    </strong>
+                </div>
+                <input type="range" class="form-range" id="precio-max-slider"
+                       min="{{ "%.0f"|format(precio_min_disponible) }}"
+                       max="{{ "%.0f"|format(precio_max_disponible) }}"
+                       step="1"
+                       value="{{ "%.0f"|format(filtros.precio_max or precio_max_disponible) }}">
+                <div class="d-flex justify-content-between" style="font-size:10.5px;color:var(--at-sub)">
+                    <span>${{ "%.0f"|format(precio_min_disponible) }}</span>
+                    <span>${{ "%.0f"|format(precio_max_disponible) }}</span>
+                </div>
             </div>
         </div>
+        {% endif %}
 
         <!-- Aerolíneas -->
         {% if aerolineas %}
@@ -154,22 +169,30 @@
             </div>
             <div class="sidebar-check-list">
                 <label class="sidebar-check-item">
-                    <input type="checkbox" checked>
+                    <input type="checkbox" name="horario" value="madrugada" form="form-filtros"
+                           {% if not filtros.horario or 'madrugada' in filtros.horario %}checked{% endif %}
+                           onchange="document.getElementById('form-filtros').requestSubmit()">
                     <span>🌅 Madrugada</span>
                     <span style="font-size:10.5px;color:var(--at-sub)">00–06h</span>
                 </label>
                 <label class="sidebar-check-item">
-                    <input type="checkbox" checked>
+                    <input type="checkbox" name="horario" value="manana" form="form-filtros"
+                           {% if not filtros.horario or 'manana' in filtros.horario %}checked{% endif %}
+                           onchange="document.getElementById('form-filtros').requestSubmit()">
                     <span>☀️ Mañana</span>
                     <span style="font-size:10.5px;color:var(--at-sub)">06–12h</span>
                 </label>
                 <label class="sidebar-check-item">
-                    <input type="checkbox" checked>
+                    <input type="checkbox" name="horario" value="tarde" form="form-filtros"
+                           {% if not filtros.horario or 'tarde' in filtros.horario %}checked{% endif %}
+                           onchange="document.getElementById('form-filtros').requestSubmit()">
                     <span>🌤 Tarde</span>
                     <span style="font-size:10.5px;color:var(--at-sub)">12–18h</span>
                 </label>
                 <label class="sidebar-check-item">
-                    <input type="checkbox" checked>
+                    <input type="checkbox" name="horario" value="noche" form="form-filtros"
+                           {% if not filtros.horario or 'noche' in filtros.horario %}checked{% endif %}
+                           onchange="document.getElementById('form-filtros').requestSubmit()">
                     <span>🌙 Noche</span>
                     <span style="font-size:10.5px;color:var(--at-sub)">18–24h</span>
                 </label>
@@ -183,12 +206,10 @@
             </div>
             <div class="sidebar-check-list">
                 <label class="sidebar-check-item">
-                    <input type="checkbox" checked>
-                    Equipaje de mano
-                </label>
-                <label class="sidebar-check-item">
-                    <input type="checkbox" checked>
-                    Equipaje en bodega
+                    <input type="checkbox" name="equipaje" value="true" form="form-filtros"
+                           {% if filtros.equipaje %}checked{% endif %}
+                           onchange="document.getElementById('form-filtros').requestSubmit()">
+                    Equipaje facturado incluido
                 </label>
             </div>
         </div>
@@ -205,7 +226,8 @@
                     {{ resultados | length }} vuelo(s) encontrado(s)
                 </div>
                 <div class="results-sub">
-                    {{ filtros.origen }} → {{ filtros.destino }} · {{ filtros.fecha }}
+                    {{ filtros.origen }} → {{ filtros.destino }} ·
+                    {{ busqueda_mes_legible | capitalize if busqueda_mes_legible else filtros.fecha }}
                 </div>
             </div>
             <div class="sort-tabs" role="group" aria-label="Ordenar resultados">
@@ -219,6 +241,36 @@
                 </button>
             </div>
         </div>
+
+        <!-- Predicción de precio (RF-VUE-008, CU-O51) — solo si Google Flights
+             ya refrescó esta ruta/fecha (rotación diaria, no siempre está fresca) -->
+        {% if prediccion %}
+        <div class="d-flex align-items-center gap-2 mb-3" style="font-size:12.5px;padding:10px 14px;border-radius:var(--at-r-md);
+             background:{{ 'rgba(16,185,129,.08)' if prediccion.tendencia == 'bajando' else ('rgba(245,158,11,.08)' if prediccion.tendencia == 'subiendo' else 'var(--slate-50)') }};
+             border:1px solid {{ 'rgba(16,185,129,.25)' if prediccion.tendencia == 'bajando' else ('rgba(245,158,11,.25)' if prediccion.tendencia == 'subiendo' else 'var(--at-border)') }}">
+            <i class="bi bi-{{ 'graph-down-arrow' if prediccion.tendencia == 'bajando' else ('graph-up-arrow' if prediccion.tendencia == 'subiendo' else 'dash-circle') }}"
+               style="font-size:15px;color:{{ 'var(--at-success)' if prediccion.tendencia == 'bajando' else ('var(--amber-600)' if prediccion.tendencia == 'subiendo' else 'var(--at-muted)') }}"></i>
+            <span>
+                <strong>Precio {{ prediccion.tendencia }}</strong> en esta ruta —
+                típicamente entre ${{ "%.0f"|format(prediccion.rango_tipico_min) }} y ${{ "%.0f"|format(prediccion.rango_tipico_max) }}
+                {% if prediccion.precio_minimo_historico %}· mínimo histórico ${{ "%.0f"|format(prediccion.precio_minimo_historico) }}{% endif %}
+            </span>
+        </div>
+        {% endif %}
+
+        <!-- Cross-sell a Paquetes: solo si hay un descuento real activo
+             para vuelo+hotel (nunca un % inventado). El armado real
+             empieza en el detalle del vuelo, con una tarifa ya elegida. -->
+        {% if descuento_vuelo_hotel %}
+        <div class="d-flex align-items-center gap-2 mb-3" style="font-size:12.5px;padding:10px 14px;border-radius:var(--at-r-md);
+             background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.25)">
+            <i class="bi bi-luggage" style="font-size:15px;color:var(--sky-600)"></i>
+            <span>
+                <strong>Suma alojamiento y ahorra hasta {{ descuento_vuelo_hotel.porcentaje_descuento | int }}%</strong>
+                — elegí una tarifa abajo y arma tu paquete desde ahí.
+            </span>
+        </div>
+        {% endif %}
 
         <!-- Filas de vuelo -->
         {% if resultados %}
@@ -299,6 +351,11 @@
                             <i class="bi bi-lightning-fill"></i>Vuelo rápido
                         </span>
                         {% endif %}
+                        {% if v.equipaje_incluido %}
+                        <span class="flight-tag good">
+                            <i class="bi bi-suitcase2-fill"></i>Equipaje incluido disponible
+                        </span>
+                        {% endif %}
                         <span class="flight-tag">
                             <i class="bi bi-calendar3"></i>{{ v.fecha_salida[:10] }}
                         </span>
@@ -306,14 +363,97 @@
                             <i class="bi bi-clock"></i>{{ v.hora_salida_programada }}–{{ v.hora_llegada_programada }}
                         </span>
                     </div>
-                    <a href="/vuelos/{{ v.id }}"
-                       style="font-size:12px;color:var(--at-primary);font-weight:600;text-decoration:none;display:flex;align-items:center;gap:4px">
-                        Ver todas las tarifas
-                        <i class="bi bi-arrow-right" style="font-size:11px"></i>
-                    </a>
+                    <div class="d-flex align-items-center gap-3">
+                        <button type="button" class="btn-analitica-ruta" style="font-size:12px;color:var(--at-muted);font-weight:600;
+                                background:none;border:none;display:flex;align-items:center;gap:4px;cursor:pointer;padding:0"
+                                data-origen="{{ v.origen_codigo }}" data-destino="{{ v.destino_codigo }}"
+                                data-origen-legible="{{ v.origen_legible }}" data-destino-legible="{{ v.destino_legible }}">
+                            <i class="bi bi-bar-chart-line"></i>
+                            Ver estadísticas de la ruta
+                        </button>
+                        <a href="/vuelos/{{ v.id }}"
+                           style="font-size:12px;color:var(--at-primary);font-weight:600;text-decoration:none;display:flex;align-items:center;gap:4px">
+                            Ver todas las tarifas
+                            <i class="bi bi-arrow-right" style="font-size:11px"></i>
+                        </a>
+                    </div>
                 </div>
             </article>
             {% endfor %}
+        </div>
+
+        <!-- ═══════ DB-04 — Diferenciador Analítico de Vuelos (modal) ═══════ -->
+        <div class="modal fade" id="modal-analitica-ruta" tabindex="-1" aria-labelledby="modal-analitica-ruta-title" aria-hidden="true">
+            <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                <div class="modal-content" style="border-radius:var(--at-r-lg);border:1px solid var(--at-border)">
+                    <div class="modal-header" style="border-bottom:1px solid var(--at-border)">
+                        <h5 class="modal-title" id="modal-analitica-ruta-title" style="font-size:15px;font-weight:700">
+                            <i class="bi bi-bar-chart-line me-1" style="color:var(--at-primary)"></i>
+                            <span id="analitica-ruta-titulo">Estadísticas de la ruta</span>
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                    </div>
+                    <div class="modal-body" style="padding:20px">
+                        <div id="analitica-ruta-cargando" style="text-align:center;padding:40px 0;color:var(--at-muted)">
+                            <div class="spinner-border" style="color:var(--at-primary)" role="status"></div>
+                            <p style="margin-top:10px;font-size:13px">Cargando historial BTS/FAA…</p>
+                        </div>
+
+                        <div id="analitica-ruta-sin-cobertura" style="display:none;text-align:center;padding:40px 20px;color:var(--at-muted)">
+                            <i class="bi bi-info-circle" style="font-size:28px;color:var(--at-sub)"></i>
+                            <p style="margin-top:12px;font-size:13.5px">
+                                Esta ruta no tiene historial en el dataset BTS/FAA.
+                                El riesgo de disrupción se calcula con estimación global.
+                            </p>
+                        </div>
+
+                        <div id="analitica-ruta-contenido" style="display:none">
+                            <!-- Fila 1 — KPIs -->
+                            <div class="row g-3 mb-3">
+                                <div class="col-12 col-md-4">
+                                    <div class="at-card" style="height:100%">
+                                        <span class="badge-status success" style="margin-bottom:8px">Datos reales BTS/FAA 2021-2025</span>
+                                        <div style="font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--at-sub)">OTP histórico de la ruta</div>
+                                        <div class="at-mono" id="kpi-otp-historico" style="font-size:28px;font-weight:700;color:var(--at-primary)">—</div>
+                                        <div style="font-size:11.5px;color:var(--at-muted)">% de vuelos que llegaron a tiempo</div>
+                                    </div>
+                                </div>
+                                <div class="col-12 col-md-4">
+                                    <div class="at-card" style="height:100%">
+                                        <div style="font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--at-sub)">Mejor aerolínea en esta ruta</div>
+                                        <div id="kpi-mejor-aerolinea" style="font-size:17px;font-weight:700;color:var(--at-text);margin-top:4px">—</div>
+                                        <div class="at-mono" id="kpi-mejor-aerolinea-otp" style="font-size:20px;font-weight:700;color:var(--at-success)">—</div>
+                                    </div>
+                                </div>
+                                <div class="col-12 col-md-4">
+                                    <div class="at-card" style="height:100%">
+                                        <div style="font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--at-sub)">Causa de retraso más frecuente</div>
+                                        <div id="kpi-causa-principal" style="font-size:14.5px;font-weight:600;color:var(--at-text);margin-top:6px">—</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Columna vertical — detalle -->
+                            <div class="at-card mb-3">
+                                <div style="font-size:12.5px;font-weight:700;margin-bottom:6px">OTP por aerolínea</div>
+                                <div id="chart-otp-aerolinea" style="height:220px"></div>
+                            </div>
+                            <div class="at-card mb-3">
+                                <div style="font-size:12.5px;font-weight:700;margin-bottom:6px">OTP por mes del año</div>
+                                <div id="chart-otp-mes" style="height:220px"></div>
+                            </div>
+                            <div class="at-card mb-3">
+                                <div style="font-size:12.5px;font-weight:700;margin-bottom:6px">OTP por día de la semana</div>
+                                <div id="chart-otp-dia-semana" style="height:220px"></div>
+                            </div>
+                            <div class="at-card">
+                                <div style="font-size:12.5px;font-weight:700;margin-bottom:6px">Distribución de causas de retraso</div>
+                                <div id="chart-causas-retraso" style="height:240px"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         {% else %}
@@ -348,6 +488,41 @@ function filterByAirline(cb) {
     }
     document.getElementById('form-filtros').submit();
 }
+/* Toggle "aún no definí la fecha": fecha exacta <-> selector de mes */
+var chkFlexible = document.getElementById('chk-fecha-flexible');
+var campoFecha = document.getElementById('campo-fecha-exacta');
+var campoMes = document.getElementById('campo-mes-flexible');
+var inputFecha = document.getElementById('fecha');
+var selectMes = document.getElementById('mes');
+function actualizarModoFecha() {
+    var flexible = chkFlexible.checked;
+    campoFecha.hidden = flexible;
+    campoMes.hidden = !flexible;
+    inputFecha.required = !flexible;
+    inputFecha.disabled = flexible;
+    selectMes.required = flexible;
+    selectMes.disabled = !flexible;
+    if (flexible) {
+        inputFecha.value = '';
+    } else {
+        selectMes.value = '';
+    }
+}
+if (chkFlexible) {
+    chkFlexible.addEventListener('change', actualizarModoFecha);
+}
+
+var sliderPrecio = document.getElementById('precio-max-slider');
+if (sliderPrecio) {
+    var labelPrecio = document.getElementById('precio-max-label');
+    sliderPrecio.addEventListener('input', function () {
+        labelPrecio.textContent = '$' + sliderPrecio.value;
+    });
+    sliderPrecio.addEventListener('change', function () {
+        document.getElementById('f-precio-max').value = sliderPrecio.value;
+        document.getElementById('form-filtros').requestSubmit();
+    });
+}
 /* Loading feedback en buscar */
 var formBusqueda = document.getElementById('form-busqueda');
 var btnBuscar    = document.getElementById('btn-buscar');
@@ -368,5 +543,86 @@ document.querySelectorAll('.sidebar-section-title').forEach(function (title) {
         }
     });
 });
+
+/* ═══════ DB-04 — Diferenciador Analítico de Vuelos ═══════ */
+var analiticaRutaCharts = [];
+var modalAnaliticaRutaEl = document.getElementById('modal-analitica-ruta');
+var modalAnaliticaRuta = modalAnaliticaRutaEl ? new bootstrap.Modal(modalAnaliticaRutaEl) : null;
+
+document.querySelectorAll('.btn-analitica-ruta').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+        var origen = btn.dataset.origen;
+        var destino = btn.dataset.destino;
+        document.getElementById('analitica-ruta-titulo').textContent =
+            btn.dataset.origenLegible + ' → ' + btn.dataset.destinoLegible;
+        document.getElementById('analitica-ruta-cargando').style.display = '';
+        document.getElementById('analitica-ruta-sin-cobertura').style.display = 'none';
+        document.getElementById('analitica-ruta-contenido').style.display = 'none';
+        modalAnaliticaRuta.show();
+
+        fetch('/vuelos/analitica-ruta?origen=' + encodeURIComponent(origen) + '&destino=' + encodeURIComponent(destino))
+            .then(function (r) { return r.json(); })
+            .then(renderAnaliticaRuta)
+            .catch(function () {
+                document.getElementById('analitica-ruta-cargando').style.display = 'none';
+                document.getElementById('analitica-ruta-sin-cobertura').style.display = '';
+            });
+    });
+});
+
+function renderAnaliticaRuta(datos) {
+    document.getElementById('analitica-ruta-cargando').style.display = 'none';
+    analiticaRutaCharts.forEach(function (c) { c && c.dispose(); });
+    analiticaRutaCharts = [];
+
+    if (!datos.cobertura) {
+        document.getElementById('analitica-ruta-sin-cobertura').style.display = '';
+        return;
+    }
+    document.getElementById('analitica-ruta-contenido').style.display = '';
+
+    document.getElementById('kpi-otp-historico').textContent = datos.otp_historico + '%';
+    document.getElementById('kpi-mejor-aerolinea').textContent = datos.mejor_aerolinea.nombre;
+    document.getElementById('kpi-mejor-aerolinea-otp').textContent = datos.mejor_aerolinea.otp_porcentaje + '% OTP';
+    document.getElementById('kpi-causa-principal').textContent = datos.causa_principal || 'Sin datos de retrasos registrados';
+
+    // Barras horizontales — OTP por aerolínea (rankeado)
+    var porAerolinea = datos.por_aerolinea.slice().sort(function (a, b) { return a.otp_porcentaje - b.otp_porcentaje; });
+    analiticaRutaCharts.push(initChart('chart-otp-aerolinea', {
+        xAxis: { type: 'value', max: 100, axisLabel: { formatter: '{value}%' } },
+        yAxis: { type: 'category', data: porAerolinea.map(function (a) { return a.aerolinea_nombre; }) },
+        series: [{ type: 'bar', data: porAerolinea.map(function (a) { return a.otp_porcentaje; }), label: { show: true, position: 'right', formatter: '{c}%' } }],
+    }));
+
+    // Línea — OTP por mes del año
+    var mesesEs = ['', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+    analiticaRutaCharts.push(initChart('chart-otp-mes', {
+        xAxis: { type: 'category', data: datos.por_mes.map(function (m) { return mesesEs[m.mes]; }) },
+        yAxis: { type: 'value', max: 100, axisLabel: { formatter: '{value}%' } },
+        series: [{ type: 'line', data: datos.por_mes.map(function (m) { return m.otp_porcentaje; }), smooth: true, areaStyle: {} }],
+    }));
+
+    // Barras — OTP por día de semana
+    analiticaRutaCharts.push(initChart('chart-otp-dia-semana', {
+        xAxis: { type: 'category', data: datos.por_dia_semana.map(function (d) { return d.dia_legible; }) },
+        yAxis: { type: 'value', max: 100, axisLabel: { formatter: '{value}%' } },
+        series: [{ type: 'bar', data: datos.por_dia_semana.map(function (d) { return d.otp_porcentaje; }) }],
+    }));
+
+    // Dona — causas de retraso (legend vertical: los nombres son largos y
+    // desbordan el legend horizontal con scroll del tema base)
+    analiticaRutaCharts.push(initChart('chart-causas-retraso', {
+        tooltip: { trigger: 'item', confine: true },
+        legend: {
+            type: 'scroll', orient: 'vertical', left: 'right', top: 'middle',
+            textStyle: { fontSize: 10.5, width: 130, overflow: 'truncate' }, itemGap: 10,
+        },
+        series: [{
+            type: 'pie', radius: ['45%', '70%'], center: ['32%', '50%'],
+            data: datos.causas.map(function (c) { return { name: c.causa_legible, value: c.total_casos }; }),
+            label: { formatter: '{d}%', fontSize: 11 },
+        }],
+    }));
+}
 </script>
 {% endblock %}

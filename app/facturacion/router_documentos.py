@@ -6,18 +6,20 @@ from fastapi.responses import Response
 from app.facturacion.repositories.facturacion_repo import FacturacionRepository
 from app.facturacion.services.documentos_service import generar_pdf_itinerario
 from app.reservas.repositories.reservas_repo import ReservasRepository
+from app.reservas.services.voucher_service import obtener_o_generar_voucher
+from app.seguridad.services.rbac_service import tiene_permiso
 from app.seguridad.services.session_service import verificar_sesion
-from app.shared.pocketbase_client import get_pocketbase_client
 from app.vuelos.repositories.vuelos_repo import VuelosRepository
 
 router = APIRouter()
 
 
-def _autorizado(usuario: dict, reserva: dict, pasajero: dict | None) -> bool:
+async def _autorizado(usuario: dict, reserva: dict, pasajero: dict | None, modulo: str) -> bool:
     es_titular = pasajero is not None and reserva["pasajero_titular_id"] == pasajero["id"]
     es_agente = reserva.get("agente_id") == usuario["id"]
-    es_administrador = usuario.get("tipo_actor") == "administrador"
-    return es_titular or es_agente or es_administrador
+    if es_titular or es_agente:
+        return True
+    return await tiene_permiso(usuario, modulo, "eliminar")
 
 
 @router.get("/facturas/{factura_id}/pdf")
@@ -31,11 +33,10 @@ async def descargar_factura(factura_id: str, usuario: dict = Depends(verificar_s
 
     reserva = await reservas_repo.obtener_reserva(factura["reserva_id"])
     pasajero = await reservas_repo.pasajero_de_usuario(usuario["id"])
-    if reserva is None or not _autorizado(usuario, reserva, pasajero):
+    if reserva is None or not await _autorizado(usuario, reserva, pasajero, "facturacion"):
         raise HTTPException(status_code=404)
 
-    client = get_pocketbase_client()
-    contenido = await client.descargar_archivo("facturas", factura["id"], factura["archivo_pdf"])
+    contenido = await facturacion_repo.descargar_pdf_factura(factura["id"], factura["archivo_pdf"])
     return Response(
         content=contenido,
         media_type="application/pdf",
@@ -50,7 +51,7 @@ async def descargar_itinerario(reserva_id: str, usuario: dict = Depends(verifica
 
     reserva = await reservas_repo.obtener_reserva(reserva_id)
     pasajero = await reservas_repo.pasajero_de_usuario(usuario["id"])
-    if reserva is None or not _autorizado(usuario, reserva, pasajero):
+    if reserva is None or not await _autorizado(usuario, reserva, pasajero, "reservas"):
         raise HTTPException(status_code=404)
 
     vuelo = await vuelos_repo.obtener_vuelo(reserva["vuelo_id"])
@@ -63,5 +64,26 @@ async def descargar_itinerario(reserva_id: str, usuario: dict = Depends(verifica
         media_type="application/pdf",
         headers={
             "Content-Disposition": f'attachment; filename="itinerario-{reserva["codigo_reserva"]}.pdf"'
+        },
+    )
+
+
+@router.get("/reservas/{reserva_id}/voucher-pdf")
+async def descargar_voucher(reserva_id: str, usuario: dict = Depends(verificar_sesion)):
+    """RF-RES-009 — a diferencia del itinerario, este SÍ es el mismo archivo
+    persistido en cada descarga (mismo patrón que /facturas/{id}/pdf)."""
+    reservas_repo = ReservasRepository()
+
+    reserva = await reservas_repo.obtener_reserva(reserva_id)
+    pasajero = await reservas_repo.pasajero_de_usuario(usuario["id"])
+    if reserva is None or not await _autorizado(usuario, reserva, pasajero, "reservas"):
+        raise HTTPException(status_code=404)
+
+    contenido, reserva = await obtener_o_generar_voucher(reserva)
+    return Response(
+        content=contenido,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="voucher-{reserva["codigo_reserva"]}.pdf"'
         },
     )

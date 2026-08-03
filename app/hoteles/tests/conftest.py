@@ -7,6 +7,7 @@ esta sesión), pero la suite automatizada no debe gastar la cuota real
 import pytest
 
 from app.hoteles.services.hotellens_client import HotelLensClient
+from app.shared import minio_catalog_reader
 
 
 class HotelLensClientFalso(HotelLensClient):
@@ -66,6 +67,7 @@ async def hotel_factory(pb):
         data.update(extra)
         hotel = await pb.create_record("hoteles_catalogo", data)
         creados.append(hotel["id"])
+        await minio_catalog_reader.publicar_y_refrescar("hoteles_catalogo")
         return hotel
 
     yield _crear
@@ -75,6 +77,8 @@ async def hotel_factory(pb):
             await pb.delete_record("hoteles_catalogo", hotel_id)
         except Exception:
             pass
+    if creados:
+        await minio_catalog_reader.publicar_y_refrescar("hoteles_catalogo")
 
 
 @pytest.fixture
@@ -94,6 +98,7 @@ async def tarifa_hotel_factory(pb):
         data.update(extra)
         tarifa = await pb.create_record("hoteles_tarifas", data)
         creadas.append(tarifa["id"])
+        await minio_catalog_reader.publicar_y_refrescar("hoteles_tarifas")
         return tarifa
 
     yield _crear
@@ -103,6 +108,37 @@ async def tarifa_hotel_factory(pb):
             await pb.delete_record("hoteles_tarifas", tarifa_id)
         except Exception:
             pass
+    if creadas:
+        await minio_catalog_reader.publicar_y_refrescar("hoteles_tarifas")
+
+
+@pytest.fixture
+async def disponibilidad_hotel_factory(pb):
+    """Crea filas de `hoteles_disponibilidad` (una noche) desechables para
+    pruebas de RF-HOT-004 (disponibilidad real por fecha); las borra al
+    finalizar."""
+    creadas: list[str] = []
+
+    async def _crear(hotel_id: str, hotel_tarifa_id: str, fecha: str, cupos_disponibles: int = 3, **extra) -> dict:
+        data = {
+            "hotel_id": hotel_id, "hotel_tarifa_id": hotel_tarifa_id, "fecha": fecha,
+            "cupos_disponibles": cupos_disponibles, "fecha_actualizacion": "2027-01-01 00:00:00.000Z",
+        }
+        data.update(extra)
+        fila = await pb.create_record("hoteles_disponibilidad", data)
+        creadas.append(fila["id"])
+        await minio_catalog_reader.publicar_y_refrescar("hoteles_disponibilidad")
+        return fila
+
+    yield _crear
+
+    for fila_id in creadas:
+        try:
+            await pb.delete_record("hoteles_disponibilidad", fila_id)
+        except Exception:
+            pass
+    if creadas:
+        await minio_catalog_reader.publicar_y_refrescar("hoteles_disponibilidad")
 
 
 @pytest.fixture
@@ -119,6 +155,7 @@ async def resena_hotel_factory(pb):
             },
         )
         creadas.append(resena["id"])
+        await minio_catalog_reader.publicar_y_refrescar("hoteles_resenas")
         return resena
 
     yield _crear
@@ -128,3 +165,5 @@ async def resena_hotel_factory(pb):
             await pb.delete_record("hoteles_resenas", resena_id)
         except Exception:
             pass
+    if creadas:
+        await minio_catalog_reader.publicar_y_refrescar("hoteles_resenas")

@@ -9,6 +9,7 @@ perfil de pasajero)."""
 
 from app.centro_ayuda.integrations.escalacion_sender import EscalacionSender
 from app.centro_ayuda.services.centro_ayuda_service import escalar_caso
+from app.shared import minio_operational_client as moc
 
 
 class EscalacionSenderFalso(EscalacionSender):
@@ -21,7 +22,7 @@ class EscalacionSenderFalso(EscalacionSender):
         return self.thread_id
 
 
-async def test_escalar_caso_crea_registro_y_guarda_thread_id(pb, pasajero_factory):
+async def test_escalar_caso_crea_registro_y_guarda_thread_id(pasajero_factory):
     usuario, pasajero = await pasajero_factory()
     sender = EscalacionSenderFalso(thread_id="thread-abc")
 
@@ -32,10 +33,10 @@ async def test_escalar_caso_crea_registro_y_guarda_thread_id(pb, pasajero_factor
     assert len(sender.enviados) == 1
     assert sender.enviados[0]["email_pasajero"] == usuario["email"]
 
-    await pb.delete_record("casos_escalados", caso["id"])
+    await moc.eliminar("casos_escalados", caso["id"])
 
 
-async def test_escalar_caso_se_crea_aunque_falle_el_envio(pb, pasajero_factory):
+async def test_escalar_caso_se_crea_aunque_falle_el_envio(pasajero_factory):
     usuario, pasajero = await pasajero_factory()
     sender = EscalacionSenderFalso(thread_id=None)
 
@@ -44,7 +45,7 @@ async def test_escalar_caso_se_crea_aunque_falle_el_envio(pb, pasajero_factory):
     assert caso["estado"] == "abierto"
     assert not caso.get("gmail_thread_id")
 
-    await pb.delete_record("casos_escalados", caso["id"])
+    await moc.eliminar("casos_escalados", caso["id"])
 
 
 async def test_escalar_requiere_sesion(client):

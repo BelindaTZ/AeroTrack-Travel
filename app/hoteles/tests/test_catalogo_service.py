@@ -73,6 +73,7 @@ async def test_generar_catalogo_crea_hotel_tarifa_y_resena(pb, hotellens_falso):
     assert tarifa["precio_final"] == 134.0
     assert tarifa["cupos_disponibles"] == 6  # RN-HOT-001: cupo real, no aproximado
     assert tarifa["reembolsable"] is True
+    assert tarifa["pago_diferido_disponible"] is True  # RN-HOT-004: sintético, atado a reembolsable
 
     resenas = await pb.list_records("hoteles_resenas", {"filter": f'hotel_id="{hotel["id"]}"'})
     assert resenas["totalItems"] == 1
@@ -83,7 +84,12 @@ async def test_generar_catalogo_crea_hotel_tarifa_y_resena(pb, hotellens_falso):
     )
     assert log is not None
 
-    # limpieza
+    # limpieza — hoteles_disponibilidad ANTES que hoteles_tarifas (relation
+    # required, ver pb_schema_hoteles.py; generar_catalogo ahora también
+    # crea filas de disponibilidad por noche, RF-HOT-004)
+    disponibilidad = await pb.list_records("hoteles_disponibilidad", {"filter": f'hotel_id="{hotel["id"]}"', "perPage": 200})
+    for d in disponibilidad["items"]:
+        await pb.delete_record("hoteles_disponibilidad", d["id"])
     for r in resenas["items"]:
         await pb.delete_record("hoteles_resenas", r["id"])
     for t in tarifas["items"]:
@@ -112,7 +118,11 @@ async def test_generar_catalogo_es_idempotente_no_duplica_hotel(pb, hotellens_fa
     tarifas = await pb.list_records("hoteles_tarifas", {"filter": f'hotel_id="{hotel["id"]}"'})
     assert tarifas["totalItems"] == 1  # tarifas se reemplazan, no se acumulan (RN-HOT-001)
 
-    # limpieza
+    # limpieza — hoteles_disponibilidad ANTES que hoteles_tarifas (relation
+    # required, ver pb_schema_hoteles.py)
+    disponibilidad = await pb.list_records("hoteles_disponibilidad", {"filter": f'hotel_id="{hotel["id"]}"', "perPage": 200})
+    for d in disponibilidad["items"]:
+        await pb.delete_record("hoteles_disponibilidad", d["id"])
     resenas = await pb.list_records("hoteles_resenas", {"filter": f'hotel_id="{hotel["id"]}"'})
     for r in resenas["items"]:
         await pb.delete_record("hoteles_resenas", r["id"])

@@ -1,5 +1,8 @@
 import uuid
 
+from app.pasajeros.repositories.pasajeros_repo import PasajerosRepository
+from app.shared import minio_operational_client as moc
+
 
 def _datos_validos(**overrides) -> dict:
     data = {
@@ -18,9 +21,13 @@ async def _limpiar(pb, email: str) -> None:
     usuario = await pb.get_first("usuarios", f'email="{email}"')
     if usuario is None:
         return
-    pasajero = await pb.get_first("pasajeros", f'usuario_id="{usuario["id"]}"')
+    pasajero = await PasajerosRepository().pasajero_de_usuario(usuario["id"])
     if pasajero:
-        await pb.delete_record("pasajeros", pasajero["id"])
+        await moc.eliminar("pasajeros", pasajero["id"])
+        try:
+            await pb.delete_record("pasajeros", pasajero["id"])  # limpia el espejo, ver RC-OP-003
+        except Exception:
+            pass
     await pb.delete_record("usuarios", usuario["id"])
 
 
@@ -39,8 +46,9 @@ async def test_registro_exitoso_crea_cuenta_y_permite_login(client, pb):
 
     usuario = await pb.get_first("usuarios", f'email="{datos["email"]}"')
     assert usuario is not None
-    assert usuario["tipo_actor"] == "pasajero"
-    pasajero = await pb.get_first("pasajeros", f'usuario_id="{usuario["id"]}"')
+    rol = await pb.get_record("roles", usuario["rol_id"])
+    assert rol["nombre"] == "Pasajero"
+    pasajero = await PasajerosRepository().pasajero_de_usuario(usuario["id"])
     assert pasajero is not None
     assert pasajero["telefono"] == datos["telefono"]
 

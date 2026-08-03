@@ -63,7 +63,7 @@ CU-O112/O113 **no requieren trabajo** — ya cubiertos por `RF-SEG-011`/`roles_s
 | Ítem | RF | Detalle |
 |---|---|---|
 | Conversión de moneda | RF-FAC-011 | ✅ **Hecho 2026-07-19** — `dags/dag_actualizar_tasas_cambio.py` (`@daily`), verificado con corrida real (6 monedas). Falta el lado de lectura (helper de conversión para mostrar precio local) — se agrega cuando alguna vertical lo necesite, hoy no tiene consumidor |
-| Pago diferido de hotel | RF-FAC-012 | Flujo Stripe `authorize`→`capture` — depende de Hoteles CU-O60 para disparador real (se puede desarrollar antes con disparador simulado) |
+| Pago diferido de hotel | RF-FAC-012 | ✅ **Completo 2026-07-22** (junto con Hoteles CU-O60) — Stripe `authorize`→`capture` real, captura disparada manualmente desde `/backoffice/pagos-diferidos` (HotelLens no tiene señal real de confirmación del hotel) |
 
 ---
 
@@ -73,7 +73,7 @@ Todos "Draft — pendiente de revisión" en su `plan.md`. Fases resumidas; ver e
 
 | Módulo | Fases (en orden) | Bloqueo real |
 |---|---|---|
-| **Hoteles** | ✅ **Completo 2026-07-19** (catálogo real HotelLens + búsqueda/detalle/filtros/reseñas/comparación reembolsable + cargos locales reales, 99 ciudades del CSV Holidu + selección vía Carrito con cupo real) — solo pago diferido (RF-HOT-009) sin código, depende de Facturación (CU-O86) | 17 tests (4 catálogo + 7 búsqueda + 6 cargos locales) |
+| **Hoteles** | ✅ **Completo 2026-07-22** (catálogo real HotelLens + búsqueda/detalle/filtros/reseñas/comparación reembolsable + cargos locales reales, 99 ciudades del CSV Holidu + selección vía Carrito con cupo real + pago diferido RF-HOT-009/CU-O86 con Stripe authorize→capture) | 17 tests Fase 1-3 + 8 de `test_pago_diferido.py` (Facturación) + 3 de `test_modalidad_pago.py` (Carrito) |
 | **Autos** | ✅ **Completo 2026-07-19** (catálogo real + búsqueda/detalle/filtros + selección vía Carrito) — revalidación en vivo contra `fuente_oferta_ref` (RN-AUT-001) sigue sin código, bajo riesgo real (solo Expedia implementado; no aplica cupo, sin ese concepto en el catálogo) | 12 tests (5 catálogo + 7 búsqueda) |
 | **Actividades** | ✅ **Completo 2026-07-19** (catálogo + reseñas + disponibilidad sintética + búsqueda/detalle/filtros/horarios/reseñas + selección vía Carrito, cupo real validado por `cantidad` de participantes) | 15 tests (5 catálogo + 7 búsqueda + 3 cupo en Carrito) |
 | **Cruceros** | ✅ **Completo 2026-07-19** (catálogo real + disponibilidad sintética + búsqueda/itinerario/barco/comparación + selección vía Carrito, cupo real) | 9 tests (3 catálogo + 6 búsqueda). Bug real corregido: `itinerario_puertos` es `[{day,port}]`, no strings planos |
@@ -104,7 +104,7 @@ Integraciones es el único módulo **solo Táctico** (no tiene nivel Operativo p
 | **Actividades** | 1) Configurar disponibilidad sintética (CU-T42) · 2) Reporte de más reservadas | **CU-T42 debe ir junto con la Fase 2 de Actividades Operativo**, no después |
 | **Cruceros** | 1) Configurar disponibilidad sintética (CU-T43) · 2) Reporte de más consultados | **CU-T43 debe ir junto con la Fase 2 de Cruceros Operativo**, no después |
 | **Paquetes** | 1) Configurar % de descuento (CU-T14) · 2) Reporte de combinaciones más vendidas | Paquetes Operativo ya está completo — `tipos_paquete_descuento` sembrado directo (4 combinaciones), falta la UI de administración (CU-T14) para editarlas sin tocar el script |
-| **Carrito** | 1) Configurar/detectar abandono (CU-T26) · 2) Reporte de recuperación | Implementable en paralelo con Carrito Operativo Fase 1 (no depende de `reserva_items`) |
+| **Carrito** | ✅ **Completo 2026-07-22** (configurar umbral/plantilla de abandono + job de detección + reporte de recuperación) | `carritos.fue_abandonado`/`fecha_marcado_abandonado` agregados (`pb_schema_carrito_abandono.py`) para no perder el historial cuando un carrito vuelve a `activo` y se convierte; `CarritoRepository.carrito_de_trabajo` reactiva un carrito `abandonado` en el único punto de entrada real (ver/agregar/checkout), sin eso CU-T27 nunca tendría recuperados que contar. 15 tests |
 | **Cuenta/Mis Viajes** | 1) Configurar programa de beneficios (CU-T24) · 2) Reporte de alertas de precio | CU-T24 es precondición real de RF-CTA-006 (Operativo Fase 4) |
 | **Centro de Ayuda** | ✅ **Completo 2026-07-19** (gestionar artículos + bandeja de casos escalados para Agente + métricas con filtro de período) | 8 tests de backoffice. RBAC Nivel 2 real: Agente restringido a `casos_escalados` |
 | **Ofertas y Promociones** | 1) Gestionar cupones (CU-T30) · 2) Campañas de email · 3) Reporte de cupones · 4) Configurar acumulación cupón+paquete (CU-T44) | CU-T30 es precondición real de RF-OFE-003 (Operativo Fase 3). Fase 4 ya tiene el dato default sembrado en `configuracion_sistema`, falta el router (`router_config_acumulacion.py`) |

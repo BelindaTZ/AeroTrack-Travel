@@ -1,0 +1,44 @@
+{# Controles de paginación reutilizables — Fix global 1 de la auditoría de
+   WorkPanels (docs/workpanels-auditoria.md). Recibe un objeto `Pagina`
+   (app/shared/paginacion.py::paginar) y el `request` de la vista (ya viene
+   implícito en el contexto de cualquier TemplateResponse). No hace nada si
+   la colección entera entra en una sola página.
+
+   Uso:
+     {% from "_paginacion.html" import controles %}
+     ...
+     {{ controles(pagina, request) }}
+#}
+{% macro controles(pagina, request) %}
+{% if pagina and pagina.total_paginas > 1 %}
+<nav class="at-paginacion" aria-label="Paginación">
+    <a class="pag-btn {% if not pagina.hay_anterior %}disabled{% endif %}"
+       href="{{ url_pagina(request, pagina.pagina - 1) }}" aria-label="Página anterior"
+       {% if not pagina.hay_anterior %}aria-disabled="true" tabindex="-1"{% endif %}>
+        <i class="bi bi-chevron-left" aria-hidden="true"></i>
+    </a>
+
+    {% if pagina.paginas_visibles[0] > 1 %}
+    <a class="pag-num" href="{{ url_pagina(request, 1) }}">1</a>
+    {% if pagina.paginas_visibles[0] > 2 %}<span class="pag-ellipsis">…</span>{% endif %}
+    {% endif %}
+
+    {% for n in pagina.paginas_visibles %}
+    <a class="pag-num {% if n == pagina.pagina %}active{% endif %}" href="{{ url_pagina(request, n) }}">{{ n }}</a>
+    {% endfor %}
+
+    {% if pagina.paginas_visibles[-1] < pagina.total_paginas %}
+    {% if pagina.paginas_visibles[-1] < pagina.total_paginas - 1 %}<span class="pag-ellipsis">…</span>{% endif %}
+    <a class="pag-num" href="{{ url_pagina(request, pagina.total_paginas) }}">{{ pagina.total_paginas }}</a>
+    {% endif %}
+
+    <a class="pag-btn {% if not pagina.hay_siguiente %}disabled{% endif %}"
+       href="{{ url_pagina(request, pagina.pagina + 1) }}" aria-label="Página siguiente"
+       {% if not pagina.hay_siguiente %}aria-disabled="true" tabindex="-1"{% endif %}>
+        <i class="bi bi-chevron-right" aria-hidden="true"></i>
+    </a>
+
+    <span class="pag-total">{{ pagina.total_items }} resultado{{ 's' if pagina.total_items != 1 else '' }}</span>
+</nav>
+{% endif %}
+{% endmacro %}

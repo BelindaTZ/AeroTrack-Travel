@@ -2,6 +2,8 @@
 
 import pytest
 
+from app.pasajeros.repositories.pasajeros_repo import PasajerosRepository
+
 
 @pytest.mark.asyncio
 async def test_contacto_telefono_valido_se_actualiza(pasajero_client, pb):
@@ -12,7 +14,7 @@ async def test_contacto_telefono_valido_se_actualiza(pasajero_client, pb):
     assert resp.status_code == 303
     assert "Contacto+actualizado" in resp.headers.get("location", "")
 
-    actualizado = await pb.get_record("pasajeros", pasajero_client.pasajero["id"])
+    actualizado = await PasajerosRepository().obtener_pasajero(pasajero_client.pasajero["id"])
     assert actualizado["telefono"] == "+59899123456"
 
     registro = await pb.get_first(

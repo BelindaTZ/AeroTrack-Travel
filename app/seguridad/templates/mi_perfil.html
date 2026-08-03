@@ -1,14 +1,58 @@
-{% extends "layout_app.html" %}
+{% extends "layout_portal.html" if usuario.tipo_actor == 'pasajero' else "layout_app.html" %}
 {% block title %}Mi perfil — AeroTrack Travel{% endblock %}
 {% block content %}
-<div class="page-heading">
-    <h1><span class="heading-icon"><i class="bi bi-person-circle"></i></span>Mi perfil</h1>
-    <p>Cuenta: {{ usuario.tipo_actor }}{% if rol_nombre %} · Rol: {{ rol_nombre }}{% endif %}</p>
+
+<!-- Encabezado de perfil -->
+<div class="at-card d-flex align-items-center gap-3 mb-3" style="background:linear-gradient(135deg,var(--navy-700),var(--sky-500));border:none">
+    {% if usuario.foto_perfil %}
+    <img src="/mi-perfil/foto?v={{ usuario.updated }}" alt="Foto de perfil"
+         style="width:56px;height:56px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,255,255,.6);flex-shrink:0">
+    {% else %}
+    <div style="width:56px;height:56px;border-radius:50%;background:rgba(255,255,255,.15);
+                display:flex;align-items:center;justify-content:center;color:#fff;font-size:22px;font-weight:700;flex-shrink:0">
+        {{ (usuario.nombre_completo or usuario.email)[:1] | upper }}
+    </div>
+    {% endif %}
+    <div class="flex-grow-1" style="min-width:0">
+        <div style="font-weight:700;font-size:16px;color:#fff">{{ usuario.nombre_completo }}</div>
+        <div style="font-size:12.5px;color:rgba(255,255,255,.85)">
+            {{ usuario.email }}{% if rol_nombre %} · {{ rol_nombre }}{% endif %}
+        </div>
+    </div>
+    <a href="#datos-personales" class="btn-at-ghost-dark" style="flex-shrink:0">
+        <i class="bi bi-pencil me-1"></i>Editar
+    </a>
 </div>
 
 <div class="row g-3">
-    <div class="col-12 col-lg-6">
-        <div class="at-card">
+    <!-- Columna principal -->
+    <div class="col-12 col-lg-8 d-flex flex-column gap-3">
+        <div class="at-card" id="foto">
+            <h2 style="font-size:14.5px;margin-bottom:14px">Foto de perfil</h2>
+            {% if error %}
+            <div class="flash-bar" role="alert"><div class="flash-error"><i class="bi bi-exclamation-triangle-fill"></i>{{ error }}</div></div>
+            {% endif %}
+            <div class="d-flex align-items-center gap-3">
+                {% if usuario.foto_perfil %}
+                <img src="/mi-perfil/foto?v={{ usuario.updated }}" alt="Foto de perfil"
+                     style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:1px solid var(--at-border)">
+                {% else %}
+                <div style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,var(--navy-700),var(--sky-500));
+                            display:flex;align-items:center;justify-content:center;color:#fff;font-size:24px;font-weight:700;flex-shrink:0">
+                    {{ (usuario.nombre_completo or usuario.email)[:1] | upper }}
+                </div>
+                {% endif %}
+                <form method="post" action="/mi-perfil/foto" enctype="multipart/form-data" class="flex-grow-1">
+                    <input type="file" class="form-control-at" name="foto" accept="image/jpeg,image/png,image/webp" required>
+                    <div style="font-size:11px;color:var(--at-sub);margin:4px 0 8px">JPG, PNG o WEBP · máx. 5 MB</div>
+                    <button type="submit" class="btn-at-primary" style="padding:7px 16px;font-size:13px">
+                        <i class="bi bi-upload"></i>Subir foto
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <div class="at-card" id="datos-personales">
             <h2 style="font-size:14.5px;margin-bottom:14px">Datos personales</h2>
             <form method="post" action="/mi-perfil" novalidate>
                 <div class="mb-3">
@@ -24,10 +68,144 @@
                 <button type="submit" class="btn-at-primary">Guardar cambios</button>
             </form>
         </div>
-    </div>
 
-    <div class="col-12 col-lg-6">
-        <div class="at-card">
+        {% if usuario.tipo_actor == 'pasajero' %}
+        <div class="at-card" id="contacto">
+            <h2 style="font-size:14.5px;margin-bottom:14px">Datos de contacto</h2>
+            <form method="post" action="/mi-perfil/contacto" novalidate>
+                <div class="mb-3">
+                    <label for="telefono" class="form-label-at">Teléfono</label>
+                    <input type="tel" class="form-control-at" id="telefono" name="telefono"
+                           value="{{ pasajero.telefono or '' }}" required>
+                </div>
+                <div class="mb-3">
+                    <label for="direccion" class="form-label-at">Dirección de facturación</label>
+                    <input type="text" class="form-control-at" id="direccion" name="direccion"
+                           value="{{ pasajero.direccion_facturacion or '' }}">
+                </div>
+                <div class="mb-3">
+                    <label for="contacto_emergencia" class="form-label-at">Contacto de emergencia</label>
+                    <input type="text" class="form-control-at" id="contacto_emergencia" name="contacto_emergencia"
+                           value="{{ pasajero.contacto_emergencia or '' }}">
+                </div>
+                <button type="submit" class="btn-at-primary">Guardar contacto</button>
+            </form>
+        </div>
+
+        <div class="at-card" id="documentos">
+            <h2 style="font-size:14.5px;margin-bottom:14px">
+                <i class="bi bi-passport me-1"></i>Documentos de viaje
+            </h2>
+            {% if documentos_viaje %}
+            <div class="d-flex flex-column gap-2 mb-3">
+                {% for d in documentos_viaje %}
+                <div class="d-flex align-items-center justify-content-between"
+                     style="padding:8px 12px;border:1px solid var(--at-border);border-radius:var(--at-r-sm);font-size:13px">
+                    <div>
+                        <strong style="text-transform:capitalize">{{ d.tipo }}</strong> · {{ d.numero }} · {{ d.pais_emision }}
+                        {% if d.fecha_vencimiento %}
+                        <div style="font-size:11px;color:var(--at-sub)">Vence {{ d.fecha_vencimiento[:10] }}</div>
+                        {% endif %}
+                    </div>
+                    <form method="post" action="/mi-perfil/documentos/{{ d.id }}/eliminar"
+                          onsubmit="return confirm('¿Eliminar este documento?');">
+                        <button type="submit" class="btn-icon" style="color:var(--at-danger)" aria-label="Eliminar">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </form>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p style="font-size:13px;color:var(--at-muted);margin-bottom:14px">Todavía no agregaste ningún documento.</p>
+            {% endif %}
+            <form method="post" action="/mi-perfil/documentos" novalidate class="row g-2">
+                <div class="col-6">
+                    <label class="form-label-at" for="doc-tipo">Tipo</label>
+                    <select class="form-control-at" id="doc-tipo" name="tipo" required>
+                        <option value="pasaporte">Pasaporte</option>
+                        <option value="cedula">Cédula</option>
+                        <option value="otro">Otro</option>
+                    </select>
+                </div>
+                <div class="col-6">
+                    <label class="form-label-at" for="doc-pais">País de emisión</label>
+                    <input type="text" class="form-control-at" id="doc-pais" name="pais_emision" required>
+                </div>
+                <div class="col-6">
+                    <label class="form-label-at" for="doc-numero">Número</label>
+                    <input type="text" class="form-control-at" id="doc-numero" name="numero" required>
+                </div>
+                <div class="col-6">
+                    <label class="form-label-at" for="doc-vencimiento">Vencimiento</label>
+                    <input type="date" class="form-control-at" id="doc-vencimiento" name="fecha_vencimiento">
+                </div>
+                <div class="col-12">
+                    <button type="submit" class="btn-at-primary" style="padding:7px 16px;font-size:13px">
+                        <i class="bi bi-plus-lg"></i>Agregar documento
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <div class="at-card" id="viajeros-frecuentes">
+            <h2 style="font-size:14.5px;margin-bottom:14px">
+                <i class="bi bi-people me-1"></i>Viajeros frecuentes
+            </h2>
+            <p style="font-size:12.5px;color:var(--at-muted);margin-bottom:14px">
+                Acompañantes que reservas seguido — se podrán elegir directo en el checkout en vez de escribir sus datos cada vez.
+            </p>
+            {% if viajeros_frecuentes %}
+            <div class="d-flex flex-column gap-2 mb-3">
+                {% for v in viajeros_frecuentes %}
+                <div class="d-flex align-items-center justify-content-between"
+                     style="padding:8px 12px;border:1px solid var(--at-border);border-radius:var(--at-r-sm);font-size:13px">
+                    <div>
+                        <strong>{{ v.nombre_completo }}</strong>
+                        {% if v.relacion %}<span style="color:var(--at-muted)"> · {{ v.relacion }}</span>{% endif %}
+                        {% if v.fecha_nacimiento %}
+                        <div style="font-size:11px;color:var(--at-sub)">Nace {{ v.fecha_nacimiento[:10] }}</div>
+                        {% endif %}
+                    </div>
+                    <form method="post" action="/mi-perfil/viajeros-frecuentes/{{ v.id }}/eliminar"
+                          onsubmit="return confirm('¿Eliminar este viajero frecuente?');">
+                        <button type="submit" class="btn-icon" style="color:var(--at-danger)" aria-label="Eliminar">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </form>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p style="font-size:13px;color:var(--at-muted);margin-bottom:14px">Todavía no agregaste ningún viajero frecuente.</p>
+            {% endif %}
+            <form method="post" action="/mi-perfil/viajeros-frecuentes" novalidate class="row g-2">
+                <div class="col-12 col-md-4">
+                    <label class="form-label-at" for="vf-nombre">Nombre completo</label>
+                    <input type="text" class="form-control-at" id="vf-nombre" name="nombre_completo" required>
+                </div>
+                <div class="col-6 col-md-3">
+                    <label class="form-label-at" for="vf-relacion">Relación</label>
+                    <input type="text" class="form-control-at" id="vf-relacion" name="relacion" placeholder="Ej. Hijo/a, pareja...">
+                </div>
+                <div class="col-6 col-md-3">
+                    <label class="form-label-at" for="vf-nacimiento">Fecha de nacimiento</label>
+                    <input type="date" class="form-control-at" id="vf-nacimiento" name="fecha_nacimiento">
+                </div>
+                <div class="col-6 col-md-2">
+                    <label class="form-label-at" for="vf-documento">N° documento</label>
+                    <input type="text" class="form-control-at" id="vf-documento" name="numero_documento">
+                </div>
+                <div class="col-12">
+                    <button type="submit" class="btn-at-primary" style="padding:7px 16px;font-size:13px">
+                        <i class="bi bi-plus-lg"></i>Agregar viajero frecuente
+                    </button>
+                </div>
+            </form>
+        </div>
+        {% endif %}
+
+        <div class="at-card" id="seguridad">
             <h2 style="font-size:14.5px;margin-bottom:14px">Cambiar contraseña</h2>
             {% if error_password %}
             <div class="flash-bar" role="alert"><div class="flash-error"><i class="bi bi-exclamation-triangle-fill"></i>{{ error_password }}</div></div>
@@ -48,18 +226,59 @@
                 <button type="submit" class="btn-at-primary">Cambiar contraseña</button>
             </form>
         </div>
-    </div>
-</div>
 
-<div class="danger-zone mt-3">
-    <h2 style="font-size:14.5px;color:var(--at-danger);margin-bottom:8px">Eliminar mis datos</h2>
-    <p style="font-size:13px;color:var(--at-muted);margin-bottom:14px">
-        Puedes solicitar la eliminación de tus datos personales. Si tienes reservas o pagos en curso,
-        esos datos se retienen hasta que se resuelvan (política de retención).
-    </p>
-    <form method="post" action="/mi-perfil/solicitar-eliminacion"
-          onsubmit="return confirm('¿Confirmas que quieres solicitar la eliminación de tus datos?');">
-        <button type="submit" class="btn-at-danger"><i class="bi bi-trash"></i>Solicitar eliminación de mis datos</button>
-    </form>
+        <div class="danger-zone" id="eliminar-cuenta">
+            <h2 style="font-size:14.5px;color:var(--at-danger);margin-bottom:8px">Eliminar mis datos</h2>
+            <p style="font-size:13px;color:var(--at-muted);margin-bottom:14px">
+                Puedes solicitar la eliminación de tus datos personales. Si tienes reservas o pagos en curso,
+                esos datos se retienen hasta que se resuelvan (política de retención).
+            </p>
+            <form method="post" action="/mi-perfil/solicitar-eliminacion"
+                  onsubmit="return confirm('¿Confirmas que quieres solicitar la eliminación de tus datos?');">
+                <button type="submit" class="btn-at-danger"><i class="bi bi-trash"></i>Solicitar eliminación de mis datos</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Sidebar: accesos directos a la cuenta -->
+    {% if usuario.tipo_actor == 'pasajero' %}
+    <div class="col-12 col-lg-4">
+        <div class="d-flex flex-column gap-3" style="position:sticky;top:80px">
+            <div class="at-card" style="background:linear-gradient(135deg,var(--navy-700),var(--sky-500));border:none;color:#fff">
+                <h2 style="font-size:14.5px;margin-bottom:6px;color:#fff">¡Planifica tu próximo viaje!</h2>
+                <p style="font-size:12.5px;color:rgba(255,255,255,.85);margin-bottom:14px">
+                    Vuelos, hoteles, autos y actividades — todo en un solo lugar.
+                </p>
+                <a href="/vuelos/buscar" class="btn-at-ghost-dark">
+                    <i class="bi bi-search me-1"></i>Encuentra tu vuelo
+                </a>
+            </div>
+
+            <div class="at-card">
+                <h2 style="font-size:14.5px;margin-bottom:10px">Mi cuenta</h2>
+                <div class="d-flex flex-column">
+                    <a href="/mis-viajes" class="d-flex align-items-center gap-2 py-2 text-decoration-none" style="color:var(--at-text);font-size:13.5px;border-bottom:1px solid var(--at-border)">
+                        <i class="bi bi-ticket-perforated" style="color:var(--sky-500)"></i>Mis viajes
+                    </a>
+                    <a href="/favoritos" class="d-flex align-items-center gap-2 py-2 text-decoration-none" style="color:var(--at-text);font-size:13.5px;border-bottom:1px solid var(--at-border)">
+                        <i class="bi bi-heart" style="color:var(--sky-500)"></i>Favoritos
+                    </a>
+                    <a href="/mi-cuenta/puntos" class="d-flex align-items-center gap-2 py-2 text-decoration-none" style="color:var(--at-text);font-size:13.5px;border-bottom:1px solid var(--at-border)">
+                        <i class="bi bi-award" style="color:var(--sky-500)"></i>Puntos
+                    </a>
+                    <a href="/mis-busquedas-recientes" class="d-flex align-items-center gap-2 py-2 text-decoration-none" style="color:var(--at-text);font-size:13.5px;border-bottom:1px solid var(--at-border)">
+                        <i class="bi bi-clock-history" style="color:var(--sky-500)"></i>Búsquedas recientes
+                    </a>
+                    <a href="/viajes-personalizados" class="d-flex align-items-center gap-2 py-2 text-decoration-none" style="color:var(--at-text);font-size:13.5px;border-bottom:1px solid var(--at-border)">
+                        <i class="bi bi-map" style="color:var(--sky-500)"></i>Planificación de viajes
+                    </a>
+                    <a href="/notificaciones" class="d-flex align-items-center gap-2 py-2 text-decoration-none" style="color:var(--at-text);font-size:13.5px">
+                        <i class="bi bi-bell" style="color:var(--sky-500)"></i>Notificaciones
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}

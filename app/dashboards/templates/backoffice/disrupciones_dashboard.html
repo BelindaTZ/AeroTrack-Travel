@@ -1,0 +1,149 @@
+{% extends "layout_app.html" %}
+{% block title %}Monitoreo de Disrupciones — AeroTrack Travel{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <h1><span class="heading-icon"><i class="bi bi-exclamation-triangle"></i></span>Monitoreo de Disrupciones</h1>
+    <p>Detección temprana y efectividad de la comunicación proactiva con pasajeros.</p>
+</div>
+
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <div id="selector-periodo" class="filter-bar mb-0"></div>
+    <button type="button" class="btn-at-ghost" onclick="window.print()">
+        <i class="bi bi-file-earmark-pdf"></i> Exportar PDF
+    </button>
+</div>
+
+<div id="db-disrupciones-cargando" style="text-align:center;padding:50px 0;color:var(--at-muted)">
+    <div class="spinner-border" style="color:var(--at-primary)" role="status"></div>
+</div>
+
+<div id="db-disrupciones-contenido" style="display:none">
+    <!-- Grupo A — Estado actual -->
+    <div class="row g-3 mb-3">
+        <div class="col-12 col-md-4">
+            <div class="at-card" style="height:100%">
+                <div style="font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--at-sub)">Vuelos en monitoreo hoy</div>
+                <div class="at-mono" id="kpi-vuelos-monitoreo" style="font-size:30px;font-weight:700;color:var(--at-primary)">—</div>
+            </div>
+        </div>
+        <div class="col-12 col-md-4">
+            <div class="at-card" style="height:100%">
+                <div style="font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--at-sub);display:flex;align-items:center;gap:6px">
+                    <span id="semaforo-riesgo" style="width:9px;height:9px;border-radius:50%;display:inline-block;background:var(--at-muted)"></span>
+                    Vuelos con riesgo alto
+                </div>
+                <div class="at-mono" id="kpi-riesgo-alto" style="font-size:30px;font-weight:700">—</div>
+            </div>
+        </div>
+        <div class="col-12 col-md-4">
+            <div class="at-card" style="height:100%">
+                <div style="font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--at-sub)">Notificaciones enviadas</div>
+                <div class="at-mono" id="kpi-notificaciones" style="font-size:30px;font-weight:700;color:var(--at-text)">—</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Grupo B — Efectividad -->
+    <div class="row g-3 mb-3">
+        <div class="col-12 col-lg-5">
+            <div class="at-card">
+                <div style="font-size:12.5px;font-weight:700;margin-bottom:6px">Efectividad de notificaciones</div>
+                <div id="chart-efectividad" style="height:220px"></div>
+            </div>
+        </div>
+        <div class="col-12 col-lg-7">
+            <div class="at-card">
+                <div style="font-size:12.5px;font-weight:700;margin-bottom:6px">Disrupciones por aerolínea <span style="font-weight:400;color:var(--at-muted);font-size:11.5px">(barra clara: benchmark OTP BTS/FAA)</span></div>
+                <div id="chart-disrupciones-aerolinea" style="height:220px"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Grupo C — Histórico y soporte -->
+    <div class="row g-3">
+        <div class="col-12 col-lg-6">
+            <div class="at-card" style="height:100%">
+                <div style="font-size:12.5px;font-weight:700;margin-bottom:6px">Disrupciones por semana <span style="font-weight:400;color:var(--at-muted);font-size:11.5px">(últimas 8 semanas)</span></div>
+                <div id="chart-disrupciones-semana" style="height:200px"></div>
+            </div>
+        </div>
+        <div class="col-12 col-lg-3">
+            <div class="at-card" style="height:100%">
+                <div style="font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--at-sub)">Casos escalados abiertos</div>
+                <div class="at-mono" id="kpi-casos-abiertos" style="font-size:30px;font-weight:700;color:var(--at-danger)">—</div>
+            </div>
+        </div>
+        <div class="col-12 col-lg-3">
+            <div class="at-card" style="height:100%">
+                <div style="font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--at-sub)">Satisfacción promedio</div>
+                <div class="at-mono" id="kpi-satisfaccion" style="font-size:30px;font-weight:700;color:var(--at-text)">—</div>
+                <div style="font-size:11.5px;color:var(--at-muted)"><span id="kpi-satisfaccion-consultas"></span> consultas evaluadas</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+var chartsDisrupciones = [];
+
+function cargarDatosDisrupciones(desde, hasta) {
+    document.getElementById('db-disrupciones-cargando').style.display = '';
+    document.getElementById('db-disrupciones-contenido').style.display = 'none';
+    fetch('/backoffice/dashboards/disrupciones/datos?desde=' + desde + '&hasta=' + hasta)
+        .then(function (r) { return r.json(); })
+        .then(renderDisrupciones);
+}
+
+function renderDisrupciones(d) {
+    document.getElementById('db-disrupciones-cargando').style.display = 'none';
+    document.getElementById('db-disrupciones-contenido').style.display = '';
+    chartsDisrupciones.forEach(function (c) { c && c.dispose(); });
+    chartsDisrupciones = [];
+
+    document.getElementById('kpi-vuelos-monitoreo').textContent = d.vuelos_en_monitoreo;
+    document.getElementById('kpi-riesgo-alto').textContent = d.vuelos_riesgo_alto;
+    var semaforo = d.vuelos_riesgo_alto === 0 ? AEROTRACK_SEMANTIC.success : (d.vuelos_riesgo_alto <= 3 ? AEROTRACK_SEMANTIC.accent : AEROTRACK_SEMANTIC.danger);
+    document.getElementById('semaforo-riesgo').style.background = semaforo;
+    document.getElementById('kpi-riesgo-alto').style.color = semaforo;
+    document.getElementById('kpi-notificaciones').textContent = d.notificaciones_enviadas;
+
+    chartsDisrupciones.push(initChart('chart-efectividad', {
+        series: [{
+            type: 'pie', radius: ['45%', '70%'],
+            data: [
+                { name: 'Con acción del pasajero', value: d.total_exitosas ? Math.round(d.total_exitosas * d.efectividad_pct / 100) : 0 },
+                { name: 'Sin acción', value: d.total_exitosas - Math.round(d.total_exitosas * d.efectividad_pct / 100) },
+                { name: 'Fallidas', value: d.total_fallidas },
+            ],
+            label: { formatter: '{b}\n{d}%' },
+        }],
+    }));
+
+    chartsDisrupciones.push(initChart('chart-disrupciones-aerolinea', {
+        legend: { bottom: 0 },
+        xAxis: { type: 'value' },
+        yAxis: { type: 'category', data: d.disrupciones_por_aerolinea.map(function (a) { return a.aerolinea_nombre; }) },
+        series: [
+            { name: 'Notificaciones', type: 'bar', data: d.disrupciones_por_aerolinea.map(function (a) { return a.total_notificaciones; }) },
+            { name: 'Benchmark OTP BTS/FAA', type: 'bar', data: d.disrupciones_por_aerolinea.map(function (a) { return Math.round(a.otp_benchmark_bts); }), itemStyle: { opacity: .45 } },
+        ],
+    }));
+
+    chartsDisrupciones.push(initChart('chart-disrupciones-semana', {
+        xAxis: { type: 'category', data: d.disrupciones_por_semana.map(function (s) { return s.semana; }) },
+        yAxis: { type: 'value' },
+        series: [{ type: 'line', smooth: true, data: d.disrupciones_por_semana.map(function (s) { return s.total; }), areaStyle: {} }],
+    }));
+
+    document.getElementById('kpi-casos-abiertos').textContent = d.casos_escalados_abiertos;
+    document.getElementById('kpi-satisfaccion').textContent = d.satisfaccion_promedio ? d.satisfaccion_promedio + '/5' : 'Sin datos';
+    document.getElementById('kpi-satisfaccion-consultas').textContent = d.satisfaccion_total_consultas;
+}
+
+initSelectorPeriodo('selector-periodo', function (periodo) {
+    cargarDatosDisrupciones(periodo.desde, periodo.hasta);
+});
+</script>
+{% endblock %}

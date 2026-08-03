@@ -1,0 +1,26 @@
+{# Encabezado estándar de informe simple — Fix global de la auditoría de
+   informes simples (sesión 2026-08-01, Regla general 2 del encargo):
+   nombre, descripción de una línea, referencia CU-T si aplica, y botón
+   "Exportar CSV" que preserva los filtros activos (via `url_exportar`).
+
+   Uso:
+     {% from "_informe_header.html" import header %}
+     {{ header("bi-bell", "Notificaciones de disrupción", "Historial completo...", request, cu_ref="CU-O31", export_path="/backoffice/notificaciones/exportar") }}
+
+   `export_path` es opcional — si no se pasa, no se muestra el botón
+   (para vistas de solo estado en vivo como el monitor del DAG, IS-06).
+#}
+{% macro header(icono, titulo, descripcion, request, cu_ref=None, export_path=None) %}
+<div class="page-heading d-flex justify-content-between align-items-start flex-wrap gap-2">
+    <div>
+        <h1>
+            <span class="heading-icon"><i class="bi {{ icono }}" aria-hidden="true"></i></span>{{ titulo }}
+            {% if cu_ref %}<span class="badge-sistema" style="font-size:11px;vertical-align:middle;margin-left:6px">{{ cu_ref }}</span>{% endif %}
+        </h1>
+        <p>{{ descripcion }}</p>
+    </div>
+    {% if export_path %}
+    <a href="{{ url_exportar(request, export_path) }}" class="btn-at-ghost"><i class="bi bi-download" aria-hidden="true"></i>Exportar CSV</a>
+    {% endif %}
+</div>
+{% endmacro %}

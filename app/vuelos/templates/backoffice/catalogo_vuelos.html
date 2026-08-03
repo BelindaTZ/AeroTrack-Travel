@@ -1,0 +1,170 @@
+{% extends "layout_app.html" %}
+{% from "_paginacion.html" import controles %}
+{% block title %}Catálogo de vuelos — AeroTrack Travel{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <h1><span class="heading-icon"><i class="bi bi-airplane"></i></span>Catálogo de vuelos</h1>
+    <p>El catálogo se genera y actualiza automáticamente (fórmula + AeroDataBox/Google Flights) — desde acá solo se consulta, se fuerza el estado y se ajusta puntualmente una tarifa, nunca se crea un vuelo a mano.</p>
+</div>
+
+<div class="at-table-wrapper">
+    <div class="at-table-header">
+        <form method="get" data-auto-filtros class="d-flex flex-wrap gap-2 align-items-end">
+            <div>
+                <label class="form-label-at" for="f-aerolinea">Aerolínea</label>
+                <select class="form-control-at" id="f-aerolinea" name="aerolinea_id" style="min-width:170px">
+                    <option value="">Todas</option>
+                    {% for a in aerolineas %}
+                    <option value="{{ a.id }}" {% if filtros.aerolinea_id == a.id %}selected{% endif %}>{{ a.nombre }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="form-label-at" for="f-origen">Origen</label>
+                <input type="text" id="f-origen" name="origen" class="form-control-at at-mono text-uppercase" maxlength="3"
+                       value="{{ filtros.origen }}" placeholder="JFK" style="width:90px">
+            </div>
+            <div>
+                <label class="form-label-at" for="f-destino">Destino</label>
+                <input type="text" id="f-destino" name="destino" class="form-control-at at-mono text-uppercase" maxlength="3"
+                       value="{{ filtros.destino }}" placeholder="LAX" style="width:90px">
+            </div>
+            <div>
+                <label class="form-label-at" for="f-fecha">Fecha</label>
+                <input type="date" id="f-fecha" name="fecha" class="form-control-at" value="{{ filtros.fecha }}">
+            </div>
+            <div>
+                <label class="form-label-at" for="f-estado">Estado</label>
+                <select class="form-control-at" id="f-estado" name="estado" style="min-width:140px">
+                    <option value="">Todos</option>
+                    {% for e in estados %}
+                    <option value="{{ e }}" {% if filtros.estado == e %}selected{% endif %}>{{ e.replace('_',' ') }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% if filtros.aerolinea_id or filtros.origen or filtros.destino or filtros.fecha or filtros.estado %}
+            <a href="/backoffice/vuelos" class="btn-at-ghost">Limpiar</a>
+            {% endif %}
+        </form>
+        <a href="/backoffice/vuelos/aerolineas" class="btn-at-ghost"><i class="bi bi-building"></i>Aerolíneas</a>
+    </div>
+
+    {% if not pagina.items %}
+    <div class="at-empty">
+        <i class="bi bi-airplane at-empty-icon" aria-hidden="true"></i>
+        <strong>Sin vuelos con estos filtros</strong>
+    </div>
+    {% else %}
+    <div class="at-table-scroll">
+        <table class="at-table">
+            <thead><tr><th>Vuelo</th><th>Aerolínea</th><th>Ruta</th><th>Salida</th><th>Estado</th><th class="actions-col">Acciones</th></tr></thead>
+            <tbody>
+            {% for v in pagina.items %}
+            <tr>
+                <td class="at-mono" style="font-weight:600">{{ v.numero_vuelo }}</td>
+                <td>{{ v.aerolinea_nombre }}</td>
+                <td class="at-mono">{{ v.origen_codigo }} → {{ v.destino_codigo }}</td>
+                <td class="at-mono" style="font-size:12px">{{ v.fecha_salida[:10] }} {{ v.hora_salida_programada }}</td>
+                <td><span class="badge-sistema">{{ v.estado.replace('_',' ') }}</span></td>
+                <td class="actions-col">
+                    <button type="button" class="btn-icon" data-bs-toggle="modal" data-bs-target="#modal-ver-{{ v.id }}" title="Ver">
+                        <i class="bi bi-eye" aria-hidden="true"></i>
+                    </button>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {{ controles(pagina, request) }}
+    {% endif %}
+</div>
+
+{% for v in pagina.items %}
+<!-- Modal: ver detalle + tarifas -->
+<div class="modal fade" id="modal-ver-{{ v.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title d-flex align-items-center gap-2" style="font-size:16px;font-weight:700">
+                    <span class="modal-icon-title"><i class="bi bi-airplane" aria-hidden="true"></i></span><span class="at-mono">{{ v.numero_vuelo }}</span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body d-flex flex-column gap-2" style="font-size:13.5px">
+                <div class="d-flex justify-content-between"><span style="color:var(--at-muted)">Aerolínea</span><span>{{ v.aerolinea_nombre }}</span></div>
+                <div class="d-flex justify-content-between"><span style="color:var(--at-muted)">Ruta</span><span class="at-mono">{{ v.origen_codigo }} → {{ v.destino_codigo }}</span></div>
+                <div class="d-flex justify-content-between"><span style="color:var(--at-muted)">Salida</span><span class="at-mono">{{ v.fecha_salida[:10] }} {{ v.hora_salida_programada }}</span></div>
+                <div class="d-flex justify-content-between"><span style="color:var(--at-muted)">Llegada</span><span class="at-mono">{{ v.hora_llegada_programada }}</span></div>
+                <div class="d-flex justify-content-between"><span style="color:var(--at-muted)">Estado</span><span class="badge-sistema">{{ v.estado.replace('_',' ') }}</span></div>
+                <div class="d-flex justify-content-between"><span style="color:var(--at-muted)">Origen del registro</span><span class="at-mono" style="font-size:11px">{{ v.generado_por or "—" }}</span></div>
+                <hr class="my-1">
+                <div style="color:var(--at-muted);margin-bottom:4px">Tarifas</div>
+                {% if not v.tarifas %}
+                <div style="font-size:12.5px;color:var(--at-sub)">Sin tarifas generadas todavía.</div>
+                {% else %}
+                <table class="at-table" style="font-size:12.5px">
+                    <thead><tr><th>Clase</th><th>Precio</th><th>Cupos</th><th class="actions-col">Acciones</th></tr></thead>
+                    <tbody>
+                    {% for t in v.tarifas %}
+                    <tr>
+                        <td>{{ t.clase_cabina or "—" }}</td>
+                        <td class="at-mono">${{ "%.2f"|format(t.precio_final) }}</td>
+                        <td class="at-mono">{{ t.cupos_disponibles if t.cupos_disponibles is not none else "—" }}</td>
+                        <td class="actions-col">
+                            <button type="button" class="btn-at-ghost" style="padding:4px 10px;font-size:11.5px" data-bs-toggle="modal" data-bs-target="#modal-ajustar-{{ t.id }}">
+                                Ajustar
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                {% endif %}
+            </div>
+            <div class="modal-footer">
+                <a href="/backoffice/vuelos/forzar-estado" class="btn-at-ghost"><i class="bi bi-exclamation-triangle"></i>Forzar estado</a>
+                <button type="button" class="btn-at-ghost" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% for t in v.tarifas %}
+<!-- Modal: ajustar tarifa puntual -->
+<div class="modal fade" id="modal-ajustar-{{ t.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title d-flex align-items-center gap-2" style="font-size:16px;font-weight:700">
+                    <span class="modal-icon-title"><i class="bi bi-tag" aria-hidden="true"></i></span>Ajustar tarifa — {{ t.clase_cabina }}
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <form method="post" action="/backoffice/vuelos/tarifas/{{ t.id }}/ajustar">
+                <div class="modal-body d-flex flex-column gap-3">
+                    <div style="font-size:12px;color:var(--at-sub)">Excepción puntual — las tarifas se actualizan automáticamente con datos reales; este ajuste queda auditado con el motivo que escribas.</div>
+                    <div>
+                        <label class="form-label-at">Precio final (USD)</label>
+                        <input type="number" step="0.01" min="0" class="form-control-at" name="precio_final" value="{{ t.precio_final }}" required>
+                    </div>
+                    <div>
+                        <label class="form-label-at">Cupos disponibles</label>
+                        <input type="number" min="0" class="form-control-at" name="cupos_disponibles" value="{{ t.cupos_disponibles if t.cupos_disponibles is not none else '' }}">
+                    </div>
+                    <div>
+                        <label class="form-label-at">Motivo (obligatorio)</label>
+                        <input type="text" class="form-control-at" name="motivo" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-at-ghost" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn-at-primary"><i class="bi bi-check2"></i>Guardar ajuste</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% endfor %}
+{% endblock %}

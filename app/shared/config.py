@@ -36,6 +36,45 @@ class Settings:
             "MINIO_BUCKET_TRAVEL_DIMS", "aerotrack-travel-dims"
         )
 
+        # MinIO operacional (REG-A2 ya no aplica a este bucket — lectura y
+        # escritura). Bucket separado de aerotrack-travel-dims, que se queda
+        # como espejo BTS/FAA de solo lectura.
+        self.minio_bucket_travel_operational = os.environ.get(
+            "MINIO_BUCKET_TRAVEL_OPERATIONAL", "aerotrack-travel-operational"
+        )
+
+        # Catálogo NDJSON publicado por el ETL de staging (PocketBase) —
+        # generado por dags/dag_publicar_catalogo_minio.py. Solo lectura
+        # desde la app (la app nunca escribe acá, solo los DAGs).
+        self.minio_bucket_travel_catalog = os.environ.get(
+            "MINIO_BUCKET_TRAVEL_CATALOG", "aerotrack-travel-catalog"
+        )
+
+        # Airflow (CU-T07, solo lectura vía API REST) — mismo criterio
+        # in_docker que MinIO: dentro del compose se resuelve por nombre de
+        # servicio, fuera (dev local) por localhost:8081 (puerto publicado).
+        self.airflow_url = (
+            os.environ.get("AIRFLOW_TRAVEL_URL_DOCKER", "http://airflow-webserver-travel:8080")
+            if in_docker
+            else "http://localhost:8081"
+        )
+        self.airflow_user = os.environ.get("AIRFLOW_TRAVEL_ADMIN_USER", "admin")
+        self.airflow_password = os.environ.get("AIRFLOW_TRAVEL_ADMIN_PASSWORD", "admin1234")
+
+        # ClickHouse (BD analítica, solo lectura desde la app — la carga la
+        # hacen los DAGs `aerotrack_travel_etl_*`, ver dags/config.py). Base
+        # `aerotrack_travel`, no `aerotrack_travel_analitico` (default de
+        # CLICKHOUSE_TRAVEL_DB, sin usar por ahora).
+        self.clickhouse_host = (
+            "clickhouse-travel" if in_docker else "localhost"
+        )
+        self.clickhouse_port = (
+            9000 if in_docker else int(os.environ.get("CLICKHOUSE_TRAVEL_NATIVE_PORT", "9004"))
+        )
+        self.clickhouse_user = os.environ.get("CLICKHOUSE_TRAVEL_USER", "admin")
+        self.clickhouse_password = os.environ.get("CLICKHOUSE_TRAVEL_PASSWORD", "admin1234")
+        self.clickhouse_db = "aerotrack_travel"
+
     @staticmethod
     def _require(name: str) -> str:
         value = os.environ.get(name)

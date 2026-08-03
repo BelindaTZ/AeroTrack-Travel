@@ -1,0 +1,84 @@
+{% extends "layout_app.html" %}
+{% from "_paginacion.html" import controles %}
+{% from "_informe_header.html" import header %}
+{% block title %}Vuelos activos — AeroTrack Travel{% endblock %}
+{% block content %}
+{{ header(
+    "bi-broadcast",
+    "Vuelos activos en monitoreo",
+    "Vuelos aún no completados ni cancelados, ordenados por salida más próxima, con nivel de riesgo estimado por aerolínea.",
+    request,
+    cu_ref="CU-T19",
+    export_path="/backoffice/vuelos/activos/exportar"
+) }}
+
+<div class="at-table-wrapper">
+    <div class="at-table-header">
+        <form method="get" action="/backoffice/vuelos/activos" data-auto-filtros class="d-flex gap-2 align-items-center flex-wrap">
+            <select class="form-control-at" name="aerolinea_id" style="width:220px">
+                <option value="">Todas las aerolíneas</option>
+                {% for a in aerolineas %}
+                <option value="{{ a.id }}" {% if filtros.aerolinea_id == a.id %}selected{% endif %}>{{ a.nombre }}</option>
+                {% endfor %}
+            </select>
+            <input type="text" class="form-control-at" style="width:140px;text-transform:uppercase" name="ruta"
+                   placeholder="Ruta (ej. MIA)" value="{{ filtros.ruta }}">
+            <select class="form-control-at" name="nivel_riesgo" style="width:170px">
+                <option value="">Todos los niveles</option>
+                {% for n in niveles_riesgo %}
+                <option value="{{ n }}" {% if filtros.nivel_riesgo == n %}selected{% endif %}>{{ n | capitalize }}</option>
+                {% endfor %}
+            </select>
+            {% if filtros.aerolinea_id or filtros.ruta or filtros.nivel_riesgo %}
+            <a href="/backoffice/vuelos/activos" class="btn-at-ghost">Limpiar</a>
+            {% endif %}
+        </form>
+    </div>
+    {% if pagina.items %}
+    <div class="at-table-scroll">
+        <table class="at-table">
+            <thead>
+                <tr>
+                    <th>Vuelo</th><th>Aerolínea</th><th>Ruta</th>
+                    <th>Fecha salida</th><th>Hora prog.</th><th>Estado</th><th>Riesgo</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for v in pagina.items %}
+                <tr>
+                    <td class="at-mono" style="font-weight:600">{{ v.numero_vuelo }}</td>
+                    <td>{{ v.aerolinea_nombre }}</td>
+                    <td class="at-mono">{{ v.origen_codigo }} → {{ v.destino_codigo }}</td>
+                    <td class="at-mono" style="font-size:12px;color:var(--at-muted)">{{ v.fecha_salida[:10] if v.fecha_salida else "" }}</td>
+                    <td class="at-mono">{{ v.hora_salida_programada }}</td>
+                    <td>
+                        <span class="badge-sistema"
+                              style="{% if v.estado == 'retrasado' %}background:var(--amber-100);color:var(--amber-700){% elif v.estado == 'desviado' %}background:var(--at-failed-bg);color:var(--at-danger){% else %}background:var(--at-success-bg);color:var(--at-success-fg){% endif %}">
+                            {{ v.estado }}
+                        </span>
+                    </td>
+                    <td>
+                        {% if v.nivel_riesgo == "alto" %}
+                        <span class="badge-sistema" style="background:var(--at-failed-bg);color:var(--at-danger)">alto ({{ v.riesgo_pct }}%)</span>
+                        {% elif v.nivel_riesgo == "medio" %}
+                        <span class="badge-sistema" style="background:var(--at-warning-bg);color:var(--at-warning-fg)">medio ({{ v.riesgo_pct }}%)</span>
+                        {% elif v.nivel_riesgo == "bajo" %}
+                        <span class="badge-sistema" style="background:var(--at-success-bg);color:var(--at-success-fg)">bajo ({{ v.riesgo_pct }}%)</span>
+                        {% else %}
+                        <span style="color:var(--at-sub)">—</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {{ controles(pagina, request) }}
+    {% else %}
+    <div class="at-empty">
+        <i class="bi bi-airplane at-empty-icon" aria-hidden="true"></i>
+        <strong>No hay vuelos activos en monitoreo</strong>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

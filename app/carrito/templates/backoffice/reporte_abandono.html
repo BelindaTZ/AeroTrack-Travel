@@ -1,0 +1,42 @@
+{% extends "layout_app.html" %}
+{% block title %}Reporte de recuperación de carrito — AeroTrack Travel{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <h1><span class="heading-icon"><i class="bi bi-graph-up"></i></span>Recuperación de carritos abandonados</h1>
+    <p>CU-T27 — cuántos carritos se abandonaron en el período y cuántos se recuperaron (volvieron a activo y se convirtieron) tras el recordatorio.</p>
+</div>
+
+<div class="filter-bar mb-3">
+    <a href="?dias=7" class="btn-at-ghost {% if dias == 7 %}active{% endif %}">Últimos 7 días</a>
+    <a href="?dias=30" class="btn-at-ghost {% if dias == 30 %}active{% endif %}">Últimos 30 días</a>
+    <a href="?dias=90" class="btn-at-ghost {% if dias == 90 %}active{% endif %}">Últimos 90 días</a>
+</div>
+
+<div class="row g-3">
+    <div class="col-12 col-md-4">
+        <div class="at-card text-center">
+            <div style="font-size:12px;color:var(--at-muted);font-weight:700">Carritos abandonados</div>
+            <div class="at-mono" style="font-size:28px;font-weight:800">{{ total_abandonados }}</div>
+        </div>
+    </div>
+    <div class="col-12 col-md-4">
+        <div class="at-card text-center">
+            <div style="font-size:12px;color:var(--at-muted);font-weight:700">Recuperados</div>
+            <div class="at-mono" style="font-size:28px;font-weight:800;color:var(--at-success)">{{ recuperados }}</div>
+        </div>
+    </div>
+    <div class="col-12 col-md-4">
+        <div class="at-card text-center">
+            <div style="font-size:12px;color:var(--at-muted);font-weight:700">Tasa de recuperación</div>
+            <div class="at-mono" style="font-size:28px;font-weight:800;color:var(--at-primary)">{{ tasa_recuperacion }}%</div>
+        </div>
+    </div>
+</div>
+
+{% if total_abandonados == 0 %}
+<div class="at-empty mt-3">
+    <i class="bi bi-cart-x at-empty-icon" aria-hidden="true"></i>
+    <strong>Sin carritos abandonados en este período</strong>
+</div>
+{% endif %}
+{% endblock %}

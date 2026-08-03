@@ -1,0 +1,149 @@
+{% extends "layout_app.html" %}
+{% block title %}Niveles de tarifa — AeroTrack Travel{% endblock %}
+{% block content %}
+<a href="/admin/configuracion" class="d-inline-flex align-items-center gap-1 mb-2" style="font-size:13px;color:var(--at-muted);text-decoration:none">
+    <i class="bi bi-arrow-left"></i>Configuración del sistema
+</a>
+<div class="page-heading">
+    <h1><span class="heading-icon"><i class="bi bi-layers"></i></span>Niveles de tarifa</h1>
+    <p>Catálogo de configuración (Light/Standard/Flex, etc.) — sin desactivar, está referenciado por tarifas ya generadas.</p>
+</div>
+
+<div class="at-table-wrapper">
+    <div class="at-table-header">
+        <div></div>
+        <button class="btn-at-primary" data-bs-toggle="modal" data-bs-target="#modal-crear">
+            <i class="bi bi-plus-lg" aria-hidden="true"></i>Nuevo nivel
+        </button>
+    </div>
+
+    {% if not niveles %}
+    <div class="at-empty">
+        <i class="bi bi-layers at-empty-icon" aria-hidden="true"></i>
+        <strong>Sin niveles de tarifa todavía</strong>
+    </div>
+    {% else %}
+    <div class="at-table-scroll">
+        <table class="at-table">
+            <thead><tr><th>Nombre</th><th>Política de reembolso</th><th>Equipaje</th><th>Cambios</th><th>Selección temprana</th><th class="actions-col">Acciones</th></tr></thead>
+            <tbody>
+            {% for n in niveles %}
+            <tr>
+                <td style="font-weight:600">{{ n.nombre }}</td>
+                <td>{{ n.politica_nombre }}</td>
+                <td>{{ "Sí" if n.equipaje_incluido else "No" }}</td>
+                <td>{{ "Sí" if n.cambios_permitidos else "No" }}</td>
+                <td>{{ "Sí" if n.seleccion_asiento_temprana else "No" }}</td>
+                <td class="actions-col">
+                    <button type="button" class="btn-icon" data-bs-toggle="modal" data-bs-target="#modal-editar-{{ n.id }}" title="Editar">
+                        <i class="bi bi-pencil" aria-hidden="true"></i>
+                    </button>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Modal: nuevo nivel -->
+<div class="modal fade" id="modal-crear" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title d-flex align-items-center gap-2" style="font-size:16px;font-weight:700">
+                    <span class="modal-icon-title"><i class="bi bi-layers" aria-hidden="true"></i></span>Nuevo nivel de tarifa
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <form method="post" action="/admin/configuracion/niveles-tarifa">
+                <div class="modal-body d-flex flex-column gap-3">
+                    <div>
+                        <label class="form-label-at" for="c-nombre">Nombre</label>
+                        <input type="text" class="form-control-at" id="c-nombre" name="nombre" required>
+                    </div>
+                    <div>
+                        <label class="form-label-at" for="c-descripcion">Descripción</label>
+                        <input type="text" class="form-control-at" id="c-descripcion" name="descripcion">
+                    </div>
+                    <div>
+                        <label class="form-label-at" for="c-politica">Política de reembolso</label>
+                        <select class="form-control-at" id="c-politica" name="politica_reembolso_id" required>
+                            {% for p in politicas %}
+                            <option value="{{ p.id }}">{{ p.nombre }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="d-flex flex-column gap-2">
+                        <label class="d-flex align-items-center gap-2" style="cursor:pointer">
+                            <input type="checkbox" name="equipaje_incluido" value="true"> Equipaje incluido
+                        </label>
+                        <label class="d-flex align-items-center gap-2" style="cursor:pointer">
+                            <input type="checkbox" name="cambios_permitidos" value="true"> Cambios permitidos
+                        </label>
+                        <label class="d-flex align-items-center gap-2" style="cursor:pointer">
+                            <input type="checkbox" name="seleccion_asiento_temprana" value="true"> Selección de asiento temprana
+                        </label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-at-ghost" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn-at-primary"><i class="bi bi-check2"></i>Crear nivel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% for n in niveles %}
+<!-- Modal: editar -->
+<div class="modal fade" id="modal-editar-{{ n.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title d-flex align-items-center gap-2" style="font-size:16px;font-weight:700">
+                    <span class="modal-icon-title"><i class="bi bi-pencil" aria-hidden="true"></i></span>Editar — {{ n.nombre }}
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <form method="post" action="/admin/configuracion/niveles-tarifa/{{ n.id }}">
+                <div class="modal-body d-flex flex-column gap-3">
+                    <div>
+                        <label class="form-label-at">Nombre</label>
+                        <input type="text" class="form-control-at" name="nombre" value="{{ n.nombre }}" required>
+                    </div>
+                    <div>
+                        <label class="form-label-at">Descripción</label>
+                        <input type="text" class="form-control-at" name="descripcion" value="{{ n.descripcion or '' }}">
+                    </div>
+                    <div>
+                        <label class="form-label-at">Política de reembolso</label>
+                        <select class="form-control-at" name="politica_reembolso_id" required>
+                            {% for p in politicas %}
+                            <option value="{{ p.id }}" {% if n.politica_reembolso_id == p.id %}selected{% endif %}>{{ p.nombre }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="d-flex flex-column gap-2">
+                        <label class="d-flex align-items-center gap-2" style="cursor:pointer">
+                            <input type="checkbox" name="equipaje_incluido" value="true" {% if n.equipaje_incluido %}checked{% endif %}> Equipaje incluido
+                        </label>
+                        <label class="d-flex align-items-center gap-2" style="cursor:pointer">
+                            <input type="checkbox" name="cambios_permitidos" value="true" {% if n.cambios_permitidos %}checked{% endif %}> Cambios permitidos
+                        </label>
+                        <label class="d-flex align-items-center gap-2" style="cursor:pointer">
+                            <input type="checkbox" name="seleccion_asiento_temprana" value="true" {% if n.seleccion_asiento_temprana %}checked{% endif %}> Selección de asiento temprana
+                        </label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-at-ghost" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn-at-primary"><i class="bi bi-check2"></i>Guardar cambios</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% endblock %}

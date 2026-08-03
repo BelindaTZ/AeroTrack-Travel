@@ -1,0 +1,81 @@
+{% extends "layout_app.html" %}
+{% block title %}Descuentos de paquete — AeroTrack Travel{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <h1><span class="heading-icon"><i class="bi bi-box-seam"></i></span>% de descuento por tipo de paquete</h1>
+    <p>Combinaciones de componentes y su descuento vigente (CU-T14). El armado real de un paquete solo acepta vuelo+hotel como obligatorios.</p>
+</div>
+
+{% if mensaje %}
+<div class="flash-bar"><div class="flash-success toast-autodismiss"><i class="bi bi-check-circle-fill"></i>{{ mensaje }}</div></div>
+{% endif %}
+
+<div class="at-table-wrapper">
+    <div class="at-table-header">
+        <span class="at-table-title">{{ combinaciones | length }} combinaciones</span>
+        {% if combinaciones_disponibles %}
+        <button class="btn-at-primary" data-bs-toggle="modal" data-bs-target="#modalNuevaCombinacion">
+            <i class="bi bi-plus-lg" aria-hidden="true"></i>Nueva combinación
+        </button>
+        {% endif %}
+    </div>
+    <div class="at-table-scroll">
+        <table class="at-table">
+            <thead><tr><th>Combinación</th><th>% Descuento</th><th>Activo</th><th class="actions-col">Acciones</th></tr></thead>
+            <tbody>
+                {% for c in combinaciones %}
+                <tr>
+                    <form method="post" action="/backoffice/paquetes/{{ c.id }}">
+                        <td style="font-weight:600">{{ c.combinacion.replace('+', ' + ') }}</td>
+                        <td>
+                            <input type="number" class="form-control-at" style="width:90px;padding:6px 10px;font-size:13px"
+                                   name="porcentaje_descuento" value="{{ c.porcentaje_descuento }}" min="0.1" max="100" step="0.1" required>
+                        </td>
+                        <td>
+                            <label class="toggle-switch">
+                                <input type="checkbox" name="activo" value="true" {% if c.activo %}checked{% endif %}>
+                                <span class="toggle-track"></span>
+                            </label>
+                        </td>
+                        <td class="actions-col">
+                            <button type="submit" class="btn-at-ghost" style="padding:6px 14px;font-size:12.5px">Guardar</button>
+                        </td>
+                    </form>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="modal fade" id="modalNuevaCombinacion" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width:420px">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" style="font-size:16px;font-weight:700">Nueva combinación</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <form method="post" action="/backoffice/paquetes">
+                <div class="modal-body d-flex flex-column gap-3">
+                    <div>
+                        <label class="form-label-at" for="nc-combinacion">Combinación</label>
+                        <select id="nc-combinacion" name="combinacion" class="form-control-at" required>
+                            {% for c in combinaciones_disponibles %}
+                            <option value="{{ c }}">{{ c.replace('+', ' + ') }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label-at" for="nc-porcentaje">% Descuento</label>
+                        <input type="number" class="form-control-at" id="nc-porcentaje" name="porcentaje_descuento" min="0.1" max="100" step="0.1" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-at-ghost" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn-at-primary">Crear</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

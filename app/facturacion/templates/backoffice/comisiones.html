@@ -1,14 +1,44 @@
 {% extends "layout_app.html" %}
+{% from "_paginacion.html" import controles %}
+{% from "_informe_header.html" import header %}
 {% block title %}Comisiones — AeroTrack Travel{% endblock %}
 {% block content %}
-<div class="page-heading">
-    <h1><span class="heading-icon"><i class="bi bi-percent"></i></span>Comisiones</h1>
-    <p>Comisión pactada por aerolínea sobre cada pago exitoso. Una comisión marcada como cobrada no puede revertirse.</p>
+{{ header(
+    "bi-percent",
+    "Comisiones pendientes de cobro por aerolínea",
+    "Comisión pactada por aerolínea sobre cada pago exitoso, agrupada para seguimiento de cobranza. Una comisión marcada como cobrada no puede revertirse.",
+    request,
+    cu_ref="CU-O35",
+    export_path="/backoffice/comisiones/exportar"
+) }}
+
+<h2 class="h6 mb-2" style="font-family:var(--font-display)">Resumen por aerolínea</h2>
+<div class="at-table-wrapper mb-3">
+    <div class="at-table-scroll">
+        <table class="at-table">
+            <thead><tr><th>Aerolínea</th><th>N.º reservas</th><th>Fecha de devengo</th><th>Monto acumulado</th><th>Días transcurridos</th><th>Estado</th></tr></thead>
+            <tbody>
+                {% for r in resumen %}
+                <tr>
+                    <td>{{ r.aerolinea_nombre }}</td>
+                    <td class="at-mono">{{ r.numero_reservas }}</td>
+                    <td class="at-mono" style="font-size:12px">{{ r.fecha_devengo }}</td>
+                    <td class="at-mono">${{ "%.2f"|format(r.monto_acumulado) }}</td>
+                    <td class="at-mono">{{ r.dias_transcurridos }}</td>
+                    <td><span class="badge-sistema" style="background:var(--at-warning-bg);color:var(--at-warning-fg)">pendiente de cobro</span></td>
+                </tr>
+                {% else %}
+                <tr><td colspan="6" class="text-center" style="color:var(--at-text-muted)">Sin comisiones pendientes de cobro para el filtro actual</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 </div>
 
+<h2 class="h6 mb-2" style="font-family:var(--font-display)">Detalle por comisión</h2>
 <div class="at-table-wrapper">
     <div class="at-table-header">
-        <form method="get" action="/backoffice/comisiones" id="form-filtros" class="d-flex gap-2 align-items-center flex-wrap">
+        <form method="get" action="/backoffice/comisiones" data-auto-filtros class="d-flex gap-2 align-items-end flex-wrap">
             <select class="form-control-at" name="estado" style="width:190px">
                 <option value="">Todos los estados</option>
                 <option value="pendiente_cobro" {% if filtros.estado == "pendiente_cobro" %}selected{% endif %}>Pendiente de cobro</option>
@@ -20,15 +50,26 @@
                 <option value="{{ a.id }}" {% if filtros.aerolinea_id == a.id %}selected{% endif %}>{{ a.nombre }}</option>
                 {% endfor %}
             </select>
+            <div>
+                <label class="form-label-at" for="f-desde">Desde</label>
+                <input type="date" id="f-desde" name="desde" class="form-control-at" value="{{ filtros.desde }}">
+            </div>
+            <div>
+                <label class="form-label-at" for="f-hasta">Hasta</label>
+                <input type="date" id="f-hasta" name="hasta" class="form-control-at" value="{{ filtros.hasta }}">
+            </div>
+            {% if filtros.estado or filtros.aerolinea_id or filtros.desde or filtros.hasta %}
+            <a href="/backoffice/comisiones" class="btn-at-ghost">Limpiar</a>
+            {% endif %}
         </form>
     </div>
 
-    {% if comisiones %}
+    {% if pagina.items %}
     <div class="at-table-scroll">
         <table class="at-table">
             <thead><tr><th>Fecha</th><th>Aerolínea</th><th>Monto</th><th>Estado</th><th></th></tr></thead>
             <tbody>
-                {% for c in comisiones %}
+                {% for c in pagina.items %}
                 <tr>
                     <td class="at-mono" style="font-size:12px">{{ c.created[:10] if c.created else "" }}</td>
                     <td>{{ c.aerolinea_nombre }}</td>
@@ -53,6 +94,7 @@
             </tbody>
         </table>
     </div>
+    {{ controles(pagina, request) }}
     {% else %}
     <div class="at-empty">
         <i class="bi bi-percent at-empty-icon" aria-hidden="true"></i>
@@ -60,12 +102,4 @@
     </div>
     {% endif %}
 </div>
-{% endblock %}
-
-{% block scripts %}
-<script>
-document.querySelectorAll('#form-filtros select').forEach(function (el) {
-    el.addEventListener('change', function () { document.getElementById('form-filtros').requestSubmit(); });
-});
-</script>
 {% endblock %}

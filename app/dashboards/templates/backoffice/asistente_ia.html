@@ -1,0 +1,95 @@
+{% extends "layout_app.html" %}
+{% block title %}Asistente IA — AeroTrack Travel{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <h1><span class="heading-icon"><i class="bi bi-robot"></i></span>Inteligencia del Asistente IA</h1>
+    <p>Volumen de consultas, temas frecuentes y respuestas verificables.</p>
+</div>
+
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <div id="selector-periodo" class="filter-bar mb-0"></div>
+    <button type="button" class="btn-at-ghost" onclick="window.print()"><i class="bi bi-file-earmark-pdf"></i> Exportar PDF</button>
+</div>
+
+<div id="db-asistente-cargando" style="text-align:center;padding:50px 0;color:var(--at-muted)">
+    <div class="spinner-border" style="color:var(--at-primary)" role="status"></div>
+</div>
+
+<div id="db-asistente-contenido" style="display:none">
+    <div class="row g-3 mb-3">
+        <div class="col-12 col-md-4">
+            <div class="at-card" style="height:100%">
+                <div style="font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--at-sub)">Total conversaciones del período</div>
+                <div class="at-mono" id="kpi-conversaciones" style="font-size:30px;font-weight:700;color:var(--at-primary)">—</div>
+            </div>
+        </div>
+        <div class="col-12 col-md-4">
+            <div class="at-card" style="height:100%">
+                <div style="font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--at-sub);margin-bottom:4px">% respuestas verificables</div>
+                <div id="chart-gauge-respuesta" style="height:110px"></div>
+            </div>
+        </div>
+        <div class="col-12 col-md-4">
+            <div class="at-card" style="height:100%;background:var(--at-warning-bg)">
+                <div style="font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--at-warning-fg)">Temas sin respuesta satisfactoria</div>
+                <div class="at-mono" id="kpi-sin-respuesta" style="font-size:30px;font-weight:700;color:var(--at-warning-fg)">—</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="at-table-wrapper mb-3">
+        <div class="at-table-header"><span class="at-table-title">Top 15 temas más consultados</span></div>
+        <table class="table" style="font-size:12.5px;margin-bottom:0">
+            <thead><tr><th>Consulta</th><th class="text-end">Frecuencia</th></tr></thead>
+            <tbody id="tabla-temas"></tbody>
+        </table>
+    </div>
+    <div class="at-card">
+        <div style="font-size:12.5px;font-weight:700;margin-bottom:6px">Volumen de consultas por día</div>
+        <div id="chart-volumen-diario" style="height:220px"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+var chartsAsistente = [];
+function cargarDatosAsistente(desde, hasta) {
+    document.getElementById('db-asistente-cargando').style.display = '';
+    document.getElementById('db-asistente-contenido').style.display = 'none';
+    fetch('/backoffice/dashboards/asistente-ia/datos?desde=' + desde + '&hasta=' + hasta).then(function (r) { return r.json(); }).then(renderAsistente);
+}
+function renderAsistente(d) {
+    document.getElementById('db-asistente-cargando').style.display = 'none';
+    document.getElementById('db-asistente-contenido').style.display = '';
+    chartsAsistente.forEach(function (c) { c && c.dispose(); });
+    chartsAsistente = [];
+
+    document.getElementById('kpi-conversaciones').textContent = d.total_conversaciones;
+    document.getElementById('kpi-sin-respuesta').textContent = d.temas_sin_respuesta;
+
+    chartsAsistente.push(initChart('chart-gauge-respuesta', {
+        series: [{
+            type: 'gauge', min: 0, max: 100, startAngle: 180, endAngle: 0, radius: '100%', center: ['50%', '85%'],
+            axisLine: { lineStyle: { width: 10, color: [[1, AEROTRACK_SEMANTIC.success + '33']] } },
+            pointer: { length: '55%', itemStyle: { color: AEROTRACK_SEMANTIC.success } },
+            progress: { show: true, width: 10, itemStyle: { color: AEROTRACK_SEMANTIC.success } },
+            splitLine: { show: false }, axisTick: { show: false }, axisLabel: { show: false }, anchor: { show: false }, title: { show: false },
+            detail: { fontSize: 20, fontWeight: 700, offsetCenter: [0, '-15%'], formatter: '{value}%', color: AEROTRACK_SEMANTIC.success },
+            data: [{ value: d.pct_con_respuesta_verificable }],
+        }],
+    }));
+
+    document.getElementById('tabla-temas').innerHTML = d.top_15_temas.map(function (t) {
+        return '<tr><td>' + t.tema + '</td><td class="text-end">' + t.frecuencia + '</td></tr>';
+    }).join('') || '<tr><td colspan="2" class="text-center" style="color:var(--at-muted)">Sin consultas en el período</td></tr>';
+
+    chartsAsistente.push(initChart('chart-volumen-diario', {
+        xAxis: { type: 'category', data: d.volumen_diario.map(function (v) { return v.dia; }) },
+        yAxis: { type: 'value' },
+        series: [{ type: 'line', smooth: true, data: d.volumen_diario.map(function (v) { return v.total; }), areaStyle: {} }],
+    }));
+}
+initSelectorPeriodo('selector-periodo', function (periodo) { cargarDatosAsistente(periodo.desde, periodo.hasta); });
+</script>
+{% endblock %}

@@ -96,7 +96,7 @@ def main() -> None:
 
     print("Verificando/creando autos_catalogo...")
 
-    ensure_collection(
+    autos_catalogo = ensure_collection(
         headers,
         {
             "name": "autos_catalogo",
@@ -115,6 +115,27 @@ def main() -> None:
                 select_field("modalidad_pago_disponible", ["pagar_ahora", "pagar_al_recoger"]),
                 relation_field("politica_reembolso_id", cache["politicas_reembolso"]["id"]),
                 text_field("fuente_oferta_ref"),
+                date_field("fecha_actualizacion", required=True),
+            ],
+            **LOCKED_RULES,
+        },
+        cache,
+    )
+
+    ensure_collection(
+        headers,
+        {
+            # Disponibilidad real por DÍA — antes recogida/devolución eran
+            # cosméticas (ver errores-conocidos.md). `autos_catalogo` se borra
+            # y recrea entero con IDs nuevos en cada refresh
+            # (`eliminar_ofertas_de_ciudad`) — estas filas se limpian junto
+            # con el auto al que pertenecen.
+            "name": "autos_disponibilidad",
+            "type": "base",
+            "schema": [
+                relation_field("auto_id", autos_catalogo["id"], required=True),
+                date_field("fecha", required=True),
+                number_field("cupos_disponibles"),
                 date_field("fecha_actualizacion", required=True),
             ],
             **LOCKED_RULES,

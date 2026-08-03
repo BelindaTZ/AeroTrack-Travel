@@ -1,53 +1,151 @@
 {% extends "layout_app.html" %}
+{% from "_paginacion.html" import controles %}
+{% from "_informe_header.html" import header %}
 {% block title %}Remesas — AeroTrack Travel{% endblock %}
 {% block content %}
-<div class="page-heading">
-    <h1><span class="heading-icon"><i class="bi bi-bank"></i></span>Remesas</h1>
-    <p>Agrupa las comisiones ya cobradas de una aerolínea en un periodo para su liquidación.</p>
-</div>
-
-<div class="at-card mb-3">
-    <h2 style="font-size:14.5px;margin-bottom:10px">Generar remesa</h2>
-    <form method="post" action="/backoffice/remesas" class="d-flex gap-2 align-items-end flex-wrap">
-        <div>
-            <label class="d-block" style="font-size:12.5px;color:var(--at-muted)">Aerolínea</label>
-            <select class="form-control-at" name="aerolinea_id" required style="width:220px">
-                {% for a in aerolineas %}
-                <option value="{{ a.id }}">{{ a.nombre }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        <div>
-            <label class="d-block" style="font-size:12.5px;color:var(--at-muted)">Periodo</label>
-            <input type="text" class="form-control-at" name="periodo" placeholder="2026-07" required style="width:150px">
-        </div>
-        <button type="submit" class="btn-at-accent"><i class="bi bi-plus-lg"></i>Generar remesa</button>
-    </form>
-</div>
+{{ header(
+    "bi-bank",
+    "Remesas pendientes de pago a proveedores",
+    "Agrupa las comisiones ya cobradas de una aerolínea en un periodo para su liquidación.",
+    request,
+    cu_ref="CU-T52",
+    export_path="/backoffice/remesas/exportar"
+) }}
 
 <div class="at-table-wrapper">
-    {% if remesas %}
+    <div class="at-table-header">
+        <form method="get" data-auto-filtros class="d-flex flex-wrap gap-2 align-items-end">
+            <div>
+                <label class="form-label-at" for="f-estado">Estado</label>
+                <select class="form-control-at" id="f-estado" name="estado" style="min-width:150px">
+                    <option value="">Todos</option>
+                    <option value="pendiente" {% if filtros.estado == 'pendiente' %}selected{% endif %}>Pendiente de pago</option>
+                    <option value="pagada" {% if filtros.estado == 'pagada' %}selected{% endif %}>Pagada</option>
+                </select>
+            </div>
+            <div>
+                <label class="form-label-at" for="f-aerolinea">Aerolínea</label>
+                <select class="form-control-at" id="f-aerolinea" name="aerolinea_id" style="min-width:190px">
+                    <option value="">Todas</option>
+                    {% for a in aerolineas %}
+                    <option value="{{ a.id }}" {% if filtros.aerolinea_id == a.id %}selected{% endif %}>{{ a.nombre }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="form-label-at" for="f-desde">Desde</label>
+                <input type="date" class="form-control-at" id="f-desde" name="desde" value="{{ filtros.desde }}">
+            </div>
+            <div>
+                <label class="form-label-at" for="f-hasta">Hasta</label>
+                <input type="date" class="form-control-at" id="f-hasta" name="hasta" value="{{ filtros.hasta }}">
+            </div>
+            {% if filtros.estado or filtros.aerolinea_id or filtros.desde or filtros.hasta %}
+            <a href="/backoffice/remesas" class="btn-at-ghost">Limpiar</a>
+            {% endif %}
+        </form>
+        <button class="btn-at-primary" data-bs-toggle="modal" data-bs-target="#modal-generar">
+            <i class="bi bi-plus-lg" aria-hidden="true"></i>Generar remesa
+        </button>
+    </div>
+
+    {% if not pagina.items %}
+    <div class="at-empty">
+        <i class="bi bi-bank at-empty-icon" aria-hidden="true"></i>
+        <strong>Sin remesas con estos filtros</strong>
+    </div>
+    {% else %}
     <div class="at-table-scroll">
         <table class="at-table">
-            <thead><tr><th>Fecha</th><th>Aerolínea</th><th>Periodo</th><th>Monto total</th><th>Estado</th></tr></thead>
+            <thead><tr><th>Fecha</th><th>Aerolínea</th><th>Periodo</th><th>Monto total</th><th>Estado</th><th class="actions-col">Acciones</th></tr></thead>
             <tbody>
-                {% for r in remesas %}
+                {% for r in pagina.items %}
                 <tr>
                     <td class="at-mono" style="font-size:12px">{{ r.created[:10] if r.created else "" }}</td>
                     <td>{{ r.aerolinea_nombre }}</td>
                     <td>{{ r.periodo }}</td>
                     <td class="at-mono">${{ "%.2f"|format(r.monto_total) }}</td>
-                    <td><span class="badge-sistema">{{ r.estado }}</span></td>
+                    <td>
+                        {% if r.estado == "pagada" %}
+                        <span class="badge-sistema" style="background:var(--at-success-bg);color:var(--at-success-fg)">pagada</span>
+                        {% else %}
+                        <span class="badge-sistema" style="background:var(--at-warning-bg);color:var(--at-warning-fg)">{{ r.estado }}</span>
+                        {% endif %}
+                    </td>
+                    <td class="actions-col">
+                        {% if r.estado != "pagada" %}
+                        <button type="button" class="btn-icon" data-bs-toggle="modal" data-bs-target="#modal-pagar-{{ r.id }}" title="Marcar pagada">
+                            <i class="bi bi-check-lg" aria-hidden="true"></i>
+                        </button>
+                        {% endif %}
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
-    {% else %}
-    <div class="at-empty">
-        <i class="bi bi-bank at-empty-icon" aria-hidden="true"></i>
-        <strong>Todavía no hay remesas generadas</strong>
-    </div>
+    {{ controles(pagina, request) }}
     {% endif %}
 </div>
+
+<!-- Modal: generar remesa -->
+<div class="modal fade" id="modal-generar" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title d-flex align-items-center gap-2" style="font-size:16px;font-weight:700">
+                    <span class="modal-icon-title"><i class="bi bi-bank" aria-hidden="true"></i></span>Generar remesa
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <form method="post" action="/backoffice/remesas">
+                <div class="modal-body d-flex flex-column gap-3">
+                    <div>
+                        <label class="form-label-at" for="g-aerolinea">Aerolínea</label>
+                        <select class="form-control-at" id="g-aerolinea" name="aerolinea_id" required>
+                            {% for a in aerolineas %}
+                            <option value="{{ a.id }}">{{ a.nombre }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label-at" for="g-periodo">Periodo</label>
+                        <input type="text" class="form-control-at" id="g-periodo" name="periodo" placeholder="2026-07" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-at-ghost" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn-at-primary"><i class="bi bi-check2"></i>Generar remesa</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% for r in pagina.items %}
+{% if r.estado != "pagada" %}
+<!-- Modal: confirmar marcar pagada -->
+<div class="modal fade" id="modal-pagar-{{ r.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width:420px">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title d-flex align-items-center gap-2" style="font-size:16px;font-weight:700">
+                    <span class="modal-icon-title"><i class="bi bi-check-lg" aria-hidden="true"></i></span>Marcar pagada
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body" style="font-size:13.5px">
+                ¿Marcar la remesa de <strong>{{ r.aerolinea_nombre }}</strong> ({{ r.periodo }}, <span class="at-mono">${{ "%.2f"|format(r.monto_total) }}</span>) como pagada? No podrás revertirlo.
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-at-ghost" data-bs-dismiss="modal">Cancelar</button>
+                <form method="post" action="/backoffice/remesas/{{ r.id }}/marcar-pagada" class="m-0">
+                    <button type="submit" class="btn-at-primary"><i class="bi bi-check-lg"></i> Marcar pagada</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endfor %}
 {% endblock %}

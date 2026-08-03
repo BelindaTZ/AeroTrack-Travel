@@ -17,6 +17,8 @@ from app.shared.rotacion_ciudades import rebanada_rotativa
 CIUDADES_DEFAULT = ["Paris", "Madrid", "New York"]
 PROVEEDOR_AGREGADOR = "expedia"
 CIUDADES_POR_CORRIDA_DEFAULT = 2
+DIAS_ADELANTE_DEFAULT = 30
+CUPOS_DEFAULT = 5
 
 
 def _ahora_iso() -> str:
@@ -53,6 +55,31 @@ def _tarjeta_a_auto(card: dict, ciudad: str, codigo_ciudad: str, ahora: str) -> 
         "fuente_oferta_ref": (card.get("detailsContext") or {}).get("carOfferToken"),
         "fecha_actualizacion": ahora,
     }
+
+
+async def _generar_disponibilidad_sintetica_auto(repo: AutosRepository, auto_id: str) -> int:
+    """RF-AUT-004 (gap real cerrado 2026-07-29, ver errores-conocidos.md) —
+    antes recogida/devolución eran cosméticas: ninguna fila tenía cupo por
+    día. Mismo patrón que actividades/hoteles: ventana móvil regenerada
+    completa en cada refresh (el auto padre también se borra y recrea
+    entero cada corrida, ver `eliminar_ofertas_de_ciudad`). Global Rental
+    Cars no da señal de flota real — cupo puramente sintético, a diferencia
+    de hoteles (que sí puede heredar `rooms_left` cuando existe)."""
+    dias_valor = await repo.config("disponibilidad_autos.dias_adelante")
+    dias_adelante = int(dias_valor) if dias_valor else DIAS_ADELANTE_DEFAULT
+    cupos_valor = await repo.config("disponibilidad_autos.cupos_default")
+    cupos = int(cupos_valor) if cupos_valor else CUPOS_DEFAULT
+
+    hoy = datetime.date.today()
+    ahora = _ahora_iso()
+    creados = 0
+    for dia_offset in range(dias_adelante):
+        fecha = hoy + datetime.timedelta(days=dia_offset)
+        await repo.crear_disponibilidad(
+            {"auto_id": auto_id, "fecha": fecha.isoformat(), "cupos_disponibles": cupos, "fecha_actualizacion": ahora}
+        )
+        creados += 1
+    return creados
 
 
 async def generar_catalogo(client: RentalCarsClient, ciudades: list[str] | None = None) -> dict:
@@ -97,7 +124,10 @@ async def generar_catalogo(client: RentalCarsClient, ciudades: list[str] | None 
                 auto_data = _tarjeta_a_auto(tarjeta, ciudad, codigo, ahora)
                 if auto_data is None:
                     continue
-                await repo.crear_auto(auto_data)
+                auto = await repo.crear_auto(auto_data)
+                # Disponibilidad real por día (RF-AUT-004, gap cerrado
+                # 2026-07-29) — sin esto el auto no es reservable con fecha real.
+                await _generar_disponibilidad_sintetica_auto(repo, auto["id"])
                 creados += 1
         estado = "exitoso" if creados > 0 else "parcial"
     except Exception as exc:  # noqa: BLE001 — se registra en la bitácora, no se oculta

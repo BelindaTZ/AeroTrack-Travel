@@ -82,7 +82,8 @@ async def test_hay_cupo_considera_lo_gastado_en_la_corrida_actual(pb):
 
 
 async def _admin_id(pb) -> str:
-    admin = await pb.get_first("usuarios", 'tipo_actor="administrador"')
+    rol = await pb.get_first("roles", 'nombre="Administrador"')
+    admin = await pb.get_first("usuarios", f'rol_id="{rol["id"]}"')
     assert admin is not None
     return admin["id"]
 

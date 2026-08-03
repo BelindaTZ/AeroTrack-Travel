@@ -1,0 +1,117 @@
+{% extends "layout_app.html" %}
+{% block title %}Campañas y Promociones — AeroTrack Travel{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <h1><span class="heading-icon"><i class="bi bi-envelope-paper"></i></span>Efectividad de Campañas y Promociones</h1>
+    <p>Cupones, newsletter y favoritos guardados.</p>
+</div>
+
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <div id="selector-periodo" class="filter-bar mb-0"></div>
+    <button type="button" class="btn-at-ghost" onclick="window.print()"><i class="bi bi-file-earmark-pdf"></i> Exportar PDF</button>
+</div>
+
+<div id="db-campanas-cargando" style="text-align:center;padding:50px 0;color:var(--at-muted)">
+    <div class="spinner-border" style="color:var(--at-primary)" role="status"></div>
+</div>
+
+<div id="db-campanas-contenido" style="display:none">
+    <div class="row g-3 mb-3">
+        <div class="col-12 col-md-4">
+            <div class="at-card" style="height:100%">
+                <div style="font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--at-sub)">Cupones canjeados</div>
+                <div class="at-mono" id="kpi-cupones-canjeados" style="font-size:30px;font-weight:700;color:var(--at-primary)">—</div>
+                <div style="font-size:11.5px;color:var(--at-muted)"><span id="kpi-cupones-pct"></span>% sobre <span id="kpi-cupones-emitidos"></span> emitidos</div>
+            </div>
+        </div>
+        <div class="col-12 col-md-4">
+            <div class="at-card" style="height:100%">
+                <div style="font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--at-sub)">Descuento total aplicado</div>
+                <div class="at-mono" id="kpi-descuento-total" style="font-size:30px;font-weight:700;color:var(--at-text)">—</div>
+            </div>
+        </div>
+        <div class="col-12 col-md-4">
+            <div class="at-card" style="height:100%">
+                <div style="font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--at-sub)">Última campaña</div>
+                <div class="at-mono" id="kpi-ultima-campana" style="font-size:16px;font-weight:700;color:var(--at-text);margin-top:4px">—</div>
+                <div style="font-size:11.5px;color:var(--at-muted)" id="kpi-apertura">Sin tracking de apertura disponible</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="at-card mb-3">
+        <div style="font-size:12.5px;font-weight:700;margin-bottom:6px">Cupones usados por tipo de descuento</div>
+        <div id="chart-cupones-tipo" style="height:200px"></div>
+    </div>
+    <div class="at-card mb-3">
+        <div style="font-size:12.5px;font-weight:700;margin-bottom:6px">Suscriptores — altas vs bajas por semana</div>
+        <div id="chart-suscriptores" style="height:220px"></div>
+    </div>
+    <div class="row g-3">
+        <div class="col-12 col-lg-7">
+            <div class="at-table-wrapper" style="height:100%">
+                <div class="at-table-header"><span class="at-table-title">Top 10 más guardados como favoritos</span></div>
+                <table class="table" style="font-size:12.5px;margin-bottom:0">
+                    <thead><tr><th>Referencia</th><th class="text-end">Veces guardado</th></tr></thead>
+                    <tbody id="tabla-favoritos"></tbody>
+                </table>
+            </div>
+        </div>
+        <div class="col-12 col-lg-5">
+            <div class="at-card" style="height:100%">
+                <div style="font-size:12.5px;font-weight:700;margin-bottom:6px">Favoritos por tipo</div>
+                <div id="chart-favoritos-tipo" style="height:200px"></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+var chartsCampanas = [];
+function cargarDatosCampanas(desde, hasta) {
+    document.getElementById('db-campanas-cargando').style.display = '';
+    document.getElementById('db-campanas-contenido').style.display = 'none';
+    fetch('/backoffice/dashboards/campanas/datos?desde=' + desde + '&hasta=' + hasta).then(function (r) { return r.json(); }).then(renderCampanas);
+}
+function renderCampanas(d) {
+    document.getElementById('db-campanas-cargando').style.display = 'none';
+    document.getElementById('db-campanas-contenido').style.display = '';
+    chartsCampanas.forEach(function (c) { c && c.dispose(); });
+    chartsCampanas = [];
+
+    document.getElementById('kpi-cupones-canjeados').textContent = d.cupones_canjeados;
+    document.getElementById('kpi-cupones-pct').textContent = d.pct_sobre_emitidos;
+    document.getElementById('kpi-cupones-emitidos').textContent = d.cupones_emitidos;
+    document.getElementById('kpi-descuento-total').textContent = '$' + d.descuento_total.toLocaleString('es', { maximumFractionDigits: 0 });
+    document.getElementById('kpi-ultima-campana').textContent = d.ultima_campana_nombre || 'Sin campañas';
+
+    chartsCampanas.push(initChart('chart-cupones-tipo', {
+        xAxis: { type: 'category', data: d.cupones_por_tipo.map(function (c) { return c.tipo; }) },
+        yAxis: { type: 'value' },
+        series: [{ type: 'bar', data: d.cupones_por_tipo.map(function (c) { return c.usos; }) }],
+    }));
+
+    chartsCampanas.push(initChart('chart-suscriptores', {
+        legend: { bottom: 0 },
+        xAxis: { type: 'category', data: d.suscriptores_semana.semanas },
+        yAxis: { type: 'value' },
+        series: [
+            { name: 'Altas', type: 'line', data: d.suscriptores_semana.altas, smooth: true, itemStyle: { color: AEROTRACK_SEMANTIC.success } },
+            { name: 'Bajas', type: 'line', data: d.suscriptores_semana.bajas, smooth: true, itemStyle: { color: AEROTRACK_SEMANTIC.danger } },
+        ],
+    }));
+
+    document.getElementById('tabla-favoritos').innerHTML = d.top_favoritos.map(function (f) {
+        return '<tr><td>' + f.referencia + '</td><td class="text-end">' + f.veces_guardado + '</td></tr>';
+    }).join('') || '<tr><td colspan="2" class="text-center" style="color:var(--at-muted)">Sin favoritos en el período</td></tr>';
+
+    chartsCampanas.push(initChart('chart-favoritos-tipo', {
+        legend: { bottom: 0 },
+        series: [{ type: 'pie', radius: ['45%', '70%'], data: d.favoritos_por_tipo.map(function (f) { return { name: f.tipo, value: f.total }; }), label: { formatter: '{b}\n{d}%' } }],
+    }));
+}
+initSelectorPeriodo('selector-periodo', function (periodo) { cargarDatosCampanas(periodo.desde, periodo.hasta); });
+</script>
+{% endblock %}

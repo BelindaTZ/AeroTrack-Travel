@@ -1,4 +1,8 @@
-from urllib.parse import unquote
+from urllib.parse import unquote_plus as unquote
+
+from app.facturacion.repositories.facturacion_repo import FacturacionRepository
+from app.reservas.repositories.reservas_repo import ReservasRepository
+from app.shared import minio_operational_client as moc
 
 
 async def _login(client, usuario):
@@ -11,7 +15,7 @@ async def _login(client, usuario):
 # ── RF-RES-004 / RN-RES-003 (CHK005, CHK012, CHK021) ──────────────────────
 
 async def test_cancelar_bloqueada_si_vuelo_completado(
-    client, pb, pasajero_factory, vuelo_factory, tarifa_factory, reserva_factory
+    client, pasajero_factory, vuelo_factory, tarifa_factory, reserva_factory
 ):
     usuario, pasajero = await pasajero_factory()
     vuelo = await vuelo_factory(estado="completado")
@@ -23,7 +27,7 @@ async def test_cancelar_bloqueada_si_vuelo_completado(
     assert resp.status_code == 303
     assert "No es posible cancelar un vuelo ya realizado" in unquote(resp.headers["location"])
 
-    sin_cambios = await pb.get_record("reservas", reserva["id"])
+    sin_cambios = await ReservasRepository().obtener_reserva(reserva["id"])
     assert sin_cambios["estado"] == "confirmada"
 
 
@@ -41,25 +45,29 @@ async def test_cancelar_normal_pasa_a_cancelada_y_registra_reembolso_segun_polit
         pasajero["id"], vuelo["id"], tarifa["id"], estado="pendiente_pago", total_pagar=200.0
     )
 
+    reservas_repo = ReservasRepository()
+    facturacion_repo = FacturacionRepository()
+
     await _login(client, usuario)
     # Paga de verdad primero (Stripe test mode real) para que exista un
     # `pagos` exitoso sobre el que Facturación pueda calcular el reembolso —
     # cerrar este punto significa dejar de simularlo, no solo de auditarlo.
     resp_pago = await client.post(f"/reservas/{reserva['id']}/pagar", data={"escenario": "exitoso"})
     assert resp_pago.status_code == 303
-    pago = await pb.get_first("pagos", f'reserva_id="{reserva["id"]}" && estado="exitoso"')
+    pago = await facturacion_repo.pago_exitoso_de_reserva(reserva["id"])
     assert pago is not None
 
     resp = await client.post(f"/reservas/{reserva['id']}/cancelar")
     assert resp.status_code == 303
 
-    actualizada = await pb.get_record("reservas", reserva["id"])
+    actualizada = await reservas_repo.obtener_reserva(reserva["id"])
     assert actualizada["estado"] == "cancelada"
 
     registro = await pb.get_first("auditoria", f'accion="cancelar" && registro_id="{reserva["id"]}"')
     assert registro is not None
 
-    reembolso = await pb.get_first("reembolsos", f'reserva_id="{reserva["id"]}"')
+    reembolsos = await moc.listar_todos("reembolsos")
+    reembolso = next((r for r in reembolsos if r.get("reserva_id") == reserva["id"]), None)
     if politica["porcentaje_reembolso"] > 0:
         # Reembolso real vía Stripe test mode — no un marcador de "pendiente".
         assert reembolso is not None
@@ -69,21 +77,22 @@ async def test_cancelar_normal_pasa_a_cancelada_y_registra_reembolso_segun_polit
         assert reembolso["monto"] == esperado
         assert registro["detalle"]["reembolso_monto"] == esperado
 
-        pago_actualizado = await pb.get_record("pagos", pago["id"])
+        pago_actualizado = await facturacion_repo.obtener_pago(pago["id"])
         assert pago_actualizado["estado"] == "reembolsado"
-        await pb.delete_record("reembolsos", reembolso["id"])
+        await moc.eliminar("reembolsos", reembolso["id"])
     else:
         assert reembolso is None
         assert "estado_reembolso" not in registro["detalle"]
 
     await pb.delete_record("auditoria", registro["id"])
-    factura = await pb.get_first("facturas", f'pago_id="{pago["id"]}"')
+    factura = await facturacion_repo.factura_de_pago(pago["id"])
     if factura is not None:
-        await pb.delete_record("facturas", factura["id"])
-    comision = await pb.get_first("comisiones", f'reserva_id="{reserva["id"]}"')
+        await moc.eliminar("facturas", factura["id"])
+    comisiones = await facturacion_repo.listar_comisiones()
+    comision = next((c for c in comisiones if c.get("reserva_id") == reserva["id"]), None)
     if comision is not None:
-        await pb.delete_record("comisiones", comision["id"])
-    await pb.delete_record("pagos", pago["id"])
+        await moc.eliminar("comisiones", comision["id"])
+    await moc.eliminar("pagos", pago["id"])
 
 
 async def test_cancelar_reserva_ajena_bloqueada(client, pasajero_factory, vuelo_factory, tarifa_factory, reserva_factory):

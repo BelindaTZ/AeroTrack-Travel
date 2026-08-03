@@ -29,6 +29,7 @@ MINIO_ENDPOINT = (
 MINIO_ACCESS = os.getenv("MINIO_TRAVEL_ACCESS", "admin")
 MINIO_SECRET = os.getenv("MINIO_TRAVEL_SECRET", "admin1234")
 MINIO_BUCKET_TRAVEL_DIMS = os.getenv("MINIO_BUCKET_TRAVEL_DIMS", "aerotrack-travel-dims")
+MINIO_BUCKET_TRAVEL_CATALOG = os.getenv("MINIO_BUCKET_TRAVEL_CATALOG", "aerotrack-travel-catalog")
 
 # ── PocketBase Travel: instancia NUEVA y separada ───────────────────────────
 PB_TRAVEL_URL = (
@@ -50,6 +51,23 @@ APP_TRAVEL_URL = (
 #    configuracion_sistema vía get_config(), ver pocketbase_client.py) ──────
 DEFAULT_UMBRAL_API_REAL_HORAS = 72
 DEFAULT_HORIZONTE_CATALOGO_DIAS = 7
+
+# ── ClickHouse Travel (BD analítica, base `aerotrack_travel` — no confundir
+#    con `aerotrack_travel_analitico`, que sigue siendo la base configurada
+#    en CLICKHOUSE_TRAVEL_DB para otros usos futuros) ────────────────────────
+CLICKHOUSE_HOST = "clickhouse-travel" if IN_DOCKER else "localhost"
+CLICKHOUSE_PORT = 9000 if IN_DOCKER else int(os.getenv("CLICKHOUSE_TRAVEL_NATIVE_PORT", "9004"))
+CLICKHOUSE_USER = os.getenv("CLICKHOUSE_TRAVEL_USER", "admin")
+CLICKHOUSE_PASSWORD = os.getenv("CLICKHOUSE_TRAVEL_PASSWORD", "admin1234")
+CLICKHOUSE_DB = "aerotrack_travel"
+
+# ── Staging de Parquet crudo/procesando/terminado del pipeline ETL ─────────
+PARQUET_BASE_DIR = (
+    Path("/opt/airflow/datos/parquet") if IN_DOCKER else Path(__file__).parent.parent / "datos" / "parquet"
+)
+PARQUET_CRUDO = PARQUET_BASE_DIR / "crudo"
+PARQUET_PROCESANDO = PARQUET_BASE_DIR / "procesando"
+PARQUET_TERMINADO = PARQUET_BASE_DIR / "terminado"
 
 # ── Integración puente con AeroTrack Analytics (minio-elt) ─────────────────
 # SOLO la usa el DAG aerotrack_travel_sync_dims para disparar el ELT/cobertura

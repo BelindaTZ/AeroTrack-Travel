@@ -13,17 +13,24 @@ async def test_login_credenciales_correctas_emite_token_y_redirige(client, usuar
         "/login", data={"email": usuario["email"], "password": usuario["_password"]}
     )
     assert resp.status_code == 303
-    assert resp.headers["location"] == "/mi-perfil"
+    # Pasajero aterriza en la home (portal completo, nav siempre visible) en
+    # vez de Mi perfil — ver _panel_por_rol() en router_auth.py.
+    assert resp.headers["location"] == "/"
     assert COOKIE_NAME in resp.cookies
 
 
-async def test_login_admin_redirige_a_panel_admin(client, usuario_factory, rol_administrador):
+async def test_login_admin_redirige_a_su_primer_dashboard(client, usuario_factory, rol_administrador):
+    """Desde la Fase C (dashboards), el staff aterriza directo en su primer
+    dashboard accesible en vez de un destino fijo — ver
+    _panel_por_rol()/primer_dashboard_accesible() en router_auth.py/nav.py.
+    Administrador no tiene restricciones Nivel 2 en "dashboards", así que
+    su primer dashboard es siempre el primero del catálogo (comercial)."""
     usuario = await usuario_factory(tipo_actor="administrador", rol_id=rol_administrador["id"])
     resp = await client.post(
         "/login", data={"email": usuario["email"], "password": usuario["_password"]}
     )
     assert resp.status_code == 303
-    assert resp.headers["location"] == "/admin/usuarios"
+    assert resp.headers["location"] == "/backoffice/dashboards/comercial"
 
 
 async def test_login_credenciales_incorrectas_mensaje_generico(client, usuario_factory):

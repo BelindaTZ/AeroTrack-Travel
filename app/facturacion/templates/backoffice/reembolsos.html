@@ -1,0 +1,79 @@
+{% extends "layout_app.html" %}
+{% from "_paginacion.html" import controles %}
+{% from "_informe_header.html" import header %}
+{% block title %}Reembolsos — AeroTrack Travel{% endblock %}
+{% block content %}
+{{ header(
+    "bi-cash-coin",
+    "Reembolsos procesados por período",
+    "Reembolsos generados a partir de la política de reembolso de la tarifa comprada — solo lectura.",
+    request,
+    cu_ref="CU-O37",
+    export_path="/backoffice/reembolsos/exportar"
+) }}
+
+<div class="at-table-wrapper">
+    <div class="at-table-header">
+        <form method="get" action="/backoffice/reembolsos" data-auto-filtros class="d-flex gap-2 align-items-end flex-wrap">
+            <select class="form-control-at" name="estado" style="width:170px">
+                <option value="">Todos los estados</option>
+                {% for e in estados %}
+                <option value="{{ e }}" {% if filtros.estado == e %}selected{% endif %}>{{ e | capitalize }}</option>
+                {% endfor %}
+            </select>
+            <select class="form-control-at" name="tipo_producto" style="width:170px">
+                <option value="">Todos los tipos</option>
+                {% for t in tipos_producto %}
+                <option value="{{ t }}" {% if filtros.tipo_producto == t %}selected{% endif %}>{{ t | capitalize }}</option>
+                {% endfor %}
+            </select>
+            <div class="at-search-wrap">
+                <i class="bi bi-search"></i>
+                <input type="text" class="at-search" name="motivo" placeholder="Motivo" value="{{ filtros.motivo }}">
+            </div>
+            <div>
+                <label class="form-label-at" for="f-desde">Desde</label>
+                <input type="date" class="form-control-at" id="f-desde" name="desde" value="{{ filtros.desde }}">
+            </div>
+            <div>
+                <label class="form-label-at" for="f-hasta">Hasta</label>
+                <input type="date" class="form-control-at" id="f-hasta" name="hasta" value="{{ filtros.hasta }}">
+            </div>
+            {% if filtros.estado or filtros.tipo_producto or filtros.motivo or filtros.desde or filtros.hasta %}
+            <a href="/backoffice/reembolsos" class="btn-at-ghost">Limpiar</a>
+            {% endif %}
+        </form>
+    </div>
+    {% if pagina.items %}
+    <div class="at-table-scroll">
+        <table class="at-table">
+            <thead><tr><th>Fecha</th><th>Reserva</th><th>Pasajero</th><th>Motivo</th><th>Monto</th><th>Estado</th></tr></thead>
+            <tbody>
+                {% for r in pagina.items %}
+                <tr>
+                    <td class="at-mono" style="font-size:12px">{{ r.fecha_solicitud[:16] if r.fecha_solicitud else "" }}</td>
+                    <td class="at-mono" style="font-weight:600">{{ r.codigo_reserva }}</td>
+                    <td>{{ r.pasajero_nombre }}</td>
+                    <td style="font-size:13px">{{ r.motivo or "—" }}</td>
+                    <td class="at-mono">${{ "%.2f"|format(r.monto or 0) }}</td>
+                    <td>
+                        {% if r.estado == "procesado" %}
+                        <span class="badge-sistema" style="background:var(--at-success-bg);color:var(--at-success-fg)">procesado</span>
+                        {% else %}
+                        <span class="badge-sistema" style="background:var(--at-failed-bg);color:var(--at-failed-fg)">rechazado</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {{ controles(pagina, request) }}
+    {% else %}
+    <div class="at-empty">
+        <i class="bi bi-cash-coin at-empty-icon" aria-hidden="true"></i>
+        <strong>Sin reembolsos para el filtro actual</strong>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

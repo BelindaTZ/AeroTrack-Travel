@@ -83,3 +83,63 @@ def _generar_pdf_itinerario_sync(reserva: dict, vuelo: dict, aerolinea: dict) ->
 
 async def generar_pdf_itinerario(reserva: dict, vuelo: dict, aerolinea: dict) -> bytes:
     return await asyncio.to_thread(_generar_pdf_itinerario_sync, reserva, vuelo, aerolinea)
+
+
+def _generar_pdf_voucher_sync(
+    reserva: dict, pasajeros_nombres: list[str], vuelo: dict | None, aerolinea: dict | None
+) -> bytes:
+    """RF-RES-009 — comprobante de reserva persistido (`reservas.voucher_pdf`),
+    a diferencia del itinerario (efímero, se regenera en cada descarga): el
+    voucher se genera una sola vez al confirmarse el pago y desde ahí se
+    sirve el mismo archivo — mismo patrón que `facturas.archivo_pdf`."""
+    buffer = io.BytesIO()
+    c = canvas.Canvas(buffer, pagesize=letter)
+    _dibujar_encabezado(c, "Comprobante de reserva")
+
+    c.setFont("Helvetica", 11)
+    y = 690
+    filas = [
+        ("Código de reserva", reserva.get("codigo_reserva", "")),
+        ("Estado", reserva.get("estado", "")),
+        ("Canal", reserva.get("canal", "")),
+    ]
+    if vuelo is not None:
+        filas.extend(
+            [
+                ("Aerolínea", (aerolinea or {}).get("nombre", "")),
+                ("Vuelo", vuelo.get("numero_vuelo", "")),
+                ("Ruta", f"{vuelo.get('origen_codigo', '')} → {vuelo.get('destino_codigo', '')}"),
+                ("Fecha de salida", (vuelo.get("fecha_salida") or "")[:10]),
+                ("Hora de salida", vuelo.get("hora_salida_programada", "")),
+            ]
+        )
+    for etiqueta, valor in filas:
+        c.drawString(72, y, f"{etiqueta}:")
+        c.drawString(220, y, str(valor))
+        y -= 20
+
+    y -= 10
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(72, y, "Pasajero(s)")
+    y -= 20
+    c.setFont("Helvetica", 11)
+    for nombre in pasajeros_nombres or ["—"]:
+        c.drawString(72, y, f"• {nombre}")
+        y -= 18
+
+    y -= 10
+    c.line(72, y, 540, y)
+    y -= 25
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(72, y, "Total pagado")
+    c.drawRightString(540, y, f"${reserva.get('total_pagar', 0):.2f} USD")
+
+    c.showPage()
+    c.save()
+    return buffer.getvalue()
+
+
+async def generar_pdf_voucher(
+    reserva: dict, pasajeros_nombres: list[str], vuelo: dict | None, aerolinea: dict | None
+) -> bytes:
+    return await asyncio.to_thread(_generar_pdf_voucher_sync, reserva, pasajeros_nombres, vuelo, aerolinea)

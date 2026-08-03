@@ -3,7 +3,9 @@ conversión 1:1 a `reserva_items`."""
 
 import datetime
 
+from app.carrito.repositories.carrito_repo import CarritoRepository
 from app.carrito.services.carrito_service import CarritoVacio, agregar_item, confirmar_checkout, revalidar_precios
+from app.shared import minio_operational_client as moc
 
 
 async def _crear_hotel_con_tarifa(pb, precio_final: float = 300.0) -> tuple[dict, dict]:
@@ -48,9 +50,9 @@ async def test_revalidar_precios_detecta_cambio_real(pb, pasajero_factory, vuelo
     assert resultado["cambios"][0]["precio_snapshot"] == 100.0
     assert resultado["cambios"][0]["precio_vigente"] == 120.0
 
-    carrito = await pb.get_first("carritos", f'pasajero_id="{pasajero["id"]}"')
-    await pb.delete_record("carrito_items", item["id"])
-    await pb.delete_record("carritos", carrito["id"])
+    carrito = await CarritoRepository().carrito_de_trabajo(pasajero["id"])
+    await moc.eliminar("carrito_items", item["id"])
+    await moc.eliminar("carritos", carrito["id"])
 
 
 async def test_confirmar_checkout_vacio_rechaza(pasajero_factory):
@@ -75,23 +77,24 @@ async def test_confirmar_checkout_un_solo_tipo_no_es_paquete(pb, pasajero_factor
     assert reserva["total_pagar"] == 100.0
     assert reserva["estado"] == "pendiente_pago"
 
-    carrito = await pb.get_record("carritos", carrito_id)
+    carrito = await moc.obtener("carritos", carrito_id)
     assert carrito["estado"] == "convertido"
 
-    reserva_items = await pb.list_records("reserva_items", {"filter": f'reserva_id="{reserva["id"]}"'})
-    assert reserva_items["totalItems"] == 1
-    assert reserva_items["items"][0]["tipo_producto"] == "vuelo"
+    reserva_items = await moc.listar_todos("reserva_items")
+    reserva_items = [i for i in reserva_items if i.get("reserva_id") == reserva["id"]]
+    assert len(reserva_items) == 1
+    assert reserva_items[0]["tipo_producto"] == "vuelo"
 
-    for ri in reserva_items["items"]:
-        await pb.delete_record("reserva_items", ri["id"])
-    await pb.delete_record("reservas", reserva["id"])
+    for ri in reserva_items:
+        await moc.eliminar("reserva_items", ri["id"])
+    await moc.eliminar("reservas", reserva["id"])
     # el item del carrito NO se borra por el checkout — el carrito queda
     # 'convertido' como historial; hay que borrar el ítem antes que el
     # carrito (relación requerida) — solo por higiene de la prueba.
-    items_restantes = await pb.list_records("carrito_items", {"filter": f'carrito_id="{carrito_id}"'})
-    for ci in items_restantes["items"]:
-        await pb.delete_record("carrito_items", ci["id"])
-    await pb.delete_record("carritos", carrito_id)
+    items_restantes = await moc.listar_todos("carrito_items")
+    for ci in [i for i in items_restantes if i.get("carrito_id") == carrito_id]:
+        await moc.eliminar("carrito_items", ci["id"])
+    await moc.eliminar("carritos", carrito_id)
 
 
 async def test_confirmar_checkout_multi_tipo_es_paquete_y_usa_precio_vigente(
@@ -113,17 +116,18 @@ async def test_confirmar_checkout_multi_tipo_es_paquete_y_usa_precio_vigente(
     # usa el precio VIGENTE de hoteles_tarifas (300.0), no el snapshot viejo (250.0)
     assert reserva["total_pagar"] == 400.0
 
-    reserva_items = await pb.list_records("reserva_items", {"filter": f'reserva_id="{reserva["id"]}"'})
-    assert reserva_items["totalItems"] == 2
-    item_hotel_confirmado = next(ri for ri in reserva_items["items"] if ri["tipo_producto"] == "hotel")
+    reserva_items = await moc.listar_todos("reserva_items")
+    reserva_items = [i for i in reserva_items if i.get("reserva_id") == reserva["id"]]
+    assert len(reserva_items) == 2
+    item_hotel_confirmado = next(ri for ri in reserva_items if ri["tipo_producto"] == "hotel")
     assert item_hotel_confirmado["precio_final"] == 300.0
 
-    for ri in reserva_items["items"]:
-        await pb.delete_record("reserva_items", ri["id"])
-    await pb.delete_record("reservas", reserva["id"])
-    items_restantes = await pb.list_records("carrito_items", {"filter": f'carrito_id="{carrito_id}"'})
-    for ci in items_restantes["items"]:
-        await pb.delete_record("carrito_items", ci["id"])
-    await pb.delete_record("carritos", carrito_id)
+    for ri in reserva_items:
+        await moc.eliminar("reserva_items", ri["id"])
+    await moc.eliminar("reservas", reserva["id"])
+    items_restantes = await moc.listar_todos("carrito_items")
+    for ci in [i for i in items_restantes if i.get("carrito_id") == carrito_id]:
+        await moc.eliminar("carrito_items", ci["id"])
+    await moc.eliminar("carritos", carrito_id)
     await pb.delete_record("hoteles_tarifas", hotel_tarifa["id"])
     await pb.delete_record("hoteles_catalogo", hotel["id"])

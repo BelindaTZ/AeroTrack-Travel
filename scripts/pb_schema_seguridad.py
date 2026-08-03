@@ -41,6 +41,17 @@ def existing_collections(headers: dict) -> dict[str, dict]:
     return {c["name"]: c for c in resp.json()["items"]}
 
 
+def get_all_records(headers: dict, collection: str) -> list[dict]:
+    resp = httpx.get(
+        f"{PB_URL}/api/collections/{collection}/records",
+        params={"perPage": 200},
+        headers=headers,
+        timeout=10,
+    )
+    resp.raise_for_status()
+    return resp.json()["items"]
+
+
 def ensure_collection(headers: dict, payload: dict, cache: dict[str, dict]) -> dict:
     name = payload["name"]
     if name in cache:
@@ -90,6 +101,28 @@ def number_field(name: str, required: bool = False) -> dict:
     return {"name": name, "type": "number", "required": required, "options": {}}
 
 
+def remove_field(headers: dict, collection: dict, field_name: str) -> None:
+    """Quita un campo ya existente de una colección (PATCH del schema sin
+    esa entrada). Usado para dar de baja `usuarios.tipo_actor` — correr
+    DESPUÉS de que el código deje de escribirlo y de que `roles.tipo_panel`
+    ya esté sembrado, para no perder capacidad de resolver el panel de una
+    cuenta en el medio de la migración."""
+    if not any(f["name"] == field_name for f in collection["schema"]):
+        print(f"  = {collection['name']}.{field_name}: ya no existe, se omite")
+        return
+    schema_actualizado = [f for f in collection["schema"] if f["name"] != field_name]
+    resp = httpx.patch(
+        f"{PB_URL}/api/collections/{collection['id']}",
+        json={"schema": schema_actualizado},
+        headers=headers,
+        timeout=10,
+    )
+    if resp.status_code >= 400:
+        print(f"  ! error quitando {collection['name']}.{field_name}: {resp.text}", file=sys.stderr)
+        resp.raise_for_status()
+    print(f"  - {collection['name']}.{field_name} eliminado")
+
+
 LOCKED_RULES = {
     "listRule": None,
     "viewRule": None,
@@ -129,6 +162,11 @@ def main() -> None:
                 text_field("nombre", required=True),
                 text_field("descripcion"),
                 bool_field("es_sistema"),
+                # MODIFICADA 2026-07-27 — reemplaza a `usuarios.tipo_actor`.
+                # A qué panel corresponde una cuenta es una propiedad del ROL
+                # (siempre coherente con sus permisos de módulo), no algo que
+                # cada usuario deba fijar aparte y que pueda desalinearse.
+                select_field("tipo_panel", ["backoffice", "autoservicio"], required=True),
             ],
             **LOCKED_RULES,
         },
@@ -176,6 +214,12 @@ def main() -> None:
                 relation_field("rol_id", roles["id"], required=True),
                 relation_field("modulo_id", modulos["id"], required=True),
                 text_field("tabla", required=True),
+                # Agregado 2026-07-30 (ver pb_schema_seguridad_fix_nivel2_accion.py
+                # para instalaciones que ya tenían esta colección creada) — Nivel 2
+                # restringe por (tabla, accion), no solo por tabla. Solo el
+                # subconjunto de acciones con sentido sobre registros de una tabla
+                # puntual; "ejecutar"/"exportar" quedan exclusivas de Nivel 1.
+                select_field("accion", ["ver", "crear", "editar", "eliminar"], required=True),
             ],
             **LOCKED_RULES,
         },
@@ -202,12 +246,12 @@ def main() -> None:
         {
             "name": "usuarios",
             "type": "auth",
+            # `tipo_actor` (2026-07-27) se retiró de acá — ver `roles.tipo_panel`
+            # arriba: qué panel corresponde a esta cuenta se deriva siempre de
+            # `rol_id`, nunca de un campo propio que pudiera desalinearse.
             "schema": [
                 text_field("nombre_completo", required=True),
-                select_field(
-                    "tipo_actor", ["pasajero", "agente", "administrador"], required=True
-                ),
-                relation_field("rol_id", roles["id"], required=False),
+                relation_field("rol_id", roles["id"], required=True),
                 bool_field("activo"),
             ],
             "options": {
@@ -276,7 +320,58 @@ def main() -> None:
         ],
     )
 
+    # MIGRACIÓN 2026-07-27 — `rol_id` pasa a obligatorio para los 3 tipos de
+    # actor (antes pasajero quedaba sin rol). Correr scripts/seed_seguridad.py
+    # primero: siembra el rol "Pasajero" y hace el backfill de los usuarios
+    # pasajero existentes, así ninguno queda con `rol_id` vacío al aplicar
+    # este `required=True`.
+    set_field_required(headers, usuarios, "rol_id", required=True)
+
+    # MIGRACIÓN 2026-07-27 (2/2) — `roles.tipo_panel` reemplaza a
+    # `usuarios.tipo_actor`. Se agrega acá como no-obligatorio (por si esta
+    # corrida es la primera vez que existe la columna); correr
+    # scripts/seed_seguridad.py para sembrar el valor de los 3 roles de
+    # sistema, y recién DESPUÉS correr este script una segunda vez para que
+    # las dos líneas de abajo se apliquen: recién ahí es seguro exigir
+    # `tipo_panel` y borrar la columna vieja sin perder la capacidad de
+    # resolver a qué panel corresponde cada cuenta.
+    ensure_fields(
+        headers, roles, [select_field("tipo_panel", ["backoffice", "autoservicio"], required=False)]
+    )
+    if all(r.get("tipo_panel") for r in get_all_records(headers, "roles")):
+        set_field_required(headers, roles, "tipo_panel", required=True)
+        remove_field(headers, usuarios, "tipo_actor")
+    else:
+        print("  ! hay roles sin tipo_panel todavía — corré seed_seguridad.py y volvé a correr este script")
+
     print("Listo.")
+
+
+def set_field_required(headers: dict, collection: dict, field_name: str, required: bool = True) -> None:
+    """Actualiza el flag `required` de un campo ya existente en la colección
+    (a diferencia de `ensure_fields`, que solo agrega campos nuevos). Usado
+    para migrar `usuarios.rol_id` a obligatorio — correr el backfill de
+    `scripts/seed_seguridad.py` ANTES de esto, para que ningún usuario
+    existente quede con `rol_id` vacío cuando el campo pase a requerido."""
+    campo = next((f for f in collection["schema"] if f["name"] == field_name), None)
+    if campo is None:
+        raise ValueError(f"{collection['name']}: campo {field_name!r} no existe")
+    if campo.get("required") == required:
+        print(f"  = {collection['name']}.{field_name}: required ya es {required}")
+        return
+    schema_actualizado = [
+        {**f, "required": required} if f["name"] == field_name else f for f in collection["schema"]
+    ]
+    resp = httpx.patch(
+        f"{PB_URL}/api/collections/{collection['id']}",
+        json={"schema": schema_actualizado},
+        headers=headers,
+        timeout=10,
+    )
+    if resp.status_code >= 400:
+        print(f"  ! error actualizando {collection['name']}.{field_name}: {resp.text}", file=sys.stderr)
+        resp.raise_for_status()
+    print(f"  + {collection['name']}.{field_name}: required={required}")
 
 
 def ensure_fields(headers: dict, collection: dict, nuevos_campos: list[dict]) -> None:

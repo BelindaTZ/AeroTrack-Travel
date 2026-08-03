@@ -1,0 +1,93 @@
+{% extends "layout_app.html" %}
+{% from "_paginacion.html" import controles %}
+{% block title %}Facturas — AeroTrack Travel{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <h1><span class="heading-icon"><i class="bi bi-receipt"></i></span>Facturas</h1>
+    <p>Vista de consulta — sin acciones de escritura. La factura se emite automáticamente sobre todo pago exitoso.</p>
+</div>
+
+<div class="at-table-wrapper">
+    <div class="at-table-header">
+        <form method="get" data-auto-filtros class="d-flex flex-wrap gap-2 align-items-end">
+            <div>
+                <label class="form-label-at" for="f-desde">Desde</label>
+                <input type="date" id="f-desde" name="desde" class="form-control-at" value="{{ filtros.desde }}">
+            </div>
+            <div>
+                <label class="form-label-at" for="f-hasta">Hasta</label>
+                <input type="date" id="f-hasta" name="hasta" class="form-control-at" value="{{ filtros.hasta }}">
+            </div>
+            <div>
+                <label class="form-label-at" for="f-codigo">Código de reserva</label>
+                <input type="text" id="f-codigo" name="codigo_reserva" class="form-control-at at-mono" value="{{ filtros.codigo_reserva }}" style="width:130px">
+            </div>
+            <div>
+                <label class="form-label-at" for="f-nombre">Pasajero</label>
+                <input type="text" id="f-nombre" name="nombre_pasajero" class="form-control-at" value="{{ filtros.nombre_pasajero }}" style="min-width:160px">
+            </div>
+            {% if filtros.desde or filtros.hasta or filtros.codigo_reserva or filtros.nombre_pasajero %}
+            <a href="/backoffice/facturas" class="btn-at-ghost">Limpiar</a>
+            {% endif %}
+        </form>
+    </div>
+
+    {% if not pagina.items %}
+    <div class="at-empty">
+        <i class="bi bi-receipt at-empty-icon" aria-hidden="true"></i>
+        <strong>Sin facturas con estos filtros</strong>
+    </div>
+    {% else %}
+    <div class="at-table-scroll">
+        <table class="at-table">
+            <thead><tr><th>Número</th><th>Fecha</th><th>Reserva</th><th>Pasajero</th><th>Total</th><th class="actions-col">Acciones</th></tr></thead>
+            <tbody>
+            {% for f in pagina.items %}
+            <tr>
+                <td class="at-mono" style="font-weight:600">{{ f.numero_factura }}</td>
+                <td class="at-mono" style="font-size:12px">{{ f.fecha_emision[:10] if f.fecha_emision else "" }}</td>
+                <td class="at-mono">{{ f.codigo_reserva }}</td>
+                <td>{{ f.pasajero_nombre }}</td>
+                <td class="at-mono">${{ "%.2f"|format(f.total) }}</td>
+                <td class="actions-col">
+                    <button type="button" class="btn-icon" data-bs-toggle="modal" data-bs-target="#modal-ver-{{ f.id }}" title="Ver">
+                        <i class="bi bi-eye" aria-hidden="true"></i>
+                    </button>
+                    <a class="btn-icon" href="/facturas/{{ f.id }}/pdf" title="Descargar PDF">
+                        <i class="bi bi-download" aria-hidden="true"></i>
+                    </a>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {{ controles(pagina, request) }}
+    {% endif %}
+</div>
+
+{% for f in pagina.items %}
+<div class="modal fade" id="modal-ver-{{ f.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title d-flex align-items-center gap-2" style="font-size:16px;font-weight:700">
+                    <span class="modal-icon-title"><i class="bi bi-receipt" aria-hidden="true"></i></span><span class="at-mono">{{ f.numero_factura }}</span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body d-flex flex-column gap-2" style="font-size:13.5px">
+                <div class="d-flex justify-content-between"><span style="color:var(--at-muted)">Reserva</span><span class="at-mono">{{ f.codigo_reserva }}</span></div>
+                <div class="d-flex justify-content-between"><span style="color:var(--at-muted)">Pasajero</span><span>{{ f.pasajero_nombre }}</span></div>
+                <div class="d-flex justify-content-between"><span style="color:var(--at-muted)">Total</span><span class="at-mono">${{ "%.2f"|format(f.total) }}</span></div>
+                <div class="d-flex justify-content-between"><span style="color:var(--at-muted)">Fecha de emisión</span><span class="at-mono">{{ f.fecha_emision[:10] if f.fecha_emision else "—" }}</span></div>
+            </div>
+            <div class="modal-footer">
+                <a href="/facturas/{{ f.id }}/pdf" class="btn-at-ghost"><i class="bi bi-download"></i>Descargar PDF</a>
+                <button type="button" class="btn-at-ghost" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% endblock %}

@@ -13,6 +13,7 @@ from app.disrupciones.services.api_estado_vuelo_service import consultar_estados
 from app.disrupciones.services.monitor_correo_service import monitorear_correo
 from app.disrupciones.services.notificacion_service import DisrupcionNoEncontrada, procesar_disrupcion
 from app.disrupciones.services.reintento_service import NotificacionNoEncontrada, reintentar_notificacion
+from app.disrupciones.services.riesgo_service import estimar_riesgo_disrupcion
 
 router = APIRouter(prefix="/internal/disrupciones")
 router_notificaciones = APIRouter(prefix="/internal/notificaciones")
@@ -26,6 +27,11 @@ async def consultar_api_endpoint() -> dict:
 @router.post("/monitorear-correo")
 async def monitorear_correo_endpoint() -> dict:
     return await monitorear_correo(GmailClientImpl(), GmailNotificationSender())
+
+
+@router.post("/estimar-riesgo")
+async def estimar_riesgo_endpoint() -> dict:
+    return await estimar_riesgo_disrupcion()
 
 
 @router_notificaciones.post("/enviar")

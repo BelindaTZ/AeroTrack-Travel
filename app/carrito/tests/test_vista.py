@@ -3,6 +3,9 @@
 por debajo del router. Aquí se prueba el camino navegable (formularios +
 redirects), no la lógica de negocio (ya cubierta)."""
 
+from app.reservas.repositories.reservas_repo import ReservasRepository
+from app.shared import minio_operational_client as moc
+
 
 async def test_ver_carrito_vacio_sin_sesion_no_falla(client):
     resp = await client.get("/carrito/ver")
@@ -37,7 +40,7 @@ async def test_agregar_ver_y_eliminar_item(pasajero_client, auto_factory):
     assert "Tu carrito está vacío" in resp.text
 
 
-async def test_confirmar_checkout_crea_reserva_y_muestra_confirmacion(pasajero_client, auto_factory, pb):
+async def test_confirmar_checkout_crea_reserva_y_muestra_confirmacion(pasajero_client, auto_factory):
     auto = await auto_factory(precio_dia=63.0)
     await pasajero_client.post(
         "/carrito/agregar",
@@ -49,16 +52,16 @@ async def test_confirmar_checkout_crea_reserva_y_muestra_confirmacion(pasajero_c
     assert "Compra confirmada" in resp.text
     assert "63.00" in resp.text
 
-    reserva = await pb.get_first(
-        "reservas", f'pasajero_titular_id="{pasajero_client.pasajero["id"]}"'
-    )
+    repo = ReservasRepository()
+    reservas = await repo.listar_reservas_de_pasajero(pasajero_client.pasajero["id"])
+    reserva = reservas[0]
     assert reserva is not None
     assert reserva["total_pagar"] == 63.0
 
-    items = await pb.list_records("reserva_items", {"filter": f'reserva_id="{reserva["id"]}"'})
-    for item in items["items"]:
-        await pb.delete_record("reserva_items", item["id"])
-    await pb.delete_record("reservas", reserva["id"])
+    items = await repo.items_de_reserva(reserva["id"])
+    for item in items:
+        await moc.eliminar("reserva_items", item["id"])
+    await moc.eliminar("reservas", reserva["id"])
 
 
 async def test_confirmar_checkout_vacio_redirige_con_mensaje(pasajero_client):

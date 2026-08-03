@@ -91,6 +91,25 @@ async def actualizar_articulo(
     return articulo
 
 
+async def archivar_articulo(usuario: dict, articulo_id: str) -> dict:
+    """WP-05 (auditoría de WorkPanels) — alterna activo/archivado. Reversible
+    a propósito: "un artículo nunca se elimina, se archiva" (comentario ya
+    existente en `articulos.html`) — este toggle cubre también "reactivar"."""
+    repo = CentroAyudaRepository()
+    articulo = await repo.obtener_articulo(articulo_id)
+    if articulo is None:
+        raise ArticuloNoEncontrado()
+
+    nuevo_activo = not articulo.get("activo", True)
+    actualizado = await repo.actualizar_articulo(articulo_id, {"activo": nuevo_activo})
+    await AuditService().insertar(
+        "reactivar_articulo" if nuevo_activo else "archivar_articulo",
+        "articulos_ayuda", usuario_id=usuario["id"], registro_id=articulo_id,
+        detalle={"activo": nuevo_activo},
+    )
+    return actualizado
+
+
 async def metricas_satisfaccion(desde_iso: str) -> dict:
     """RF-AYU-T02 — **"más consultados" no es literal**: `articulos_ayuda`
     no tiene un contador de vistas en el esquema real (confirmado contra

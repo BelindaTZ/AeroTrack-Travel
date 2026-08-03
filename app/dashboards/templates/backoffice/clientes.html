@@ -1,0 +1,133 @@
+{% extends "layout_app.html" %}
+{% block title %}Captación y Retención — AeroTrack Travel{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <h1><span class="heading-icon"><i class="bi bi-person-hearts"></i></span>Captación y Retención de Pasajeros</h1>
+    <p>Adquisición, segmentación y conversión de alertas de precio.</p>
+</div>
+
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <div id="selector-periodo" class="filter-bar mb-0"></div>
+    <button type="button" class="btn-at-ghost" onclick="window.print()"><i class="bi bi-file-earmark-pdf"></i> Exportar PDF</button>
+</div>
+
+<div id="db-clientes-cargando" style="text-align:center;padding:50px 0;color:var(--at-muted)">
+    <div class="spinner-border" style="color:var(--at-primary)" role="status"></div>
+</div>
+
+<div id="db-clientes-contenido" style="display:none">
+    <div class="row g-3 mb-3">
+        <div class="col-12 col-md-4">
+            <div class="at-card" style="height:100%">
+                <div style="font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--at-sub)">Nuevos pasajeros del período</div>
+                <div class="at-mono" id="kpi-nuevos" style="font-size:30px;font-weight:700;color:var(--at-primary)">—</div>
+                <div style="font-size:11.5px;color:var(--at-muted)" id="kpi-nuevos-vs-anterior"></div>
+            </div>
+        </div>
+        <div class="col-12 col-md-4">
+            <div class="at-card" style="height:100%">
+                <div style="font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--at-sub);margin-bottom:4px">Tasa de activación</div>
+                <div id="chart-gauge-activacion" style="height:110px"></div>
+            </div>
+        </div>
+        <div class="col-12 col-md-4">
+            <div class="at-card" style="height:100%">
+                <div style="font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--at-sub)">Canal con mayor captación</div>
+                <div class="at-mono" id="kpi-canal-top" style="font-size:22px;font-weight:700;color:var(--at-text);margin-top:6px">—</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-12 col-lg-5">
+            <div class="at-card">
+                <div style="font-size:12.5px;font-weight:700;margin-bottom:6px">Distribución por segmento</div>
+                <div id="chart-segmentos" style="height:220px"></div>
+            </div>
+        </div>
+        <div class="col-12 col-lg-7">
+            <div class="at-card">
+                <div style="font-size:12.5px;font-weight:700;margin-bottom:6px">Nuevos pasajeros por semana</div>
+                <div id="chart-nuevos-semana" style="height:220px"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-12 col-md-4">
+            <div class="at-card" style="height:100%">
+                <div style="font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--at-sub)">Alertas de precio activas</div>
+                <div class="at-mono" id="kpi-alertas-activas" style="font-size:30px;font-weight:700;color:var(--at-text)">—</div>
+            </div>
+        </div>
+        <div class="col-12 col-md-4">
+            <div class="at-card" style="height:100%">
+                <div style="font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--at-sub)">Tasa de conversión de alertas</div>
+                <div class="at-mono" id="kpi-tasa-conversion-alertas" style="font-size:30px;font-weight:700;color:var(--at-text)">—</div>
+            </div>
+        </div>
+        <div class="col-12 col-md-4">
+            <div class="at-table-wrapper" style="height:100%">
+                <div class="at-table-header"><span class="at-table-title">Top destinos en alertas activas</span></div>
+                <table class="table" style="font-size:12.5px;margin-bottom:0">
+                    <thead><tr><th>Destino</th><th class="text-end">Alertas</th></tr></thead>
+                    <tbody id="tabla-top-destinos"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+var chartsClientes = [];
+function cargarDatosClientes(desde, hasta) {
+    document.getElementById('db-clientes-cargando').style.display = '';
+    document.getElementById('db-clientes-contenido').style.display = 'none';
+    fetch('/backoffice/dashboards/clientes/datos?desde=' + desde + '&hasta=' + hasta).then(function (r) { return r.json(); }).then(renderClientes);
+}
+function renderClientes(d) {
+    document.getElementById('db-clientes-cargando').style.display = 'none';
+    document.getElementById('db-clientes-contenido').style.display = '';
+    chartsClientes.forEach(function (c) { c && c.dispose(); });
+    chartsClientes = [];
+
+    document.getElementById('kpi-nuevos').textContent = d.nuevos_periodo;
+    var diff = d.nuevos_periodo - d.nuevos_periodo_anterior;
+    document.getElementById('kpi-nuevos-vs-anterior').textContent = (diff >= 0 ? '+' : '') + diff + ' vs. período anterior (' + d.nuevos_periodo_anterior + ')';
+    document.getElementById('kpi-canal-top').textContent = d.canal_top || 'Sin datos';
+
+    chartsClientes.push(initChart('chart-gauge-activacion', {
+        series: [{
+            type: 'gauge', min: 0, max: 100, startAngle: 180, endAngle: 0, radius: '100%', center: ['50%', '85%'],
+            axisLine: { lineStyle: { width: 10, color: [[1, AEROTRACK_SEMANTIC.primary + '33']] } },
+            pointer: { length: '55%', itemStyle: { color: AEROTRACK_SEMANTIC.primary } },
+            progress: { show: true, width: 10, itemStyle: { color: AEROTRACK_SEMANTIC.primary } },
+            splitLine: { show: false }, axisTick: { show: false }, axisLabel: { show: false }, anchor: { show: false }, title: { show: false },
+            detail: { fontSize: 20, fontWeight: 700, offsetCenter: [0, '-15%'], formatter: '{value}%', color: AEROTRACK_SEMANTIC.primary },
+            data: [{ value: d.tasa_activacion }],
+        }],
+    }));
+
+    chartsClientes.push(initChart('chart-segmentos', {
+        legend: { bottom: 0 },
+        series: [{ type: 'pie', radius: ['45%', '70%'], data: d.segmentos.map(function (s) { return { name: s.segmento, value: s.total }; }), label: { formatter: '{b}\n{d}%' } }],
+    }));
+
+    chartsClientes.push(initChart('chart-nuevos-semana', {
+        xAxis: { type: 'category', data: d.nuevos_por_semana.map(function (s) { return s.semana; }) },
+        yAxis: { type: 'value' },
+        series: [{ type: 'bar', data: d.nuevos_por_semana.map(function (s) { return s.total; }) }],
+    }));
+
+    document.getElementById('kpi-alertas-activas').textContent = d.alertas_activas_total;
+    document.getElementById('kpi-tasa-conversion-alertas').textContent = d.tasa_conversion_alertas + '%';
+
+    document.getElementById('tabla-top-destinos').innerHTML = d.top_destinos_alertas.map(function (x) {
+        return '<tr><td>' + x.destino + '</td><td class="text-end">' + x.total + '</td></tr>';
+    }).join('') || '<tr><td colspan="2" class="text-center" style="color:var(--at-muted)">Sin alertas activas</td></tr>';
+}
+initSelectorPeriodo('selector-periodo', function (periodo) { cargarDatosClientes(periodo.desde, periodo.hasta); });
+</script>
+{% endblock %}

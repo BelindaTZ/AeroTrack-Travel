@@ -43,10 +43,14 @@ async def test_filtro_precio_maximo_excluye_ofertas_caras(client, auto_factory):
     assert "Caro" not in resp.text
 
 
-async def test_detalle_muestra_especificaciones(client, auto_factory):
+async def test_detalle_muestra_especificaciones(client, auto_factory, disponibilidad_auto_factory):
     auto = await auto_factory(ciudad_recogida="Paris", modelo="BMW X1", transmision="Manual")
+    # RF-AUT-004 — con fechas seleccionadas se necesita cupo real por día
+    # (recogida=07-01, devolucion=07-03 -> días 07-01 y 07-02).
+    await disponibilidad_auto_factory(auto["id"], "2027-07-01")
+    await disponibilidad_auto_factory(auto["id"], "2027-07-02")
 
-    resp = await client.get(f"/autos/{auto['id']}")
+    resp = await client.get(f"/autos/{auto['id']}", params={"recogida": "2027-07-01", "devolucion": "2027-07-03"})
     assert resp.status_code == 200
     assert "BMW X1" in resp.text
     assert "Manual" in resp.text
@@ -56,3 +60,25 @@ async def test_detalle_muestra_especificaciones(client, auto_factory):
 async def test_detalle_auto_inexistente_da_404(client):
     resp = await client.get("/autos/id-que-no-existe")
     assert resp.status_code == 404
+
+
+async def test_buscar_con_fechas_excluye_auto_con_dia_sin_cupo(client, auto_factory, disponibilidad_auto_factory):
+    auto = await auto_factory(ciudad_recogida="Bogota", modelo="Auto Con Hueco")
+    await disponibilidad_auto_factory(auto["id"], "2027-08-01", cupos_disponibles=3)
+    await disponibilidad_auto_factory(auto["id"], "2027-08-02", cupos_disponibles=0)  # agotado
+
+    resp = await client.get(
+        "/autos/buscar", params={"ciudad": "Bogota", "recogida": "2027-08-01", "devolucion": "2027-08-03"}
+    )
+    assert resp.status_code == 200
+    assert "Auto Con Hueco" not in resp.text
+
+
+async def test_detalle_con_fechas_muestra_precio_total_por_dias(client, auto_factory, disponibilidad_auto_factory):
+    auto = await auto_factory(ciudad_recogida="Santiago", modelo="Auto Precio Total", precio_dia=40.0)
+    await disponibilidad_auto_factory(auto["id"], "2027-08-10", cupos_disponibles=3)
+    await disponibilidad_auto_factory(auto["id"], "2027-08-11", cupos_disponibles=3)
+
+    resp = await client.get(f"/autos/{auto['id']}", params={"recogida": "2027-08-10", "devolucion": "2027-08-12"})
+    assert resp.status_code == 200
+    assert "$80.00" in resp.text  # 40.0/día * 2 días

@@ -19,7 +19,8 @@ async def test_forzar_estado_sin_sesion_bloqueado(client, vuelo_factory):
 
 async def test_forzar_estado_sin_permiso_rbac_bloqueado(client, usuario_factory, vuelo_factory):
     vuelo = await vuelo_factory()
-    pasajero = await usuario_factory(tipo_actor="pasajero")  # sin rol_id -> sin RBAC
+    # el rol "Pasajero" no tiene permiso Nivel 1 sobre vuelos_catalogo -> RBAC bloquea
+    pasajero = await usuario_factory(tipo_actor="pasajero")
     await client.post("/login", data={"email": pasajero["email"], "password": pasajero["_password"]})
 
     resp = await client.post(

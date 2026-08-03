@@ -72,19 +72,65 @@
 
     <div class="col-12 col-md-5">
         <div class="at-card h-100 d-flex flex-column">
+            {% if filtros.recogida and filtros.devolucion %}
+            <div class="at-mono" style="font-size:30px;font-weight:800;color:var(--at-primary);letter-spacing:-.02em">
+                ${{ "%.2f"|format(precio_total) }}
+            </div>
+            <div style="font-size:11px;color:var(--at-sub);margin-bottom:12px">
+                ${{ "%.2f"|format(auto.precio_dia) }}/día × {{ filtros.dias }} día{{ 's' if filtros.dias != 1 else '' }} — {{ auto.moneda }}, revalidado al confirmar
+            </div>
+            {% else %}
             <div class="at-mono" style="font-size:30px;font-weight:800;color:var(--at-primary);letter-spacing:-.02em">
                 ${{ "%.2f"|format(auto.precio_dia) }}<span style="font-size:13px;font-weight:500;color:var(--at-muted)"> /día</span>
             </div>
             <div style="font-size:11px;color:var(--at-sub);margin-bottom:16px">{{ auto.moneda }} · precio por día, revalidado al confirmar</div>
+            {% endif %}
 
+            <form method="get" class="d-flex flex-wrap gap-2 align-items-end mb-3" style="border:1px solid var(--at-border);border-radius:var(--at-r-md);padding:10px">
+                <div>
+                    <label class="form-label-at" for="f-recogida" style="font-size:10.5px">Recogida</label>
+                    <input type="date" class="form-control-at" id="f-recogida" name="recogida" value="{{ filtros.recogida }}" style="font-size:12.5px">
+                </div>
+                <div>
+                    <label class="form-label-at" for="f-devolucion" style="font-size:10.5px">Devolución</label>
+                    <input type="date" class="form-control-at" id="f-devolucion" name="devolucion" value="{{ filtros.devolucion }}" style="font-size:12.5px">
+                </div>
+                <button type="submit" class="btn-at-ghost" style="padding:6px 12px;font-size:12px"><i class="bi bi-calendar-check"></i></button>
+            </form>
+
+            {% if not filtros.recogida or not filtros.devolucion %}
+            <div class="at-empty" style="padding:16px 12px">
+                <i class="bi bi-calendar-week at-empty-icon" style="font-size:24px"></i>
+                <strong style="font-size:12.5px">Elige fecha de recogida y devolución</strong>
+                <p style="font-size:11px;color:var(--at-sub);margin:4px 0 0">Sin fechas no se puede agregar al carrito.</p>
+            </div>
+            {% elif cupo_disponible and cupo_disponible > 0 %}
             <form method="post" action="/carrito/agregar" class="mt-auto">
                 <input type="hidden" name="tipo_producto" value="auto">
                 <input type="hidden" name="auto_id" value="{{ auto.id }}">
                 <input type="hidden" name="precio_snapshot" value="{{ auto.precio_dia }}">
+                <input type="hidden" name="fecha_inicio" value="{{ filtros.recogida }}">
+                <input type="hidden" name="fecha_fin" value="{{ filtros.devolucion }}">
                 <button type="submit" class="btn-at-accent w-100 justify-content-center" style="padding:10px;font-size:14px;font-weight:700">
                     <i class="bi bi-cart-plus" aria-hidden="true"></i>Agregar al carrito
                 </button>
             </form>
+            {% if request.query_params.get('paquete_id') %}
+            <form method="post" action="/paquetes/{{ request.query_params.get('paquete_id') }}/agregar" class="mt-2">
+                <input type="hidden" name="tipo_producto" value="auto">
+                <input type="hidden" name="auto_id" value="{{ auto.id }}">
+                <input type="hidden" name="precio_final" value="{{ precio_total }}">
+                <button type="submit" class="btn-at-ghost w-100 justify-content-center" style="padding:8px;font-size:12.5px">
+                    <i class="bi bi-box-seam" aria-hidden="true"></i>Agregar a mi paquete
+                </button>
+            </form>
+            {% endif %}
+            {% else %}
+            <div class="at-empty" style="padding:16px 12px">
+                <i class="bi bi-car-front at-empty-icon" style="font-size:24px"></i>
+                <strong style="font-size:12.5px">Sin cupo para esas fechas</strong>
+            </div>
+            {% endif %}
         </div>
     </div>
 </div>

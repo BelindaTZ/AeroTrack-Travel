@@ -3,7 +3,7 @@
 **Propósito:** Validar que la implementación del módulo Hoteles cumple los RF/RNF y RN definidos en `hoteles-spec.md`.
 **Creado:** 2026-07-18
 **Feature:** [`hoteles-spec.md`](./hoteles-spec.md) · [`plan.md`](./plan.md)
-**Estado:** Fase 1, 2 y 3 completas y verificadas (2026-07-19, cerrado en segunda ronda) — catálogo, búsqueda/detalle/filtros/reseñas, comparación reembolsable, cargos locales reales (99 ciudades importadas del CSV de Holidu), y cupo real validado server-side vía Carrito (`app.shared.cupo_service`). Solo Fase 4 — pago diferido (RF-HOT-009) — sigue sin código, depende de CU-O86 (Facturación, tampoco implementado).
+**Estado:** Completo — Fase 1, 2 y 3 (2026-07-19) y Fase 4 (2026-07-22, junto con CU-O86 de Facturación) — catálogo, búsqueda/detalle/filtros/reseñas, comparación reembolsable, cargos locales reales (99 ciudades importadas del CSV de Holidu), cupo real validado server-side vía Carrito, y pago diferido (RF-HOT-009) con captura Stripe authorize-then-capture.
 
 ---
 
@@ -16,7 +16,7 @@
 - [x] CHK005 RF-HOT-007 — Reseñas se muestran con autor, calificación/escala, comentario, fecha relativa y fuente libre.
 - [x] CHK006 RF-HOT-008 — **Cerrado 2026-07-19 (segunda ronda).** `dags/dag_importar_cargos_locales.py` + `app/hoteles/services/cargos_locales_service.py` parsean el CSV real de Holidu (solo su Tabla 1 — el archivo trae dos tablas concatenadas, confirmado al inspeccionarlo) e importan 99 ciudades reales. Verificado en vivo: Paris muestra su regla real ("5star: €11.38; 4star: €8.45; ..."), correctamente clasificada como compuesta (sin estimado inventado, solo `regla_texto`). 6 tests (`test_cargos_locales.py`).
 - [x] CHK007 RF-HOT-006 — Habitaciones muestran reembolsable/no reembolsable como badge explícito (dato real de `hoteles_tarifas.reembolsable`) antes del botón de agregar al carrito.
-- [ ] CHK011 RF-HOT-009 — **No implementado.** `hoteles_tarifas` no tiene ningún campo de modalidad de pago diferido en el esquema; fuera de alcance de esta ronda (depende de CU-O86, Facturación, tampoco implementado).
+- [x] CHK011 RF-HOT-009 — **Completo 2026-07-22.** `hoteles_tarifas.pago_diferido_disponible` (sintético, atado a `reembolsable` — HotelLens no expone este dato), `carrito_items`/`reserva_items.modalidad_pago="pago_diferido"`, botón "Reservar sin pagar ahora" en `detalle_hotel.html` (solo si la tarifa lo admite, RN-HOT-004).
 
 ## Reglas de negocio
 
@@ -40,7 +40,7 @@
 - [x] CHK018 CU-O57 — Selección funciona de punta a punta vía Carrito, cupo real incluido (verificado en vivo: tarifa real → carrito → checkout → `reserva_items.tipo_producto=hotel`, cupo decrementado).
 - [x] CHK019 CU-O58 — cubierto por `test_busqueda.py` (reseñas con autor/comentario).
 - [x] CHK020 CU-O59 — datos reales verificados en ambos caminos (ver CHK006/CHK025) — Paris muestra su regla real, ciudades no cubiertas se omiten.
-- [ ] CHK021 CU-O60 — no implementado (ver CHK011).
+- [x] CHK021 CU-O60 — cubierto por CHK011; verificado en vivo de punta a punta (hotel → carrito → checkout → `/reservas/{id}/pagar` → autorizado → `/backoffice/pagos-diferidos` → capturado → factura emitida).
 - [x] CHK022 CU-O118 — cubierto por CHK001; 4 tests (Fase 1).
 
 ## Diseño de interfaz (constitución, Sección J)

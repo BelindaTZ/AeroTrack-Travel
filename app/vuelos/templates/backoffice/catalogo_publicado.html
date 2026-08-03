@@ -1,0 +1,69 @@
+{% extends "layout_app.html" %}
+{% from "_paginacion.html" import controles %}
+{% from "_informe_header.html" import header %}
+{% block title %}Catálogo publicado — AeroTrack Travel{% endblock %}
+{% block content %}
+{{ header(
+    "bi-cloud-check",
+    "Catálogo de vuelos activo (publicado en MinIO)",
+    "Contenido real del snapshot NDJSON que usa la búsqueda pública — distinto del catálogo en PocketBase, puede haber hasta 24h de desfase entre ambos.",
+    request,
+    export_path="/backoffice/vuelos/catalogo-publicado/exportar"
+) }}
+
+{% if fecha_publicacion %}
+<div class="at-card mb-3" style="font-size:13px">
+    <i class="bi bi-clock-history" aria-hidden="true"></i>
+    Última publicación del snapshot: <strong class="at-mono">{{ fecha_publicacion }}</strong>
+</div>
+{% else %}
+<div class="at-card mb-3" style="font-size:13px;color:var(--at-danger)">
+    <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+    No se pudo leer la fecha de publicación del snapshot.
+</div>
+{% endif %}
+
+<div class="at-table-wrapper">
+    <div class="at-table-header">
+        <form method="get" action="/backoffice/vuelos/catalogo-publicado" data-auto-filtros class="d-flex gap-2 align-items-center flex-wrap">
+            <input type="text" class="form-control-at" style="width:120px;text-transform:uppercase" name="origen"
+                   placeholder="Origen (ej. MIA)" value="{{ filtros.origen }}">
+            <input type="text" class="form-control-at" style="width:120px;text-transform:uppercase" name="destino"
+                   placeholder="Destino (ej. JFK)" value="{{ filtros.destino }}">
+            <select class="form-control-at" name="aerolinea_id" style="width:220px">
+                <option value="">Todas las aerolíneas</option>
+                {% for a in aerolineas %}
+                <option value="{{ a.id }}" {% if filtros.aerolinea_id == a.id %}selected{% endif %}>{{ a.nombre }}</option>
+                {% endfor %}
+            </select>
+            {% if filtros.origen or filtros.destino or filtros.aerolinea_id %}
+            <a href="/backoffice/vuelos/catalogo-publicado" class="btn-at-ghost">Limpiar</a>
+            {% endif %}
+        </form>
+    </div>
+    {% if pagina.items %}
+    <div class="at-table-scroll">
+        <table class="at-table">
+            <thead><tr><th>Origen</th><th>Destino</th><th>Aerolínea</th><th>Precio base</th><th>Actualizado</th></tr></thead>
+            <tbody>
+                {% for v in pagina.items %}
+                <tr>
+                    <td class="at-mono">{{ v.origen_codigo }}</td>
+                    <td class="at-mono">{{ v.destino_codigo }}</td>
+                    <td>{{ v.aerolinea_nombre }}</td>
+                    <td class="at-mono">${{ "%.2f"|format(v.precio_base or 0) }}</td>
+                    <td class="at-mono" style="font-size:12px;color:var(--at-muted)">{{ v.updated[:16] if v.updated else "" }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {{ controles(pagina, request) }}
+    {% else %}
+    <div class="at-empty">
+        <i class="bi bi-cloud-slash at-empty-icon" aria-hidden="true"></i>
+        <strong>Sin vuelos publicados para el filtro actual</strong>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

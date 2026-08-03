@@ -14,6 +14,13 @@ class RolConUsuariosAsignados(Exception):
         super().__init__(f"{cantidad} usuario(s) activos asignados")
 
 
+# Mismo orden que el campo select `permisos.accion` en pb_schema_seguridad.py.
+ACCIONES_NIVEL1 = ["ver", "crear", "editar", "eliminar", "exportar", "ejecutar"]
+# Único subconjunto de acciones con sentido sobre registros de una tabla
+# puntual — "ejecutar"/"exportar" quedan exclusivas de Nivel 1 (módulo).
+ACCIONES_NIVEL2 = ["ver", "crear", "editar", "eliminar"]
+
+
 class NivelDosExcedeNivelUno(Exception):
     def __init__(self, modulo_id: str):
         self.modulo_id = modulo_id
@@ -27,13 +34,28 @@ class RolesService:
         self._client = client or get_pocketbase_client()
 
     # ── RF-SEG-010 ───────────────────────────────────────────────────────
-    async def crear_rol(self, nombre: str, descripcion: str) -> dict:
+    async def crear_rol(self, nombre: str, descripcion: str, tipo_panel: str) -> dict:
         return await self._client.create_record(
-            "roles", {"nombre": nombre, "descripcion": descripcion, "es_sistema": False}
+            "roles",
+            {
+                "nombre": nombre,
+                "descripcion": descripcion,
+                "es_sistema": False,
+                "tipo_panel": tipo_panel,
+            },
         )
 
-    async def listar_roles(self) -> list[dict]:
-        result = await self._client.list_records("roles", {"perPage": 200, "sort": "nombre"})
+    async def listar_roles(self, nombre: str | None = None, tipo_panel: str | None = None) -> list[dict]:
+        condiciones = []
+        if nombre:
+            safe = nombre.replace('"', '\\"')
+            condiciones.append(f'nombre~"{safe}"')
+        if tipo_panel:
+            condiciones.append(f'tipo_panel="{tipo_panel}"')
+        params: dict = {"perPage": 200, "sort": "nombre"}
+        if condiciones:
+            params["filter"] = " && ".join(condiciones)
+        result = await self._client.list_records("roles", params)
         return result["items"]
 
     async def obtener_rol(self, rol_id: str) -> dict:
@@ -48,7 +70,7 @@ class RolesService:
         )
         return {
             "permiso_ids": {rp["permiso_id"] for rp in nivel1["items"]},
-            "tablas": {(rpt["modulo_id"], rpt["tabla"]) for rpt in nivel2["items"]},
+            "tablas": {(rpt["modulo_id"], rpt["tabla"], rpt["accion"]) for rpt in nivel2["items"]},
         }
 
     # ── RF-SEG-011 ───────────────────────────────────────────────────────
@@ -58,26 +80,36 @@ class RolesService:
         nombre: str | None,
         descripcion: str | None,
         permiso_ids: list[str],
-        tablas_nivel2: list[tuple[str, str]],
+        tablas_nivel2: list[tuple[str, str, str]],
     ) -> dict:
         """Reemplaza la matriz completa Nivel1/Nivel2 del rol.
 
-        RN-SEG-009: cada (modulo_id, tabla) de Nivel 2 solo se acepta si el
-        rol conserva, en esta misma edición, al menos un permiso Nivel 1
-        sobre ese módulo — Nivel 2 nunca amplía lo no autorizado en Nivel 1.
+        RN-SEG-009, a nivel de (tabla, accion): cada (modulo_id, tabla, accion)
+        de Nivel 2 solo se acepta si el rol conserva, en esta misma edición,
+        ese mismo permiso Nivel 1 (módulo, accion) — Nivel 2 nunca amplía lo
+        no autorizado en Nivel 1, ni siquiera acción por acción.
         """
-        modulos_autorizados_nivel1: set[str] = set()
+        acciones_autorizadas_nivel1: dict[str, set[str]] = {}
         if permiso_ids:
             filtro = " || ".join(f'id="{pid}"' for pid in permiso_ids)
             permisos = await self._client.list_records("permisos", {"filter": filtro, "perPage": 500})
-            modulos_autorizados_nivel1 = {p["modulo_id"] for p in permisos["items"]}
+            for p in permisos["items"]:
+                acciones_autorizadas_nivel1.setdefault(p["modulo_id"], set()).add(p["accion"])
 
-        for modulo_id, _tabla in tablas_nivel2:
-            if modulo_id not in modulos_autorizados_nivel1:
+        for modulo_id, _tabla, accion in tablas_nivel2:
+            if accion not in ACCIONES_NIVEL2:
+                raise NivelDosExcedeNivelUno(modulo_id)
+            if accion not in acciones_autorizadas_nivel1.get(modulo_id, set()):
                 raise NivelDosExcedeNivelUno(modulo_id)
 
+        rol_actual = await self.obtener_rol(rol_id)
         campos: dict = {}
-        if nombre is not None:
+        # El nombre de un rol de sistema (Administrador/Agente/Pasajero) se
+        # usa en lookups literales por string en todo el código (auth,
+        # resolución de tipo de actor, scripts de seed) — renombrarlo
+        # rompería esos flujos en silencio. La descripción no tiene ese
+        # riesgo y sí queda editable.
+        if nombre is not None and not rol_actual.get("es_sistema"):
             campos["nombre"] = nombre
         if descripcion is not None:
             campos["descripcion"] = descripcion
@@ -103,18 +135,21 @@ class RolesService:
                 "roles_permisos", {"rol_id": rol_id, "permiso_id": permiso_id}
             )
 
-    async def _reemplazar_nivel2(self, rol_id: str, tablas_nivel2: list[tuple[str, str]]) -> None:
+    async def _reemplazar_nivel2(self, rol_id: str, tablas_nivel2: list[tuple[str, str, str]]) -> None:
         actuales = await self._client.list_records(
             "roles_permisos_tablas", {"filter": f'rol_id="{rol_id}"', "perPage": 500}
         )
-        actuales_por_clave = {(item["modulo_id"], item["tabla"]): item["id"] for item in actuales["items"]}
+        actuales_por_clave = {
+            (item["modulo_id"], item["tabla"], item["accion"]): item["id"] for item in actuales["items"]
+        }
         deseados = set(tablas_nivel2)
         for clave, item_id in actuales_por_clave.items():
             if clave not in deseados:
                 await self._client.delete_record("roles_permisos_tablas", item_id)
-        for modulo_id, tabla in deseados - set(actuales_por_clave.keys()):
+        for modulo_id, tabla, accion in deseados - set(actuales_por_clave.keys()):
             await self._client.create_record(
-                "roles_permisos_tablas", {"rol_id": rol_id, "modulo_id": modulo_id, "tabla": tabla}
+                "roles_permisos_tablas",
+                {"rol_id": rol_id, "modulo_id": modulo_id, "tabla": tabla, "accion": accion},
             )
 
     # ── RF-SEG-012 ───────────────────────────────────────────────────────

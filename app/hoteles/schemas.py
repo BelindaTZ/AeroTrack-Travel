@@ -11,3 +11,4 @@ class HotelBusquedaOut(BaseModel):
     precio_desde: float | None = None
     moneda: str = "USD"
     imagen_principal: str | None = None
+    noches: int | None = None

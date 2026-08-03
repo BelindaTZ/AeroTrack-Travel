@@ -7,8 +7,9 @@
    (cada tab apunta a un /buscar real ya construido, no hay
    producto "universal" inventado — ver diseno-visual.md)
 ══════════════════════════════════════════ #}
+{% import "_selector_lugar.html" as sel %}
 {% block hero %}
-<section class="at-hero-search" aria-label="Buscador AeroTrack Travel">
+<section class="at-hero-search hero-home" aria-label="Buscador AeroTrack Travel">
     <div class="hero-route-deco" aria-hidden="true">
         <svg viewBox="0 0 1200 320" preserveAspectRatio="xMidYMid slice">
             <circle cx="1020" cy="70" r="220" fill="rgba(255,255,255,.05)"/>
@@ -23,39 +24,31 @@
         <h1 class="hero-title">Viajes con seguimiento real, <span class="accent">en cualquier parte del mundo</span></h1>
         <p class="hero-sub">Buscas, reservas y pagas sin llamar a nadie — rutas domésticas e internacionales — y si tu viaje cambia, te avisamos antes que nadie.</p>
 
-        <div class="hero-vt" role="tablist" aria-label="Elegir tipo de búsqueda">
-            <button type="button" class="on" data-vertical="vuelos" role="tab" aria-selected="true">
-                <i class="bi bi-airplane" aria-hidden="true"></i>Vuelos
-            </button>
-            <button type="button" data-vertical="hoteles" role="tab" aria-selected="false">
-                <i class="bi bi-building" aria-hidden="true"></i>Hoteles
-            </button>
-            <button type="button" data-vertical="autos" role="tab" aria-selected="false">
-                <i class="bi bi-car-front" aria-hidden="true"></i>Autos
-            </button>
-            <button type="button" data-vertical="actividades" role="tab" aria-selected="false">
-                <i class="bi bi-compass" aria-hidden="true"></i>Actividades
-            </button>
-            <button type="button" data-vertical="cruceros" role="tab" aria-selected="false">
-                <i class="bi bi-water" aria-hidden="true"></i>Cruceros
-            </button>
-        </div>
+        <!-- El selector de vertical vive en el nav superior (ver
+             layout_portal.html) — ya no se duplica acá; el nav llama a
+             window.aeroTrackMostrarVertical() para mostrar el form correcto
+             sin recargar la página. -->
 
         <form method="get" action="/vuelos/buscar" class="search-card hero-form" data-vertical-form="vuelos">
             <div class="row g-3 align-items-end">
                 <div class="col-6 col-md">
-                    <label class="form-label-at" for="hi-origen">Origen</label>
-                    <input type="text" class="form-control-at text-uppercase" id="hi-origen" name="origen"
-                           maxlength="3" placeholder="JFK" autocomplete="off">
+                    {{ sel.campo('hi-origen', 'origen', '', opciones_vuelos, 'Origen', 'Ciudad o aeropuerto', 'airplane', requerido=False) }}
                 </div>
                 <div class="col-6 col-md">
-                    <label class="form-label-at" for="hi-destino">Destino</label>
-                    <input type="text" class="form-control-at text-uppercase" id="hi-destino" name="destino"
-                           maxlength="3" placeholder="LAX" autocomplete="off">
+                    {{ sel.campo('hi-destino', 'destino', '', opciones_vuelos, 'Destino', 'Ciudad o aeropuerto', 'geo-alt', requerido=False) }}
                 </div>
-                <div class="col-6 col-md">
+                <div class="col-6 col-md" id="hi-campo-fecha-exacta">
                     <label class="form-label-at" for="hi-fecha">Salida</label>
                     <input type="date" class="form-control-at" id="hi-fecha" name="fecha">
+                </div>
+                <div class="col-6 col-md" id="hi-campo-mes-flexible" hidden>
+                    <label class="form-label-at" for="hi-mes">Mes</label>
+                    <select class="form-control-at" id="hi-mes" name="mes" disabled>
+                        <option value="" disabled selected>Elegí un mes…</option>
+                        {% for m in meses_vuelos %}
+                        <option value="{{ m.valor }}">{{ m.legible | capitalize }}</option>
+                        {% endfor %}
+                    </select>
                 </div>
                 <div class="col-6 col-md-2">
                     <label class="form-label-at" for="hi-pasajeros">Pasajeros</label>
@@ -66,31 +59,64 @@
                         <i class="bi bi-search" aria-hidden="true"></i> Buscar
                     </button>
                 </div>
+                <div class="col-12">
+                    <label class="d-flex align-items-center gap-2" style="font-size:12.5px;color:var(--at-sub);cursor:pointer">
+                        <input type="checkbox" id="hi-chk-fecha-flexible">
+                        Aún no definí la fecha — buscar por mes
+                    </label>
+                </div>
             </div>
         </form>
 
         <form method="get" action="/hoteles/buscar" class="search-card hero-form" data-vertical-form="hoteles" hidden>
             <div class="row g-3 align-items-end">
-                <div class="col-12 col-md-4">
-                    <label class="form-label-at" for="hh-ciudad">Ciudad</label>
-                    <input type="text" class="form-control-at" id="hh-ciudad" name="ciudad" placeholder="Miami" autocomplete="off">
+                <div class="col-12 col-md-3">
+                    {{ sel.campo('hh-ciudad', 'ciudad', '', opciones_hoteles, 'Ciudad', 'Miami', 'building', requerido=False) }}
                 </div>
-                <div class="col-6 col-md-3">
+                <div class="col-6 col-md-2" id="hh-campo-fecha-exacta">
                     <label class="form-label-at" for="hh-checkin">Check-in</label>
                     <input type="date" class="form-control-at" id="hh-checkin" name="checkin">
                 </div>
-                <div class="col-6 col-md-3">
+                <div class="col-6 col-md-2" id="hh-campo-fecha-exacta-2">
                     <label class="form-label-at" for="hh-checkout">Check-out</label>
                     <input type="date" class="form-control-at" id="hh-checkout" name="checkout">
                 </div>
-                <div class="col-8 col-md-1">
-                    <label class="form-label-at" for="hh-huespedes">Huésp.</label>
-                    <input type="number" class="form-control-at" id="hh-huespedes" name="huespedes" min="1" max="9" value="1">
+                <div class="col-6 col-md" id="hh-campo-mes-flexible" hidden>
+                    <label class="form-label-at" for="hh-mes">Mes</label>
+                    <select class="form-control-at" id="hh-mes" name="mes" disabled>
+                        <option value="" disabled selected>Elegí un mes…</option>
+                        <option value="todos">Todos los meses</option>
+                        {% for m in meses_hoteles %}
+                        <option value="{{ m.valor }}">{{ m.legible | capitalize }}</option>
+                        {% endfor %}
+                    </select>
                 </div>
-                <div class="col-4 col-md-1">
+                <div class="col-9 col-md-3">
+                    <label class="form-label-at" id="hh-lbl-pasajeros-habitaciones">Pasajeros y habitaciones</label>
+                    <div class="dropdown">
+                        <button type="button" class="form-control-at text-start dropdown-toggle w-100" id="hh-btn-pasajeros-habitaciones"
+                                data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" style="font-size:13px">
+                            <span id="hh-txt-pasajeros-habitaciones">1 persona, 1 habitación</span>
+                        </button>
+                        <div class="dropdown-menu p-3" style="min-width:280px;max-height:320px;overflow-y:auto" aria-labelledby="hh-btn-pasajeros-habitaciones">
+                            <div id="hh-lista-habitaciones"></div>
+                            <button type="button" class="btn-at-ghost" id="hh-btn-anadir-habitacion" style="font-size:12.5px;color:var(--at-primary);border:none;background:none;padding:0">+ Añadir habitación</button>
+                            <button type="button" class="btn-at-primary w-100 justify-content-center mt-3" data-bs-toggle="dropdown">Aplicar</button>
+                        </div>
+                        <input type="hidden" id="hh-huespedes" name="huespedes" value="1">
+                        <input type="hidden" id="hh-habitaciones" name="habitaciones" value="1">
+                    </div>
+                </div>
+                <div class="col-3 col-md-2">
                     <button type="submit" class="btn-search-hero w-100 justify-content-center">
                         <i class="bi bi-search" aria-hidden="true"></i>
                     </button>
+                </div>
+                <div class="col-12">
+                    <label class="d-flex align-items-center gap-2" style="font-size:12.5px;color:var(--at-sub);cursor:pointer">
+                        <input type="checkbox" id="hh-chk-fecha-flexible">
+                        Aún no definí la fecha — buscar por mes
+                    </label>
                 </div>
             </div>
         </form>
@@ -98,8 +124,7 @@
         <form method="get" action="/autos/buscar" class="search-card hero-form" data-vertical-form="autos" hidden>
             <div class="row g-3 align-items-end">
                 <div class="col-12 col-md-5">
-                    <label class="form-label-at" for="ha-ciudad">Ciudad de recogida</label>
-                    <input type="text" class="form-control-at" id="ha-ciudad" name="ciudad" placeholder="Orlando" autocomplete="off">
+                    {{ sel.campo('ha-ciudad', 'ciudad', '', opciones_autos, 'Ciudad de recogida', 'Orlando', 'car-front', requerido=False) }}
                 </div>
                 <div class="col-6 col-md-3">
                     <label class="form-label-at" for="ha-recogida">Recogida</label>
@@ -119,11 +144,18 @@
 
         <form method="get" action="/actividades/buscar" class="search-card hero-form" data-vertical-form="actividades" hidden>
             <div class="row g-3 align-items-end">
-                <div class="col-9 col-md-10">
-                    <label class="form-label-at" for="hac-ciudad">Ciudad</label>
-                    <input type="text" class="form-control-at" id="hac-ciudad" name="ciudad" placeholder="Cancún" autocomplete="off">
+                <div class="col-12 col-md-5">
+                    {{ sel.campo('hac-ciudad', 'ciudad', '', opciones_actividades, 'Ciudad', 'Cancún', 'compass', requerido=False) }}
                 </div>
-                <div class="col-3 col-md-2">
+                <div class="col-6 col-md-3">
+                    <label class="form-label-at" for="hac-desde">Desde</label>
+                    <input type="date" class="form-control-at" id="hac-desde" name="desde">
+                </div>
+                <div class="col-6 col-md-3">
+                    <label class="form-label-at" for="hac-hasta">Hasta</label>
+                    <input type="date" class="form-control-at" id="hac-hasta" name="hasta">
+                </div>
+                <div class="col-12 col-md-1">
                     <button type="submit" class="btn-search-hero w-100 justify-content-center">
                         <i class="bi bi-search" aria-hidden="true"></i>
                     </button>
@@ -133,11 +165,16 @@
 
         <form method="get" action="/cruceros/buscar" class="search-card hero-form" data-vertical-form="cruceros" hidden>
             <div class="row g-3 align-items-end">
-                <div class="col-9 col-md-10">
-                    <label class="form-label-at" for="hcr-destino">Destino o puerto</label>
-                    <input type="text" class="form-control-at" id="hcr-destino" name="destino" placeholder="Caribe" autocomplete="off">
+                <div class="col-12 col-md-6">
+                    {{ sel.campo('hcr-destino', 'destino', '', opciones_cruceros, 'Destino o puerto', 'Caribe', 'water', requerido=False) }}
                 </div>
-                <div class="col-3 col-md-2">
+                <div class="col-9 col-md-5">
+                    <label class="form-label-at" for="hcr-rango-fechas">Fecha de zarpe</label>
+                    <input type="text" class="form-control-at" id="hcr-rango-fechas" placeholder="Cualquier fecha" readonly autocomplete="off">
+                    <input type="hidden" id="hcr-desde" name="desde">
+                    <input type="hidden" id="hcr-hasta" name="hasta">
+                </div>
+                <div class="col-3 col-md-1">
                     <button type="submit" class="btn-search-hero w-100 justify-content-center">
                         <i class="bi bi-search" aria-hidden="true"></i>
                     </button>
@@ -149,35 +186,48 @@
 {% endblock %}
 
 {% block content %}
-<h2 style="font-family:var(--font-display,var(--font-heading));font-size:20px;margin:0 0 4px">Explora por categoría</h2>
-<p style="font-size:13px;color:var(--at-muted);margin:0">Cada categoría abre su propio buscador con filtros completos.</p>
-<div class="categoria-grid">
-    <a class="categoria-card at-card at-card-hover" href="/vuelos/buscar">
-        <div class="icon-box"><i class="bi bi-airplane" aria-hidden="true"></i></div>
-        <strong>Vuelos</strong>
-        <span>Domésticos e internacionales, precio final garantizado</span>
-    </a>
-    <a class="categoria-card at-card at-card-hover" href="/hoteles/buscar">
-        <div class="icon-box"><i class="bi bi-building" aria-hidden="true"></i></div>
-        <strong>Hoteles</strong>
-        <span>Con reseñas reales y cargos locales cuando aplican</span>
-    </a>
-    <a class="categoria-card at-card at-card-hover" href="/autos/buscar">
-        <div class="icon-box"><i class="bi bi-car-front" aria-hidden="true"></i></div>
-        <strong>Autos</strong>
-        <span>Renta por día, varias categorías de vehículo</span>
-    </a>
-    <a class="categoria-card at-card at-card-hover" href="/actividades/buscar">
-        <div class="icon-box"><i class="bi bi-compass" aria-hidden="true"></i></div>
-        <strong>Actividades</strong>
-        <span>Tours y experiencias por ciudad, con horarios</span>
-    </a>
-    <a class="categoria-card at-card at-card-hover" href="/cruceros/buscar">
-        <div class="icon-box"><i class="bi bi-water" aria-hidden="true"></i></div>
-        <strong>Cruceros</strong>
-        <span>Itinerarios por naviera, compara fechas del mismo barco</span>
-    </a>
+{% if hoteles_destacados %}
+<h2 style="font-family:var(--font-display,var(--font-heading));font-size:20px;margin:0 0 4px">Hoteles destacados</h2>
+<p style="font-size:13px;color:var(--at-muted);margin:0 0 12px">Fotos y calificación reales de nuestro catálogo — se desliza solo, o navegá con las flechas.</p>
+<div id="carrusel-hoteles" class="carousel slide destacados-carrusel" data-bs-ride="carousel" data-bs-interval="4500">
+    <div class="carousel-indicators">
+        {% for h in hoteles_destacados %}
+        <button type="button" data-bs-target="#carrusel-hoteles" data-bs-slide-to="{{ loop.index0 }}"
+                {% if loop.first %}class="active" aria-current="true"{% endif %} aria-label="Hotel {{ loop.index }}"></button>
+        {% endfor %}
+    </div>
+    <div class="carousel-inner">
+        {% for h in hoteles_destacados %}
+        <div class="carousel-item {% if loop.first %}active{% endif %}">
+            <a href="/hoteles/{{ h.id }}" class="destacado-slide text-decoration-none"
+               style="background-image:linear-gradient(180deg,rgba(11,29,58,.15),rgba(11,29,58,.85)),url('{{ h.imagen_principal }}')">
+                <div class="destacado-slide-texto">
+                    {% if h.estrellas %}
+                    <span class="type-chip mb-2">{{ h.estrellas | int }}<i class="bi bi-star-fill" style="color:var(--amber-400)"></i> hotel</span>
+                    {% endif %}
+                    <strong>{{ h.nombre }}</strong>
+                    <span>{{ h.ciudad }}{% if h.pais %}, {{ h.pais }}{% endif %}</span>
+                    {% if h.calificacion_promedio %}
+                    <span class="mt-1"><i class="bi bi-star-fill" style="color:var(--amber-400)"></i>
+                        {{ "%.1f"|format(h.calificacion_promedio) }}{% if h.cantidad_resenas %} ({{ h.cantidad_resenas | int }} reseñas){% endif %}</span>
+                    {% endif %}
+                </div>
+            </a>
+        </div>
+        {% endfor %}
+    </div>
+    {% if hoteles_destacados | length > 1 %}
+    <button class="carousel-control-prev" type="button" data-bs-target="#carrusel-hoteles" data-bs-slide="prev">
+        <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+        <span class="visually-hidden">Anterior</span>
+    </button>
+    <button class="carousel-control-next" type="button" data-bs-target="#carrusel-hoteles" data-bs-slide="next">
+        <span class="carousel-control-next-icon" aria-hidden="true"></span>
+        <span class="visually-hidden">Siguiente</span>
+    </button>
+    {% endif %}
 </div>
+{% endif %}
 
 {% if destinos_populares %}
 <h2 style="font-family:var(--font-display,var(--font-heading));font-size:20px;margin:32px 0 4px">Destinos con más vuelos disponibles</h2>
@@ -210,21 +260,195 @@
 
 {% block scripts %}
 <script>
+// Único selector de vertical de la home: el nav superior (layout_portal.html)
+// llama a esta función global en vez de tener su propia fila de pestañas
+// duplicada acá — antes había 3 formas de elegir "Vuelos/Autos/..." (nav,
+// pestañas del hero, tarjetas de categoría); esto deja solo el nav + este
+// switch de formulario.
+window.aeroTrackMostrarVertical = function (vertical) {
+    document.querySelectorAll('.hero-form').forEach(function (f) {
+        f.hidden = f.getAttribute('data-vertical-form') !== vertical;
+    });
+    document.querySelectorAll('.portal-nav-link[data-tab]').forEach(function (link) {
+        link.classList.toggle('active', link.dataset.tab === vertical);
+    });
+};
+
 document.addEventListener('DOMContentLoaded', function () {
-    var tabs = document.querySelectorAll('.hero-vt button');
-    var forms = document.querySelectorAll('.hero-form');
-    tabs.forEach(function (tab) {
-        tab.addEventListener('click', function () {
-            var vertical = tab.getAttribute('data-vertical');
-            tabs.forEach(function (t) {
-                t.classList.toggle('on', t === tab);
-                t.setAttribute('aria-selected', t === tab ? 'true' : 'false');
-            });
-            forms.forEach(function (f) {
-                f.hidden = f.getAttribute('data-vertical-form') !== vertical;
+    // Llegar acá con "?tab=autos" (desde el nav de otra página, ver
+    // layout_portal.html) preselecciona esa pestaña en vez de arrancar
+    // siempre en "Vuelos".
+    var tabParam = new URLSearchParams(window.location.search).get('tab');
+    if (tabParam) {
+        window.aeroTrackMostrarVertical(tabParam);
+    }
+
+    // Toggle "aún no definí la fecha" del mini-buscador de vuelos del hero
+    // (mismo patrón que /vuelos/buscar) — antes esta opción solo existía
+    // después de buscar, no en el primer contacto.
+    var chk = document.getElementById('hi-chk-fecha-flexible');
+    var campoFecha = document.getElementById('hi-campo-fecha-exacta');
+    var campoMes = document.getElementById('hi-campo-mes-flexible');
+    var inputFecha = document.getElementById('hi-fecha');
+    var selectMes = document.getElementById('hi-mes');
+    if (chk) {
+        chk.addEventListener('change', function () {
+            var flexible = chk.checked;
+            campoFecha.hidden = flexible;
+            campoMes.hidden = !flexible;
+            inputFecha.disabled = flexible;
+            selectMes.disabled = !flexible;
+            if (flexible) {
+                inputFecha.value = '';
+            } else {
+                selectMes.value = '';
+            }
+        });
+    }
+
+    // Mismo toggle para el mini-buscador de hoteles del hero — acá además
+    // se desactiva huéspedes/habitaciones (quedan fijos en 1) porque sin
+    // fecha puntual no hay cupo real que filtrar todavía (ver
+    // /hoteles/buscar, mismo criterio).
+    var chkH = document.getElementById('hh-chk-fecha-flexible');
+    var campoFechaH = document.getElementById('hh-campo-fecha-exacta');
+    var campoFechaH2 = document.getElementById('hh-campo-fecha-exacta-2');
+    var campoMesH = document.getElementById('hh-campo-mes-flexible');
+    var inputCheckinH = document.getElementById('hh-checkin');
+    var inputCheckoutH = document.getElementById('hh-checkout');
+    var selectMesH = document.getElementById('hh-mes');
+    var btnPasajerosHabitacionesH = document.getElementById('hh-btn-pasajeros-habitaciones');
+    if (chkH) {
+        chkH.addEventListener('change', function () {
+            var flexible = chkH.checked;
+            campoFechaH.hidden = flexible;
+            campoFechaH2.hidden = flexible;
+            campoMesH.hidden = !flexible;
+            inputCheckinH.disabled = flexible;
+            inputCheckoutH.disabled = flexible;
+            selectMesH.disabled = !flexible;
+            btnPasajerosHabitacionesH.disabled = flexible;
+            if (flexible) {
+                inputCheckinH.value = '';
+                inputCheckoutH.value = '';
+                aeroTrackHabitacionesHomeHoteles = [{personas: 1}];
+                aeroTrackRenderHabitacionesHomeHoteles();
+            } else {
+                selectMesH.value = '';
+            }
+        });
+    }
+
+    // "Pasajeros y habitaciones" del mini-buscador de hoteles del hero —
+    // mismo componente por-habitación que /hoteles/buscar (evita la misma
+    // combinación absurda "3 habitaciones para 1 persona" que ese fix ya
+    // corrigió ahí; el home usaba hasta ahora 2 inputs planos sueltos).
+    var aeroTrackHabitacionesHomeHoteles = [{personas: 1}];
+    function aeroTrackRenderHabitacionesHomeHoteles() {
+        var cont = document.getElementById('hh-lista-habitaciones');
+        cont.innerHTML = '';
+        aeroTrackHabitacionesHomeHoteles.forEach(function (hab, idx) {
+            var div = document.createElement('div');
+            div.className = 'mb-3 pb-3';
+            if (idx < aeroTrackHabitacionesHomeHoteles.length - 1) {
+                div.style.borderBottom = '1px solid var(--at-border)';
+            }
+            var eliminar = aeroTrackHabitacionesHomeHoteles.length > 1
+                ? '<a href="#" class="hh-aero-eliminar-habitacion" data-idx="' + idx + '" style="font-size:12px;color:var(--at-primary);text-decoration:none">Eliminar</a>'
+                : '';
+            div.innerHTML =
+                '<div class="d-flex justify-content-between align-items-center mb-2">' +
+                    '<strong style="font-size:13px">Habitación ' + (idx + 1) + '</strong>' + eliminar +
+                '</div>' +
+                '<div class="d-flex justify-content-between align-items-center">' +
+                    '<div style="font-size:13px">Personas</div>' +
+                    '<div class="d-flex align-items-center gap-2">' +
+                        '<button type="button" class="btn-at-ghost hh-aero-ajustar" data-idx="' + idx + '" data-delta="-1" style="padding:2px 10px">−</button>' +
+                        '<span style="min-width:18px;text-align:center">' + hab.personas + '</span>' +
+                        '<button type="button" class="btn-at-ghost hh-aero-ajustar" data-idx="' + idx + '" data-delta="1" style="padding:2px 10px">+</button>' +
+                    '</div>' +
+                '</div>';
+            cont.appendChild(div);
+        });
+        cont.querySelectorAll('.hh-aero-ajustar').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var hab = aeroTrackHabitacionesHomeHoteles[parseInt(btn.dataset.idx, 10)];
+                hab.personas = Math.min(8, Math.max(1, hab.personas + parseInt(btn.dataset.delta, 10)));
+                aeroTrackRenderHabitacionesHomeHoteles();
             });
         });
-    });
+        cont.querySelectorAll('.hh-aero-eliminar-habitacion').forEach(function (btn) {
+            btn.addEventListener('click', function (ev) {
+                ev.preventDefault();
+                aeroTrackHabitacionesHomeHoteles.splice(parseInt(btn.dataset.idx, 10), 1);
+                aeroTrackRenderHabitacionesHomeHoteles();
+            });
+        });
+        var huespedes = aeroTrackHabitacionesHomeHoteles.reduce(function (s, h) { return s + h.personas; }, 0);
+        var habitaciones = aeroTrackHabitacionesHomeHoteles.length;
+        document.getElementById('hh-huespedes').value = huespedes;
+        document.getElementById('hh-habitaciones').value = habitaciones;
+        document.getElementById('hh-txt-pasajeros-habitaciones').textContent =
+            huespedes + (huespedes === 1 ? ' persona, ' : ' personas, ') +
+            habitaciones + (habitaciones === 1 ? ' habitación' : ' habitaciones');
+    }
+    var btnAnadirHabitacionH = document.getElementById('hh-btn-anadir-habitacion');
+    if (btnAnadirHabitacionH) {
+        btnAnadirHabitacionH.addEventListener('click', function () {
+            if (aeroTrackHabitacionesHomeHoteles.length >= 8) return;
+            aeroTrackHabitacionesHomeHoteles.push({personas: 1});
+            aeroTrackRenderHabitacionesHomeHoteles();
+        });
+    }
+    if (document.getElementById('hh-lista-habitaciones')) {
+        aeroTrackRenderHabitacionesHomeHoteles();
+    }
+
+    // El botón vive dentro de `.at-hero-search`, que tiene `overflow:
+    // hidden` (recorta el fondo decorativo) — eso recorta el menú
+    // desplegado sin importar la estrategia de posicionamiento de Popper
+    // (`strategy:'fixed'` por sí sola NO alcanza: Chromium igual recorta
+    // los descendientes `position:fixed` de un ancestro con
+    // `overflow:hidden`). Única forma real de escapar: mover el propio
+    // `.dropdown-menu` a `document.body` mientras está abierto, y
+    // devolverlo a su lugar al cerrar para no romper la estructura.
+    var btnPasHabHomeEl = document.getElementById('hh-btn-pasajeros-habitaciones');
+    if (btnPasHabHomeEl && window.bootstrap) {
+        var menuPasHabHomeEl = btnPasHabHomeEl.nextElementSibling;
+        new bootstrap.Dropdown(btnPasHabHomeEl, {
+            popperConfig: function (defaultConfig) {
+                return Object.assign({}, defaultConfig, {
+                    strategy: 'fixed',
+                    modifiers: (defaultConfig.modifiers || []).concat([{name: 'flip', options: {fallbackPlacements: []}}]),
+                });
+            },
+        });
+        btnPasHabHomeEl.addEventListener('show.bs.dropdown', function () {
+            document.body.appendChild(menuPasHabHomeEl);
+        });
+        btnPasHabHomeEl.addEventListener('hidden.bs.dropdown', function () {
+            btnPasHabHomeEl.insertAdjacentElement('afterend', menuPasHabHomeEl);
+        });
+    }
+
+    // Selector de rango de fechas del mini-buscador de cruceros del hero
+    // (mismo componente que /cruceros/buscar) — un solo calendario en vez
+    // de 2 inputs sueltos.
+    var inputRangoCr = document.getElementById('hcr-rango-fechas');
+    var inputDesdeCr = document.getElementById('hcr-desde');
+    var inputHastaCr = document.getElementById('hcr-hasta');
+    if (inputRangoCr && window.flatpickr) {
+        flatpickr(inputRangoCr, {
+            mode: 'range',
+            dateFormat: 'Y-m-d',
+            altInput: true,
+            altFormat: 'D, M j',
+            onChange: function (selectedDates) {
+                inputDesdeCr.value = selectedDates[0] ? flatpickr.formatDate(selectedDates[0], 'Y-m-d') : '';
+                inputHastaCr.value = selectedDates[1] ? flatpickr.formatDate(selectedDates[1], 'Y-m-d') : '';
+            },
+        });
+    }
 });
 </script>
 {% endblock %}

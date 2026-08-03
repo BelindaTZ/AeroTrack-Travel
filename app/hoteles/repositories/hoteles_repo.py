@@ -34,12 +34,23 @@ class HotelesRepository:
         )
         return resultado["items"]
 
-    async def ciudades_disponibles(self) -> list[str]:
-        resultado = await self._client.list_records("hoteles_catalogo", {"perPage": 200, "fields": "ciudad"})
-        return sorted({item["ciudad"] for item in resultado["items"] if item.get("ciudad")})
+    async def ciudades_disponibles(self) -> list[dict]:
+        """`[{"ciudad":..., "pais":...}]`, deduplicado — `pais` viene real
+        de HotelLens, usado en el selector de origen/destino para mostrar
+        "Ciudad, País" en vez de solo el nombre de la ciudad."""
+        resultado = await self._client.list_records(
+            "hoteles_catalogo", {"perPage": 200, "fields": "ciudad,pais"}
+        )
+        pares = {(item["ciudad"], item.get("pais") or "") for item in resultado["items"] if item.get("ciudad")}
+        return sorted(({"ciudad": c, "pais": p} for c, p in pares), key=lambda x: x["ciudad"])
 
     # ── hoteles_tarifas ──────────────────────────────────────────────
     async def eliminar_tarifas_de_hotel(self, hotel_id: str) -> None:
+        # `hoteles_disponibilidad` primero — sus filas quedarían huérfanas
+        # (relation a una tarifa ya borrada) si se borrara la tarifa antes;
+        # se filtra por `hotel_id` denormalizado, no por tarifa, para no
+        # necesitar un join extra (ver pb_schema_hoteles.py).
+        await self.eliminar_disponibilidad_de_hotel(hotel_id)
         resultado = await self._client.list_records(
             "hoteles_tarifas", {"filter": f'hotel_id="{hotel_id}"', "perPage": 100}
         )
@@ -52,6 +63,23 @@ class HotelesRepository:
     async def tarifas_de_hotel(self, hotel_id: str) -> list[dict]:
         resultado = await self._client.list_records(
             "hoteles_tarifas", {"filter": f'hotel_id="{hotel_id}"', "perPage": 50}
+        )
+        return resultado["items"]
+
+    # ── hoteles_disponibilidad (RF-HOT-004, cupo real por noche) ────────
+    async def eliminar_disponibilidad_de_hotel(self, hotel_id: str) -> None:
+        resultado = await self._client.list_records(
+            "hoteles_disponibilidad", {"filter": f'hotel_id="{hotel_id}"', "perPage": 500}
+        )
+        for fila in resultado["items"]:
+            await self._client.delete_record("hoteles_disponibilidad", fila["id"])
+
+    async def crear_disponibilidad(self, data: dict) -> dict:
+        return await self._client.create_record("hoteles_disponibilidad", data)
+
+    async def disponibilidad_de_tarifa(self, hotel_tarifa_id: str) -> list[dict]:
+        resultado = await self._client.list_records(
+            "hoteles_disponibilidad", {"filter": f'hotel_tarifa_id="{hotel_tarifa_id}"', "perPage": 200}
         )
         return resultado["items"]
 

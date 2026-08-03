@@ -7,6 +7,7 @@ from fastapi.responses import RedirectResponse
 
 from app.seguridad.services.audit_service import AuditService
 from app.seguridad.services.password_service import PasswordDebil, PasswordService
+from app.seguridad.services.plantillas_service import plantilla
 from app.seguridad.services.usuarios_service import CorreoDuplicado, UsuariosService
 from app.shared.email_sender import enviar_correo
 from app.shared.templating import templates
@@ -48,7 +49,7 @@ async def registro_submit(
         )
 
     try:
-        PasswordService().validar_fortaleza(password)
+        await PasswordService().validar_fortaleza(password)
     except PasswordDebil as exc:
         return templates.TemplateResponse(
             request, "registro.html", {**contexto_error, "error": exc.motivo}, status_code=400
@@ -78,11 +79,9 @@ async def registro_submit(
         "crear", "usuarios", usuario_id=usuario["id"], registro_id=usuario["id"],
         detalle={"origen": "autoservicio_registro"},
     )
-    await enviar_correo(
-        email,
-        "Bienvenido a AeroTrack Travel",
-        "Tu cuenta fue creada correctamente. Ya puedes iniciar sesión.",
-    )
+    asunto = await plantilla("bienvenida.plantilla_asunto", "Bienvenido a AeroTrack Travel")
+    cuerpo = await plantilla("bienvenida.plantilla_cuerpo", "Tu cuenta fue creada correctamente. Ya puedes iniciar sesión.")
+    await enviar_correo(email, asunto, cuerpo)
 
     return RedirectResponse(
         "/login?mensaje=Cuenta creada. Revisa tu correo y luego inicia sesión.", status_code=303

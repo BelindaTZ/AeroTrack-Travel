@@ -4,7 +4,8 @@ import datetime
 
 
 async def _crear_fuente(pb, sufijo: str) -> dict:
-    admin = await pb.get_first("usuarios", 'tipo_actor="administrador"')
+    rol = await pb.get_first("roles", 'nombre="Administrador"')
+    admin = await pb.get_first("usuarios", f'rol_id="{rol["id"]}"')
     return await pb.create_record(
         "fuentes_datos_externas",
         {
@@ -41,7 +42,8 @@ async def test_resincronizar_fuente_catalogo_periodico_crea_log_manual(admin_cli
 
 
 async def test_resincronizar_fuente_regla_negocio_interna_se_rechaza(admin_client, pb):
-    admin = await pb.get_first("usuarios", 'tipo_actor="administrador"')
+    rol = await pb.get_first("roles", 'nombre="Administrador"')
+    admin = await pb.get_first("usuarios", f'rol_id="{rol["id"]}"')
     fuente = await pb.create_record(
         "fuentes_datos_externas",
         {"nombre": "Fuente regla interna test", "tipo_uso": "regla_negocio_interna", "activa": True, "modificado_por": admin["id"]},
@@ -124,4 +126,68 @@ async def test_corrida_fallida_no_oculta_ultima_exitosa(admin_client, pb):
     finally:
         await pb.delete_record("sincronizaciones_log", log_exitoso["id"])
         await pb.delete_record("sincronizaciones_log", log_fallido["id"])
+        await pb.delete_record("fuentes_datos_externas", fuente["id"])
+
+
+# ── IS-03 (auditoría de informes simples, 2026-08-01) — filtro por estado,
+# paginación y exportar CSV ──────────────────────────────────────────────
+
+async def test_bitacora_filtra_por_estado(admin_client, pb):
+    fuente = await _crear_fuente(pb, "filtro-estado")
+    log_exitoso = await pb.create_record(
+        "sincronizaciones_log",
+        {
+            "fuente_id": fuente["id"], "tipo_producto": "hotel",
+            "fecha_inicio": _iso(0), "fecha_fin": _iso(0),
+            "estado": "exitoso", "registros_procesados": 10, "registros_nuevos": 3, "registros_actualizados": 7,
+        },
+    )
+    log_fallido = await pb.create_record(
+        "sincronizaciones_log",
+        {
+            "fuente_id": fuente["id"], "tipo_producto": "hotel",
+            "fecha_inicio": _iso(0), "fecha_fin": _iso(0),
+            "estado": "fallido", "registros_procesados": 0, "registros_nuevos": 0, "registros_actualizados": 0,
+        },
+    )
+    try:
+        resp = await admin_client.get(f"/backoffice/integraciones/bitacora?fuente_id={fuente['id']}&estado=fallido")
+        assert resp.status_code == 200
+        assert f"log-{log_fallido['id']}" in resp.text
+        assert f"log-{log_exitoso['id']}" not in resp.text
+    finally:
+        await pb.delete_record("sincronizaciones_log", log_exitoso["id"])
+        await pb.delete_record("sincronizaciones_log", log_fallido["id"])
+        await pb.delete_record("fuentes_datos_externas", fuente["id"])
+
+
+async def test_bitacora_paginacion(admin_client):
+    resp = await admin_client.get("/backoffice/integraciones/bitacora?page=1")
+    assert resp.status_code == 200
+
+    resp = await admin_client.get("/backoffice/integraciones/bitacora?page=999")
+    assert resp.status_code == 200
+
+
+async def test_bitacora_exportar_csv_respeta_filtro(admin_client, pb):
+    fuente = await _crear_fuente(pb, "export")
+    log = await pb.create_record(
+        "sincronizaciones_log",
+        {
+            "fuente_id": fuente["id"], "tipo_producto": "hotel",
+            "fecha_inicio": _iso(0), "fecha_fin": _iso(0),
+            "estado": "exitoso", "registros_procesados": 10, "registros_nuevos": 3, "registros_actualizados": 7,
+        },
+    )
+    try:
+        resp = await admin_client.get(f"/backoffice/integraciones/bitacora/exportar?fuente_id={fuente['id']}")
+        assert resp.status_code == 200
+        assert resp.headers["content-type"].startswith("text/csv")
+        assert resp.text.splitlines()[0] == (
+            "fecha_inicio,fuente,tipo_producto,estado,registros_procesados,"
+            "registros_nuevos,registros_actualizados,unidades_cuota_consumidas"
+        )
+        assert fuente["nombre"] in resp.text
+    finally:
+        await pb.delete_record("sincronizaciones_log", log["id"])
         await pb.delete_record("fuentes_datos_externas", fuente["id"])

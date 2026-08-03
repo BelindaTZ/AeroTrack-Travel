@@ -1,0 +1,241 @@
+{% extends "layout_app.html" %}
+{% from "_paginacion.html" import controles %}
+{% block title %}Ofertas destacadas — AeroTrack Travel{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <h1><span class="heading-icon"><i class="bi bi-stars"></i></span>Ofertas destacadas</h1>
+    <p>Lo que se muestra en el home — vigente cuando la fecha actual cae entre inicio y fin, y está activa.</p>
+</div>
+
+<div class="at-table-wrapper">
+    <div class="at-table-header">
+        <form method="get" data-auto-filtros class="d-flex flex-wrap gap-2 align-items-end">
+            <div>
+                <label class="form-label-at" for="f-tipo">Tipo de producto</label>
+                <select class="form-control-at" id="f-tipo" name="tipo_producto" style="min-width:150px">
+                    <option value="">Todos</option>
+                    <option value="vuelo" {% if filtros.tipo_producto == 'vuelo' %}selected{% endif %}>Vuelo</option>
+                    <option value="hotel" {% if filtros.tipo_producto == 'hotel' %}selected{% endif %}>Hotel</option>
+                    <option value="auto" {% if filtros.tipo_producto == 'auto' %}selected{% endif %}>Auto</option>
+                    <option value="actividad" {% if filtros.tipo_producto == 'actividad' %}selected{% endif %}>Actividad</option>
+                    <option value="crucero" {% if filtros.tipo_producto == 'crucero' %}selected{% endif %}>Crucero</option>
+                </select>
+            </div>
+            <div>
+                <label class="form-label-at" for="f-estado">Estado</label>
+                <select class="form-control-at" id="f-estado" name="estado" style="min-width:120px">
+                    <option value="">Todos</option>
+                    <option value="activo" {% if filtros.estado == 'activo' %}selected{% endif %}>Activa</option>
+                    <option value="inactivo" {% if filtros.estado == 'inactivo' %}selected{% endif %}>Inactiva</option>
+                </select>
+            </div>
+            {% if filtros.tipo_producto or filtros.estado %}
+            <a href="/backoffice/ofertas/destacadas" class="btn-at-ghost">Limpiar</a>
+            {% endif %}
+        </form>
+        <button class="btn-at-primary" data-bs-toggle="modal" data-bs-target="#modal-crear">
+            <i class="bi bi-plus-lg" aria-hidden="true"></i>Nueva oferta
+        </button>
+    </div>
+
+    {% if not pagina.items %}
+    <div class="at-empty">
+        <i class="bi bi-stars at-empty-icon" aria-hidden="true"></i>
+        <strong>Sin ofertas con estos filtros</strong>
+    </div>
+    {% else %}
+    <div class="at-table-scroll">
+        <table class="at-table">
+            <thead><tr><th>Título</th><th>Tipo</th><th>Vigencia</th><th>Estado</th><th class="actions-col">Acciones</th></tr></thead>
+            <tbody>
+            {% for o in pagina.items %}
+            <tr>
+                <td style="font-weight:600">{{ o.titulo }}</td>
+                <td>{{ o.tipo_producto }}</td>
+                <td class="at-mono" style="font-size:12px">{{ o.fecha_inicio[:10] }} → {{ o.fecha_fin[:10] }}</td>
+                <td>{% if o.activa %}<span class="badge-sistema">activa</span>{% else %}<span class="badge-sistema" style="opacity:.6">inactiva</span>{% endif %}</td>
+                <td class="actions-col">
+                    <button type="button" class="btn-icon" data-bs-toggle="modal" data-bs-target="#modal-ver-{{ o.id }}" title="Ver">
+                        <i class="bi bi-eye" aria-hidden="true"></i>
+                    </button>
+                    <button type="button" class="btn-icon" data-bs-toggle="modal" data-bs-target="#modal-editar-{{ o.id }}" title="Editar">
+                        <i class="bi bi-pencil" aria-hidden="true"></i>
+                    </button>
+                    <button type="button" class="btn-icon {% if o.activa %}danger{% endif %}" data-bs-toggle="modal"
+                            data-bs-target="#modal-alternar-{{ o.id }}" title="{{ 'Desactivar' if o.activa else 'Reactivar' }}">
+                        <i class="bi {{ 'bi-slash-circle' if o.activa else 'bi-arrow-counterclockwise' }}" aria-hidden="true"></i>
+                    </button>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {{ controles(pagina, request) }}
+    {% endif %}
+</div>
+
+<!-- Modal: nueva oferta -->
+<div class="modal fade" id="modal-crear" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title d-flex align-items-center gap-2" style="font-size:16px;font-weight:700">
+                    <span class="modal-icon-title"><i class="bi bi-stars" aria-hidden="true"></i></span>Nueva oferta destacada
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <form method="post" action="/backoffice/ofertas/destacadas">
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <label class="form-label-at" for="c-titulo">Título</label>
+                            <input type="text" class="form-control-at" id="c-titulo" name="titulo" required>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label-at" for="c-descripcion">Descripción</label>
+                            <input type="text" class="form-control-at" id="c-descripcion" name="descripcion">
+                        </div>
+                        <div class="col-6 col-md-4">
+                            <label class="form-label-at" for="c-tipo">Tipo de producto</label>
+                            <select class="form-control-at" id="c-tipo" name="tipo_producto" required>
+                                <option value="vuelo">Vuelo</option>
+                                <option value="hotel">Hotel</option>
+                                <option value="auto">Auto</option>
+                                <option value="actividad">Actividad</option>
+                                <option value="crucero">Crucero</option>
+                            </select>
+                        </div>
+                        <div class="col-6 col-md-8">
+                            <label class="form-label-at" for="c-ref">ID del producto</label>
+                            <input type="text" class="form-control-at at-mono" id="c-ref" name="producto_ref" required>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label-at" for="c-inicio">Vigente desde</label>
+                            <input type="date" class="form-control-at" id="c-inicio" name="fecha_inicio" required>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label-at" for="c-fin">Vigente hasta</label>
+                            <input type="date" class="form-control-at" id="c-fin" name="fecha_fin" required>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-at-ghost" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn-at-primary"><i class="bi bi-check2"></i>Crear oferta</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% for o in pagina.items %}
+<!-- Modal: ver -->
+<div class="modal fade" id="modal-ver-{{ o.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title d-flex align-items-center gap-2" style="font-size:16px;font-weight:700">
+                    <span class="modal-icon-title"><i class="bi bi-stars" aria-hidden="true"></i></span>{{ o.titulo }}
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body d-flex flex-column gap-2" style="font-size:13.5px">
+                <div class="d-flex justify-content-between"><span style="color:var(--at-muted)">Descripción</span><span>{{ o.descripcion or "—" }}</span></div>
+                <div class="d-flex justify-content-between"><span style="color:var(--at-muted)">Tipo de producto</span><span>{{ o.tipo_producto }}</span></div>
+                <div class="d-flex justify-content-between"><span style="color:var(--at-muted)">ID del producto</span><span class="at-mono">{{ o.producto_ref }}</span></div>
+                <div class="d-flex justify-content-between"><span style="color:var(--at-muted)">Vigencia</span><span class="at-mono">{{ o.fecha_inicio[:10] }} → {{ o.fecha_fin[:10] }}</span></div>
+                <div class="d-flex justify-content-between"><span style="color:var(--at-muted)">Estado</span><span>{% if o.activa %}<span class="badge-sistema">activa</span>{% else %}<span class="badge-sistema" style="opacity:.6">inactiva</span>{% endif %}</span></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-at-ghost" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: editar -->
+<div class="modal fade" id="modal-editar-{{ o.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title d-flex align-items-center gap-2" style="font-size:16px;font-weight:700">
+                    <span class="modal-icon-title"><i class="bi bi-pencil" aria-hidden="true"></i></span>Editar — {{ o.titulo }}
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <form method="post" action="/backoffice/ofertas/destacadas/{{ o.id }}">
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <label class="form-label-at">Título</label>
+                            <input type="text" class="form-control-at" name="titulo" value="{{ o.titulo }}" required>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label-at">Descripción</label>
+                            <input type="text" class="form-control-at" name="descripcion" value="{{ o.descripcion or '' }}">
+                        </div>
+                        <div class="col-6 col-md-4">
+                            <label class="form-label-at">Tipo de producto</label>
+                            <select class="form-control-at" name="tipo_producto" required>
+                                {% for tp in ["vuelo","hotel","auto","actividad","crucero"] %}
+                                <option value="{{ tp }}" {% if o.tipo_producto == tp %}selected{% endif %}>{{ tp }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-6 col-md-8">
+                            <label class="form-label-at">ID del producto</label>
+                            <input type="text" class="form-control-at at-mono" name="producto_ref" value="{{ o.producto_ref }}" required>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label-at">Vigente desde</label>
+                            <input type="date" class="form-control-at" name="fecha_inicio" value="{{ o.fecha_inicio[:10] }}" required>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label-at">Vigente hasta</label>
+                            <input type="date" class="form-control-at" name="fecha_fin" value="{{ o.fecha_fin[:10] }}" required>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-at-ghost" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn-at-primary"><i class="bi bi-check2"></i>Guardar cambios</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: desactivar / reactivar -->
+<div class="modal fade" id="modal-alternar-{{ o.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width:420px">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title d-flex align-items-center gap-2" style="font-size:16px;font-weight:700">
+                    <span class="modal-icon-title" style="{% if o.activa %}background:var(--at-failed-bg);color:var(--at-danger){% endif %}">
+                        <i class="bi {{ 'bi-slash-circle' if o.activa else 'bi-arrow-counterclockwise' }}" aria-hidden="true"></i>
+                    </span>{{ 'Desactivar oferta' if o.activa else 'Reactivar oferta' }}
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body" style="font-size:13.5px">
+                {% if o.activa %}
+                ¿Desactivar <strong>{{ o.titulo }}</strong>? Deja de mostrarse en el home de inmediato — se puede reactivar cuando quieras.
+                {% else %}
+                ¿Reactivar <strong>{{ o.titulo }}</strong>? Vuelve a mostrarse si está dentro de su vigencia.
+                {% endif %}
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-at-ghost" data-bs-dismiss="modal">Cancelar</button>
+                <form method="post" action="/backoffice/ofertas/destacadas/{{ o.id }}/alternar-activa" class="m-0">
+                    <button type="submit" class="{{ 'btn-at-danger' if o.activa else 'btn-at-primary' }}">
+                        <i class="bi {{ 'bi-slash-circle' if o.activa else 'bi-arrow-counterclockwise' }}" aria-hidden="true"></i>
+                        {{ 'Desactivar' if o.activa else 'Reactivar' }}
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% endblock %}

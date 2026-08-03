@@ -1,0 +1,106 @@
+{% extends "layout_app.html" %}
+{% block title %}Alertas de Precio — AeroTrack Travel{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <h1><span class="heading-icon"><i class="bi bi-bell"></i></span>Alertas de Precio y Conversión</h1>
+    <p>Intención de compra y su conversión real a reservas.</p>
+</div>
+
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <div id="selector-periodo" class="filter-bar mb-0"></div>
+    <button type="button" class="btn-at-ghost" onclick="window.print()"><i class="bi bi-file-earmark-pdf"></i> Exportar PDF</button>
+</div>
+
+<div id="db-alertas-cargando" style="text-align:center;padding:50px 0;color:var(--at-muted)">
+    <div class="spinner-border" style="color:var(--at-primary)" role="status"></div>
+</div>
+
+<div id="db-alertas-contenido" style="display:none">
+    <div class="row g-3 mb-3">
+        <div class="col-12 col-md-4">
+            <div class="at-card" style="height:100%">
+                <div style="font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--at-sub)">Alertas activas totales</div>
+                <div class="at-mono" id="kpi-alertas-activas" style="font-size:30px;font-weight:700;color:var(--at-primary)">—</div>
+            </div>
+        </div>
+        <div class="col-12 col-md-4">
+            <div class="at-card" style="height:100%;margin-bottom:4px">
+                <div style="font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--at-sub)">Tasa de conversión</div>
+                <div id="chart-gauge-conversion" style="height:110px"></div>
+            </div>
+        </div>
+        <div class="col-12 col-md-4">
+            <div class="at-card" style="height:100%">
+                <div style="font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--at-sub)">Tiempo promedio alerta → reserva</div>
+                <div class="at-mono" id="kpi-tiempo-promedio" style="font-size:30px;font-weight:700;color:var(--at-text)">—</div>
+                <div style="font-size:11.5px;color:var(--at-muted)">horas</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="at-card mb-3">
+        <div style="font-size:12.5px;font-weight:700;margin-bottom:6px">Alertas por ruta — top 10</div>
+        <div id="chart-alertas-ruta" style="height:220px"></div>
+    </div>
+    <div class="at-card mb-3">
+        <div style="font-size:12.5px;font-weight:700;margin-bottom:6px">Conversiones por mes <span style="font-weight:400;color:var(--at-muted);font-size:11.5px">(no hay fuente semanal)</span></div>
+        <div id="chart-conversiones-mes" style="height:200px"></div>
+    </div>
+    <div class="at-table-wrapper">
+        <div class="at-table-header"><span class="at-table-title">Rutas con alerta pero sin conversión</span></div>
+        <table class="table" style="font-size:12.5px;margin-bottom:0">
+            <thead><tr><th>Ruta</th><th>Pasajero</th></tr></thead>
+            <tbody id="tabla-sin-conversion"></tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+var chartsAlertas = [];
+function cargarDatosAlertas(desde, hasta) {
+    document.getElementById('db-alertas-cargando').style.display = '';
+    document.getElementById('db-alertas-contenido').style.display = 'none';
+    fetch('/backoffice/dashboards/alertas-precio/datos?desde=' + desde + '&hasta=' + hasta).then(function (r) { return r.json(); }).then(renderAlertas);
+}
+function renderAlertas(d) {
+    document.getElementById('db-alertas-cargando').style.display = 'none';
+    document.getElementById('db-alertas-contenido').style.display = '';
+    chartsAlertas.forEach(function (c) { c && c.dispose(); });
+    chartsAlertas = [];
+
+    document.getElementById('kpi-alertas-activas').textContent = d.alertas_activas_total;
+    document.getElementById('kpi-tiempo-promedio').textContent = d.tiempo_promedio_horas;
+
+    chartsAlertas.push(initChart('chart-gauge-conversion', {
+        series: [{
+            type: 'gauge', min: 0, max: 100, startAngle: 180, endAngle: 0, radius: '100%', center: ['50%', '85%'],
+            axisLine: { lineStyle: { width: 10, color: [[1, AEROTRACK_SEMANTIC.primary + '33']] } },
+            pointer: { length: '55%', itemStyle: { color: AEROTRACK_SEMANTIC.primary } },
+            progress: { show: true, width: 10, itemStyle: { color: AEROTRACK_SEMANTIC.primary } },
+            splitLine: { show: false }, axisTick: { show: false }, axisLabel: { show: false }, anchor: { show: false }, title: { show: false },
+            detail: { fontSize: 20, fontWeight: 700, offsetCenter: [0, '-15%'], formatter: '{value}%', color: AEROTRACK_SEMANTIC.primary },
+            data: [{ value: d.tasa_conversion }],
+        }],
+    }));
+
+    chartsAlertas.push(initChart('chart-alertas-ruta', {
+        xAxis: { type: 'value' },
+        yAxis: { type: 'category', data: d.top_10_rutas.map(function (r) { return r.ruta; }) },
+        series: [{ type: 'bar', data: d.top_10_rutas.map(function (r) { return r.alertas; }), label: { show: true, position: 'right' } }],
+    }));
+
+    chartsAlertas.push(initChart('chart-conversiones-mes', {
+        xAxis: { type: 'category', data: d.tendencia_mensual.map(function (t) { return t.periodo.slice(0, 7); }) },
+        yAxis: { type: 'value' },
+        series: [{ type: 'bar', data: d.tendencia_mensual.map(function (t) { return t.conversiones; }) }],
+    }));
+
+    document.getElementById('tabla-sin-conversion').innerHTML = d.rutas_sin_conversion.map(function (r) {
+        return '<tr><td>' + r.ruta + '</td><td>' + r.pasajero_id + '</td></tr>';
+    }).join('') || '<tr><td colspan="2" class="text-center" style="color:var(--at-muted)">Todas las alertas activas convirtieron</td></tr>';
+}
+initSelectorPeriodo('selector-periodo', function (periodo) { cargarDatosAlertas(periodo.desde, periodo.hasta); });
+</script>
+{% endblock %}

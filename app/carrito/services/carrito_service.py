@@ -26,9 +26,16 @@ import string
 
 from app.carrito.repositories.carrito_repo import CarritoRepository
 from app.reservas.repositories.reservas_repo import ReservasRepository
+from app.shared.rango_fechas import fechas_rango
 
 TIPOS_VALIDOS = {"vuelo", "hotel", "auto", "actividad", "crucero"}
 DEFAULT_EXPIRACION_MINUTOS = 15
+
+# Hotel (noches) y Auto (días) son los únicos tipos cuya `cantidad` se
+# DERIVA de un rango de fechas — antes de esto, check-in/check-out y
+# recogida/devolución eran cosméticos (ver errores-conocidos.md, gap
+# cerrado 2026-07-29): `unidades` (habitaciones/vehículos) × noches/días.
+TIPOS_CON_RANGO_FECHAS = {"hotel", "auto"}
 
 # tipo_producto -> campos de id que se copian tal cual de carrito_items a
 # reserva_items (mapeo 1:1 a propósito, mismo patrón polimórfico).
@@ -54,6 +61,10 @@ class SinPermiso(Exception):
 
 
 class CarritoVacio(Exception):
+    pass
+
+
+class RangoFechasInvalido(Exception):
     pass
 
 
@@ -89,7 +100,7 @@ async def _minutos_expiracion(repo: ReservasRepository) -> int:
 async def obtener_o_crear_carrito_activo(pasajero_id: str) -> dict:
     """RN-CAR-002 — nunca crea un segundo carrito activo en paralelo."""
     repo = CarritoRepository()
-    carrito = await repo.carrito_activo_de_pasajero(pasajero_id)
+    carrito = await repo.carrito_de_trabajo(pasajero_id)
     if carrito is not None:
         return carrito
     ahora = _ahora_iso()
@@ -99,7 +110,9 @@ async def obtener_o_crear_carrito_activo(pasajero_id: str) -> dict:
 
 
 async def agregar_item(
-    pasajero_id: str, tipo_producto: str, ids: dict, precio_snapshot: float, cantidad: int = 1
+    pasajero_id: str, tipo_producto: str, ids: dict, precio_snapshot: float, cantidad: int = 1,
+    modalidad_pago: str | None = None,
+    fecha_inicio: str | None = None, fecha_fin: str | None = None, unidades: int = 1,
 ) -> dict:
     if tipo_producto not in TIPOS_VALIDOS:
         raise TipoProductoInvalido(tipo_producto)
@@ -112,6 +125,24 @@ async def agregar_item(
         "carrito_id": carrito["id"], "tipo_producto": tipo_producto,
         "precio_snapshot": precio_snapshot, "cantidad": cantidad, "fecha_agregado": ahora,
     }
+    if modalidad_pago:
+        data["modalidad_pago"] = modalidad_pago
+
+    if tipo_producto in TIPOS_CON_RANGO_FECHAS and fecha_inicio and fecha_fin:
+        # `cantidad` se SOBREESCRIBE acá — nunca se confía en la del form
+        # para hotel/auto, para no poder desincronizarla del rango real
+        # (evita doble conteo o sub-reserva al confirmar el checkout, ver
+        # `cupo_rango_service.py`). `unidades` × noches/días es el único
+        # cálculo válido de cuánto cobrar; `unidades` por sí solo es lo que
+        # se reserva contra CADA noche/día individual.
+        noches_o_dias = len(fechas_rango(fecha_inicio, fecha_fin))
+        if noches_o_dias <= 0:
+            raise RangoFechasInvalido(f"fecha_fin debe ser posterior a fecha_inicio: {fecha_inicio}..{fecha_fin}")
+        data["cantidad"] = unidades * noches_o_dias
+        data["fecha_inicio"] = fecha_inicio
+        data["fecha_fin"] = fecha_fin
+        data["unidades"] = unidades
+
     for campo in _CAMPOS_ID_POR_TIPO[tipo_producto]:
         if campo in ids:
             data[campo] = ids[campo]
@@ -141,7 +172,7 @@ async def eliminar_item(pasajero_id: str, item_id: str) -> None:
 
 async def ver_carrito(pasajero_id: str) -> dict:
     repo = CarritoRepository()
-    carrito = await repo.carrito_activo_de_pasajero(pasajero_id)
+    carrito = await repo.carrito_de_trabajo(pasajero_id)
     if carrito is None:
         return {"carrito": None, "items": [], "total": 0.0}
 
@@ -156,7 +187,7 @@ async def revalidar_precios(pasajero_id: str) -> dict:
     (REG-G2 exige avisar antes de cobrar, no cobrar silenciosamente un
     precio distinto)."""
     repo = CarritoRepository()
-    carrito = await repo.carrito_activo_de_pasajero(pasajero_id)
+    carrito = await repo.carrito_de_trabajo(pasajero_id)
     if carrito is None:
         return {"items": [], "cambios": []}
 
@@ -199,7 +230,7 @@ async def confirmar_checkout(pasajero_id: str) -> dict:
     carrito_repo = CarritoRepository()
     reservas_repo = ReservasRepository()
 
-    carrito = await carrito_repo.carrito_activo_de_pasajero(pasajero_id)
+    carrito = await carrito_repo.carrito_de_trabajo(pasajero_id)
     if carrito is None:
         raise CarritoVacio()
 
@@ -258,6 +289,11 @@ async def confirmar_checkout(pasajero_id: str) -> dict:
             "cantidad": item.get("cantidad") or 1,
             "estado_item": "pendiente",
         }
+        if item.get("modalidad_pago"):
+            item_data["modalidad_pago"] = item["modalidad_pago"]
+        for campo in ("fecha_inicio", "fecha_fin", "unidades"):
+            if item.get(campo) is not None:
+                item_data[campo] = item[campo]
         for campo in _CAMPOS_ID_POR_TIPO[item["tipo_producto"]]:
             if item.get(campo):
                 item_data[campo] = item[campo]

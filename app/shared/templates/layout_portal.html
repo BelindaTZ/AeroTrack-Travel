@@ -12,28 +12,32 @@
         </div>
     </a>
 
-    <!-- Navegación central (solo pasajero autenticado) -->
-    {% if usuario and usuario.tipo_actor == 'pasajero' %}
+    <!-- Navegación central (pasajero autenticado o invitado — nunca vacía) -->
+    {% if not usuario or usuario.tipo_actor == 'pasajero' %}
     <nav class="portal-nav" aria-label="Navegación principal">
         <a class="portal-nav-link {% if request.url.path in ['/vuelos/buscar', '/'] %}active{% endif %}"
-           href="/vuelos/buscar">
+           href="/?tab=vuelos" data-tab="vuelos">
             <i class="bi bi-search" aria-hidden="true"></i>Buscar vuelos
         </a>
         <a class="portal-nav-link {% if '/autos' in request.url.path %}active{% endif %}"
-           href="/autos/buscar">
+           href="/?tab=autos" data-tab="autos">
             <i class="bi bi-car-front" aria-hidden="true"></i>Autos
         </a>
         <a class="portal-nav-link {% if '/actividades' in request.url.path %}active{% endif %}"
-           href="/actividades/buscar">
+           href="/?tab=actividades" data-tab="actividades">
             <i class="bi bi-compass" aria-hidden="true"></i>Actividades
         </a>
         <a class="portal-nav-link {% if '/cruceros' in request.url.path %}active{% endif %}"
-           href="/cruceros/buscar">
+           href="/?tab=cruceros" data-tab="cruceros">
             <i class="bi bi-water" aria-hidden="true"></i>Cruceros
         </a>
         <a class="portal-nav-link {% if '/hoteles' in request.url.path %}active{% endif %}"
-           href="/hoteles/buscar">
+           href="/?tab=hoteles" data-tab="hoteles">
             <i class="bi bi-building" aria-hidden="true"></i>Hoteles
+        </a>
+        <a class="portal-nav-link {% if '/paquetes' in request.url.path %}active{% endif %}"
+           href="/paquetes">
+            <i class="bi bi-box-seam" aria-hidden="true"></i>Paquetes
         </a>
         <a class="portal-nav-link {% if '/reservas' in request.url.path or request.url.path in ['/mis-reservas', '/mis-viajes'] %}active{% endif %}"
            href="/mis-viajes">
@@ -68,13 +72,6 @@
             <i class="bi bi-list fs-5" aria-hidden="true"></i>
         </button>
 
-        {% if not (usuario and usuario.tipo_actor == 'pasajero') %}
-        <a href="/ayuda/buscar" class="d-none d-md-inline-flex align-items-center gap-1"
-           style="font-size:13px;font-weight:600;color:var(--at-muted);text-decoration:none">
-            <i class="bi bi-question-circle" aria-hidden="true"></i>Ayuda
-        </a>
-        {% endif %}
-
         {% if usuario %}
         <div class="dropdown">
             <a class="avatar-chip-portal dropdown-toggle text-decoration-none"
@@ -95,8 +92,43 @@
                     </div>
                 </li>
                 <li>
+                    <a class="dropdown-item" style="border-radius:8px;padding:8px 12px" href="/mis-viajes">
+                        <i class="bi bi-ticket-perforated me-2"></i>Mis viajes
+                    </a>
+                </li>
+                <li>
+                    <a class="dropdown-item" style="border-radius:8px;padding:8px 12px" href="/favoritos">
+                        <i class="bi bi-heart me-2"></i>Favoritos
+                    </a>
+                </li>
+                <li>
+                    <a class="dropdown-item" style="border-radius:8px;padding:8px 12px" href="/asistente/historial">
+                        <i class="bi bi-robot me-2"></i>Asistente IA
+                    </a>
+                </li>
+                <li>
                     <a class="dropdown-item" style="border-radius:8px;padding:8px 12px" href="/mi-perfil">
                         <i class="bi bi-person me-2"></i>Mi perfil
+                    </a>
+                </li>
+                <li>
+                    <a class="dropdown-item" style="border-radius:8px;padding:8px 12px" href="/mi-cuenta/puntos">
+                        <i class="bi bi-award me-2"></i>Puntos
+                    </a>
+                </li>
+                <li>
+                    <a class="dropdown-item" style="border-radius:8px;padding:8px 12px" href="/notificaciones">
+                        <i class="bi bi-bell me-2"></i>Notificaciones
+                    </a>
+                </li>
+                <li>
+                    <a class="dropdown-item" style="border-radius:8px;padding:8px 12px" href="/mis-busquedas-recientes">
+                        <i class="bi bi-clock-history me-2"></i>Búsquedas recientes
+                    </a>
+                </li>
+                <li>
+                    <a class="dropdown-item" style="border-radius:8px;padding:8px 12px" href="/viajes-personalizados">
+                        <i class="bi bi-map me-2"></i>Planificación de viajes
                     </a>
                 </li>
                 <li><hr class="dropdown-divider" style="margin:4px 0"></li>
@@ -118,27 +150,31 @@
 </header>
 
 <!-- Menú móvil desplegable -->
-{% if usuario and usuario.tipo_actor == 'pasajero' %}
+{% if not usuario or usuario.tipo_actor == 'pasajero' %}
 <nav class="portal-nav-mobile" id="portal-nav-mobile" aria-label="Menú móvil">
     <a class="portal-nav-link {% if request.url.path in ['/vuelos/buscar', '/'] %}active{% endif %}"
-       href="/vuelos/buscar">
+       href="/?tab=vuelos" data-tab="vuelos">
         <i class="bi bi-search"></i>Buscar vuelos
     </a>
     <a class="portal-nav-link {% if '/autos' in request.url.path %}active{% endif %}"
-       href="/autos/buscar">
+       href="/?tab=autos" data-tab="autos">
         <i class="bi bi-car-front"></i>Autos
     </a>
     <a class="portal-nav-link {% if '/actividades' in request.url.path %}active{% endif %}"
-       href="/actividades/buscar">
+       href="/?tab=actividades" data-tab="actividades">
         <i class="bi bi-compass"></i>Actividades
     </a>
     <a class="portal-nav-link {% if '/cruceros' in request.url.path %}active{% endif %}"
-       href="/cruceros/buscar">
+       href="/?tab=cruceros" data-tab="cruceros">
         <i class="bi bi-water"></i>Cruceros
     </a>
     <a class="portal-nav-link {% if '/hoteles' in request.url.path %}active{% endif %}"
-       href="/hoteles/buscar">
+       href="/?tab=hoteles" data-tab="hoteles">
         <i class="bi bi-building"></i>Hoteles
+    </a>
+    <a class="portal-nav-link {% if '/paquetes' in request.url.path %}active{% endif %}"
+       href="/paquetes">
+        <i class="bi bi-box-seam"></i>Paquetes
     </a>
     <a class="portal-nav-link {% if '/reservas' in request.url.path or request.url.path in ['/mis-reservas', '/mis-viajes'] %}active{% endif %}"
        href="/mis-viajes">
@@ -204,6 +240,25 @@ document.addEventListener('DOMContentLoaded', function () {
             btn.setAttribute('aria-expanded', abierto ? 'true' : 'false');
         });
     }
+
+    // Los links de "Vuelos/Autos/Actividades/Cruceros/Hoteles" del nav son
+    // el único selector de vertical del buscador de "/" (ver inicio.html,
+    // window.aeroTrackMostrarVertical) — si ya estamos en "/", cambiar de
+    // vertical no navega, solo cambia el formulario mostrado; si estamos en
+    // otra página, sí navega a "/" con la pestaña correcta ya activada.
+    document.querySelectorAll('.portal-nav-link[data-tab], .portal-nav-mobile .portal-nav-link[data-tab]').forEach(function (link) {
+        link.addEventListener('click', function (e) {
+            if (window.location.pathname !== '/' || typeof window.aeroTrackMostrarVertical !== 'function') return;
+            e.preventDefault();
+            window.aeroTrackMostrarVertical(link.dataset.tab);
+            var hero = document.getElementById('portal-hero');
+            if (hero) hero.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            if (nav && nav.classList.contains('open')) {
+                nav.classList.remove('open');
+                if (btn) btn.setAttribute('aria-expanded', 'false');
+            }
+        });
+    });
 });
 </script>
 {% endblock %}

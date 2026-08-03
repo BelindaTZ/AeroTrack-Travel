@@ -20,3 +20,15 @@ CATALOGO_POR_TIPO = {
     "actividad": ("actividades_horarios", "precio", "actividad_horario_id", "cupos_disponibles"),
     "crucero": ("cruceros_camarotes_tarifa", "precio_por_persona", "crucero_camarote_id", "cupos_disponibles"),
 }
+
+# tipo_producto -> (colección de disponibilidad por fecha, campo de
+# relación al catálogo padre dentro de esa colección, campo de cupo) —
+# solo Hotel/Auto (gap real cerrado 2026-07-29, ver errores-conocidos.md):
+# a diferencia de `CATALOGO_POR_TIPO`, acá el `campo_id_referencia` de
+# arriba (`hotel_tarifa_id`/`auto_id`) no resuelve UNA fila de cupo sino
+# el padre de VARIAS (una por noche/día del rango `fecha_inicio`/
+# `fecha_fin` del ítem) — ver `app/shared/cupo_rango_service.py`.
+CATALOGO_RANGO_POR_TIPO = {
+    "hotel": ("hoteles_disponibilidad", "hotel_tarifa_id", "cupos_disponibles"),
+    "auto": ("autos_disponibilidad", "auto_id", "cupos_disponibles"),
+}

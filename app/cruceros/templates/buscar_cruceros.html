@@ -2,8 +2,9 @@
 {% block title %}Buscar cruceros — AeroTrack Travel{% endblock %}
 {% block description %}Compara cruceros por destino, duración y precio.{% endblock %}
 
+{% import "_selector_lugar.html" as sel %}
 {% block hero %}
-<section class="at-hero-search {% if resultados is not none %}compact{% endif %}" aria-label="Buscador de cruceros">
+<section class="at-hero-search hero-cruceros {% if resultados is not none %}compact{% endif %}" aria-label="Buscador de cruceros">
     <div style="max-width:960px;margin:0 auto;position:relative;z-index:2">
         {% if not resultados %}
         <div class="hero-eyebrow">
@@ -17,16 +18,20 @@
         <form method="get" action="/cruceros/buscar" id="form-busqueda-cruceros"
               class="{% if resultados %}search-card-compact{% else %}search-card{% endif %}">
             <div class="row g-3 align-items-end">
-                <div class="col-12 col-md-5">
-                    <label class="form-label-at" for="destino">Puerto o destino</label>
-                    <input type="text" class="form-control-at" id="destino" name="destino"
-                           placeholder="Nassau, Cozumel..." value="{{ filtros.destino }}" required autocomplete="off">
+                <div class="col-12 col-md-4">
+                    {{ sel.campo('destino', 'destino', filtros.destino, puertos, 'Puerto o destino', 'Nassau, Cozumel...', 'water') }}
                 </div>
-                <div class="col-6 col-md-3">
+                <div class="col-12 col-md-3">
+                    <label class="form-label-at" for="rango-fechas-crucero">Fecha de zarpe</label>
+                    <input type="text" class="form-control-at" id="rango-fechas-crucero" placeholder="Cualquier fecha" readonly autocomplete="off">
+                    <input type="hidden" id="desde" name="desde" value="{{ filtros.desde }}">
+                    <input type="hidden" id="hasta" name="hasta" value="{{ filtros.hasta }}">
+                </div>
+                <div class="col-6 col-md-2">
                     <label class="form-label-at" for="duracion_min">Duración mín. (días)</label>
                     <input type="number" class="form-control-at" id="duracion_min" name="duracion_min" min="1" value="{{ filtros.duracion_min }}">
                 </div>
-                <div class="col-6 col-md-2">
+                <div class="col-6 col-md-1">
                     <label class="form-label-at" for="duracion_max">Máx.</label>
                     <input type="number" class="form-control-at" id="duracion_max" name="duracion_max" min="1" value="{{ filtros.duracion_max }}">
                 </div>
@@ -46,6 +51,8 @@
 
 <form id="form-filtros-cruceros" method="get" action="/cruceros/buscar" style="display:none">
     <input type="hidden" name="destino" value="{{ filtros.destino }}">
+    <input type="hidden" name="desde" value="{{ filtros.desde }}">
+    <input type="hidden" name="hasta" value="{{ filtros.hasta }}">
     <input type="hidden" name="duracion_min" value="{{ filtros.duracion_min }}">
     <input type="hidden" name="duracion_max" value="{{ filtros.duracion_max }}">
     <input type="hidden" name="precio_max" id="f-precio-max" value="{{ filtros.precio_max }}">
@@ -54,7 +61,10 @@
 <div class="results-header">
     <div>
         <div class="results-title">{{ resultados | length }} crucero(s) encontrado(s)</div>
-        <div class="results-sub">Destino: {{ filtros.destino }}</div>
+        <div class="results-sub">
+            Destino: {{ filtros.destino }}
+            {% if filtros.desde or filtros.hasta %}· zarpe entre {{ filtros.desde or "…" }} y {{ filtros.hasta or "…" }}{% endif %}
+        </div>
     </div>
     <div style="max-width:200px">
         <input type="number" class="form-control-at" min="0" placeholder="Precio máx."
@@ -115,6 +125,27 @@ if (formBusqueda && btnBuscar) {
     formBusqueda.addEventListener('submit', function () {
         btnBuscar.disabled = true;
         btnBuscar.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Buscando…';
+    });
+}
+
+/* Selector de rango real (RF-CRU) — reemplaza los 2 inputs de fecha
+   sueltos por un único calendario de rango, estilo "Departing between".
+   `desde`/`hasta` (los campos que el form realmente envía) son inputs
+   ocultos que este script llena al elegir el rango. */
+var inputRangoCrucero = document.getElementById('rango-fechas-crucero');
+var inputDesdeCrucero = document.getElementById('desde');
+var inputHastaCrucero = document.getElementById('hasta');
+if (inputRangoCrucero && window.flatpickr) {
+    flatpickr(inputRangoCrucero, {
+        mode: 'range',
+        dateFormat: 'Y-m-d',
+        altInput: true,
+        altFormat: 'D, M j',
+        defaultDate: [inputDesdeCrucero.value, inputHastaCrucero.value].filter(Boolean),
+        onChange: function (selectedDates) {
+            inputDesdeCrucero.value = selectedDates[0] ? flatpickr.formatDate(selectedDates[0], 'Y-m-d') : '';
+            inputHastaCrucero.value = selectedDates[1] ? flatpickr.formatDate(selectedDates[1], 'Y-m-d') : '';
+        },
     });
 }
 </script>

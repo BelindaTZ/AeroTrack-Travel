@@ -19,6 +19,8 @@ from app.shared.rotacion_ciudades import rebanada_rotativa
 CIUDADES_DEFAULT = ["Paris", "Madrid", "New York"]
 MAX_HOTELES_POR_CIUDAD_DEFAULT = 2
 CIUDADES_POR_CORRIDA_DEFAULT = 3
+DIAS_ADELANTE_DEFAULT = 60
+CUPOS_DEFAULT = 10
 
 
 def _ahora_iso() -> str:
@@ -30,6 +32,43 @@ def _num(valor, default=None):
         return float(valor) if valor is not None else default
     except (TypeError, ValueError):
         return default
+
+
+async def _generar_disponibilidad_sintetica_hotel(
+    repo: HotelesRepository, hotel_id: str, hotel_tarifa_id: str, cupos_seed: float | None
+) -> int:
+    """RF-HOT-004 (gap real cerrado 2026-07-29, ver errores-conocidos.md) —
+    antes check-in/check-out eran cosméticos: ninguna fila tenía cupo por
+    noche. Mismo patrón que `actividades_horarios`
+    (`_generar_disponibilidad_sintetica` en el módulo Actividades): ventana
+    móvil que se regenera completa en cada refresh de catálogo, no se
+    acumula sobre lo ya generado (la fila padre `hoteles_tarifas` también se
+    borra y recrea entera en cada corrida, ver `eliminar_tarifas_de_hotel`)."""
+    dias_valor = await repo.config("disponibilidad_hoteles.dias_adelante")
+    dias_adelante = int(dias_valor) if dias_valor else DIAS_ADELANTE_DEFAULT
+    cupos_default_valor = await repo.config("disponibilidad_hoteles.cupos_default")
+    cupos_default = int(cupos_default_valor) if cupos_default_valor else CUPOS_DEFAULT
+    # Preferir la señal real de HotelLens (`rooms_left`, ya en
+    # `hoteles_tarifas.cupos_disponibles`) sobre el fallback sintético —
+    # es el único dato de inventario real que esta fuente sí entrega.
+    cupos = int(cupos_seed) if cupos_seed is not None else cupos_default
+
+    hoy = datetime.date.today()
+    ahora = _ahora_iso()
+    creados = 0
+    for dia_offset in range(dias_adelante):
+        fecha = hoy + datetime.timedelta(days=dia_offset)
+        await repo.crear_disponibilidad(
+            {
+                "hotel_id": hotel_id,
+                "hotel_tarifa_id": hotel_tarifa_id,
+                "fecha": fecha.isoformat(),
+                "cupos_disponibles": cupos,
+                "fecha_actualizacion": ahora,
+            }
+        )
+        creados += 1
+    return creados
 
 
 async def _procesar_hotel(repo: HotelesRepository, client: HotelLensClient, item_busqueda: dict, check_in: str, check_out: str) -> bool:
@@ -97,7 +136,8 @@ async def _procesar_hotel(repo: HotelesRepository, client: HotelLensClient, item
     # reemplazan completas en cada corrida, no se acumulan versiones viejas.
     await repo.eliminar_tarifas_de_hotel(hotel["id"])
     for oferta_habitacion in room_offers:
-        await repo.crear_tarifa(
+        cupos_seed = _num(oferta_habitacion.get("rooms_left"))
+        tarifa = await repo.crear_tarifa(
             {
                 "hotel_id": hotel["id"],
                 "tipo_habitacion": oferta_habitacion.get("room_name") or "Habitación estándar",
@@ -117,10 +157,19 @@ async def _procesar_hotel(repo: HotelesRepository, client: HotelLensClient, item
                 # `refundable_until` real viene "" (no null) cuando no aplica
                 # — PocketBase rechaza "" en un campo date, se normaliza a None.
                 "cancelacion_hasta": oferta_habitacion.get("refundable_until") or None,
-                "cupos_disponibles": _num(oferta_habitacion.get("rooms_left")),
+                # RN-HOT-004: HotelLens no expone si una tarifa admite pago
+                # diferido (no es un dato real de la fuente) — se deriva de
+                # `reembolsable` como criterio de riesgo sintético, documentado
+                # (mismo patrón que otros defaults sintéticos de este módulo,
+                # ver `scripts/pb_schema_pago_diferido_hotel.py`).
+                "pago_diferido_disponible": bool(oferta_habitacion.get("free_cancellation")),
+                "cupos_disponibles": cupos_seed,
                 "fecha_actualizacion": ahora,
             }
         )
+        # Disponibilidad real por noche (RF-HOT-004, gap cerrado 2026-07-29)
+        # — sin esto la tarifa no es reservable con fecha real.
+        await _generar_disponibilidad_sintetica_hotel(repo, hotel["id"], tarifa["id"], cupos_seed)
 
     # Reseñas (RF-HOT-005) — se cachean junto con el catálogo para no gastar
     # cuota consultando /reviews en cada vista de detalle.

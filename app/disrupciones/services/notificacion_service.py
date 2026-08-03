@@ -34,6 +34,27 @@ _TEXTO_POR_TIPO = {
     "desvio": "Tu vuelo {numero_vuelo} fue desviado a otro destino.",
 }
 
+_CLAVE_PLANTILLA_POR_TIPO = {
+    "retraso": "disrupciones.plantilla_retraso",
+    "cancelacion": "disrupciones.plantilla_cancelacion",
+    "cambio_horario": "disrupciones.plantilla_cambio_horario",
+    "cambio_puerta": "disrupciones.plantilla_cambio_puerta",
+    "desvio": "disrupciones.plantilla_desvio",
+}
+
+
+async def _plantilla_texto(repo: DisrupcionesRepository, tipo_cambio: str) -> str:
+    """WP-08 (ampliación de sesión 2026-08-01) — editable desde
+    Configuración del sistema; `_TEXTO_POR_TIPO` sigue siendo el fallback
+    si la clave todavía no está sembrada."""
+    config = await repo.config(_CLAVE_PLANTILLA_POR_TIPO[tipo_cambio])
+    return config["valor"] if config else _TEXTO_POR_TIPO[tipo_cambio]
+
+
+async def _plantilla_asunto(repo: DisrupcionesRepository) -> str:
+    config = await repo.config("disrupciones.plantilla_asunto")
+    return config["valor"] if config else "AeroTrack Travel — {codigo_reserva}"
+
 
 class DisrupcionNoEncontrada(Exception):
     pass
@@ -94,7 +115,10 @@ async def procesar_disrupcion(disrupcion_id: str, sender: NotificationSender) ->
             if usuario is None:
                 continue
 
-            texto = _TEXTO_POR_TIPO[disrupcion["tipo_cambio"]].format(numero_vuelo=numero_vuelo)
+            texto_plantilla = await _plantilla_texto(repo, disrupcion["tipo_cambio"])
+            texto = texto_plantilla.format(numero_vuelo=numero_vuelo)
+            asunto_plantilla = await _plantilla_asunto(repo)
+            asunto = asunto_plantilla.format(codigo_reserva=reserva["codigo_reserva"])
             canal = "email"
             ahora_iso = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S.000Z")
 
@@ -104,7 +128,7 @@ async def procesar_disrupcion(disrupcion_id: str, sender: NotificationSender) ->
                     "reserva_id": reserva["id"],
                     "disrupcion_id": disrupcion_id,
                     "canal": canal,
-                    "asunto": f"AeroTrack Travel — {reserva['codigo_reserva']}",
+                    "asunto": asunto,
                     "contenido": texto,
                     "estado_envio": "pendiente",
                     "intentos_envio": 1,

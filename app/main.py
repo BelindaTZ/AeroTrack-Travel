@@ -6,25 +6,40 @@ from fastapi.staticfiles import StaticFiles
 
 from fastapi.responses import JSONResponse
 
+from app.dashboards.router_backoffice import router as dashboards_backoffice_router
 from app.shared.nav import nav_context
+from app.shared.router_interno_analitica import router as analitica_interno_router
 from app.shared.templating import templates
 from app.seguridad.services.session_service import usuario_opcional
 from app.vuelos.repositories.dims_reader import resolver_aeropuerto
 from app.vuelos.repositories.vuelos_repo import VuelosRepository
+from app.vuelos.repositories.catalogo_reader import CatalogoVuelosReader
+from app.vuelos.router_busqueda import opciones_aeropuertos, opciones_mes
+from app.hoteles.repositories.hoteles_repo import HotelesRepository
+from app.hoteles.repositories.catalogo_reader import CatalogoHotelesReader
+from app.hoteles.router_busqueda import opciones_mes as opciones_mes_hoteles
+from app.autos.repositories.autos_repo import AutosRepository
+from app.actividades.repositories.actividades_repo import ActividadesRepository
+from app.cruceros.repositories.cruceros_repo import CrucerosRepository
 from app.seguridad.router_auditoria import router as seguridad_auditoria_router
+from app.seguridad.router_intentos_fallidos import router as seguridad_intentos_fallidos_router
 from app.seguridad.router_auth import router as seguridad_auth_router
 from app.seguridad.router_password import router as seguridad_password_router
 from app.seguridad.router_perfil import router as seguridad_perfil_router
 from app.seguridad.router_registro import router as seguridad_registro_router
+from app.seguridad.router_configuracion import router as seguridad_configuracion_router
 from app.seguridad.router_roles import router as seguridad_roles_router
 from app.seguridad.router_usuarios import router as seguridad_usuarios_router
 from app.seguridad.services.rbac_service import AccesoDenegado
 from app.seguridad.services.session_service import SesionExpirada
 from app.vuelos.router_backoffice import router as vuelos_backoffice_router
+from app.vuelos.router_monitor import router as vuelos_monitor_router
 from app.vuelos.router_busqueda import router as vuelos_busqueda_router
+from app.vuelos.router_interno import router as vuelos_interno_router
 from app.reservas.router_alertas import router as reservas_alertas_router
 from app.reservas.router_backoffice import router as reservas_backoffice_router
 from app.reservas.router_interno import router as reservas_interno_router
+from app.reservas.router_reportes import router as reservas_reportes_router
 from app.reservas.router_reservas import router as reservas_router
 from app.facturacion.router_backoffice import router as facturacion_backoffice_router
 from app.facturacion.router_documentos import router as facturacion_documentos_router
@@ -32,7 +47,9 @@ from app.facturacion.router_interno import router as facturacion_interno_router
 from app.facturacion.router_pagos import router as facturacion_pagos_router
 from app.pasajeros.router_backoffice import router as pasajeros_backoffice_router
 from app.pasajeros.router_contacto import router as pasajeros_contacto_router
+from app.pasajeros.router_documentos import router as pasajeros_documentos_router
 from app.pasajeros.router_historial import router as pasajeros_historial_router
+from app.disrupciones.router_backoffice import router as disrupciones_backoffice_router
 from app.disrupciones.router_interno import router as disrupciones_interno_router
 from app.disrupciones.router_interno import router_notificaciones as disrupciones_notificaciones_interno_router
 from app.disrupciones.router_notificaciones import router as disrupciones_notificaciones_router
@@ -42,6 +59,7 @@ from app.hoteles.router_interno import router as hoteles_interno_router
 from app.hoteles.router_busqueda import router as hoteles_busqueda_router
 from app.autos.router_interno import router as autos_interno_router
 from app.autos.router_busqueda import router as autos_busqueda_router
+from app.autos.router_backoffice import router as autos_backoffice_router
 from app.actividades.router_interno import router as actividades_interno_router
 from app.actividades.router_busqueda import router as actividades_busqueda_router
 from app.cruceros.router_interno import router as cruceros_interno_router
@@ -49,8 +67,15 @@ from app.cruceros.router_busqueda import router as cruceros_busqueda_router
 from app.carrito.router_carrito import router as carrito_router
 from app.carrito.router_checkout import router as carrito_checkout_router
 from app.carrito.router_vista import router as carrito_vista_router
+from app.carrito.router_config_abandono import router as carrito_config_abandono_router
+from app.carrito.router_reporte import router as carrito_reporte_router
+from app.carrito.router_interno import router as carrito_interno_router
+from app.paquetes.router_backoffice import router as paquetes_backoffice_router
 from app.paquetes.router_construccion import router as paquetes_construccion_router
 from app.paquetes.router_resumen import router as paquetes_resumen_router
+from app.paquetes.router_vista import router as paquetes_vista_router
+from app.proveedores.router_backoffice import router as proveedores_backoffice_router
+from app.cuenta.router_backoffice import router as cuenta_backoffice_router
 from app.cuenta.router_mis_viajes import router as cuenta_mis_viajes_router
 from app.cuenta.router_favoritos import router as cuenta_favoritos_router
 from app.cuenta.router_viajes_personalizados import router as cuenta_viajes_personalizados_router
@@ -77,20 +102,28 @@ app.include_router(seguridad_perfil_router)
 app.include_router(seguridad_registro_router)
 app.include_router(seguridad_usuarios_router)
 app.include_router(seguridad_roles_router)
+app.include_router(seguridad_configuracion_router)
 app.include_router(seguridad_auditoria_router)
+app.include_router(seguridad_intentos_fallidos_router)
 app.include_router(vuelos_busqueda_router)
 app.include_router(vuelos_backoffice_router)
+app.include_router(vuelos_monitor_router)
+app.include_router(vuelos_interno_router)
 app.include_router(reservas_router)
 app.include_router(reservas_backoffice_router)
 app.include_router(reservas_interno_router)
 app.include_router(reservas_alertas_router)
+app.include_router(reservas_reportes_router)
 app.include_router(facturacion_pagos_router)
 app.include_router(facturacion_documentos_router)
 app.include_router(facturacion_interno_router)
 app.include_router(facturacion_backoffice_router)
 app.include_router(pasajeros_backoffice_router)
 app.include_router(pasajeros_contacto_router)
+app.include_router(pasajeros_documentos_router)
 app.include_router(pasajeros_historial_router)
+app.include_router(analitica_interno_router)
+app.include_router(disrupciones_backoffice_router)
 app.include_router(disrupciones_interno_router)
 app.include_router(disrupciones_notificaciones_interno_router)
 app.include_router(disrupciones_notificaciones_router)
@@ -100,6 +133,7 @@ app.include_router(hoteles_interno_router)
 app.include_router(hoteles_busqueda_router)
 app.include_router(autos_interno_router)
 app.include_router(autos_busqueda_router)
+app.include_router(autos_backoffice_router)
 app.include_router(actividades_interno_router)
 app.include_router(actividades_busqueda_router)
 app.include_router(cruceros_interno_router)
@@ -107,8 +141,15 @@ app.include_router(cruceros_busqueda_router)
 app.include_router(carrito_router)
 app.include_router(carrito_checkout_router)
 app.include_router(carrito_vista_router)
+app.include_router(carrito_config_abandono_router)
+app.include_router(carrito_reporte_router)
+app.include_router(carrito_interno_router)
+app.include_router(paquetes_backoffice_router)
 app.include_router(paquetes_construccion_router)
 app.include_router(paquetes_resumen_router)
+app.include_router(paquetes_vista_router)
+app.include_router(proveedores_backoffice_router)
+app.include_router(cuenta_backoffice_router)
 app.include_router(cuenta_mis_viajes_router)
 app.include_router(cuenta_favoritos_router)
 app.include_router(cuenta_viajes_personalizados_router)
@@ -122,6 +163,7 @@ app.include_router(ofertas_ofertas_router)
 app.include_router(ofertas_backoffice_router)
 app.include_router(asistente_conversacion_router)
 app.include_router(asistente_backoffice_router)
+app.include_router(dashboards_backoffice_router)
 
 
 @app.exception_handler(SesionExpirada)
@@ -171,6 +213,44 @@ async def raiz(request: Request, usuario: dict | None = Depends(usuario_opcional
     destinos_out = [
         {**d, "legible": await resolver_aeropuerto(d["codigo"])} for d in destinos
     ]
+    hoteles_destacados = await CatalogoHotelesReader().hoteles_destacados(limite=6)
+
+    # Mismo selector real (no crudo) que cada página de búsqueda propia —
+    # el hero de home es el primer contacto del usuario, no debe pedirle
+    # que ya sepa códigos de aeropuerto o nombres exactos de ciudad.
+    opciones_vuelos = await opciones_aeropuertos(repo)
+    meses_vuelos = await opciones_mes(CatalogoVuelosReader())
+    opciones_hoteles = [
+        {"valor": c["ciudad"], "principal": c["ciudad"], "secundario": c["pais"] or None}
+        for c in await HotelesRepository().ciudades_disponibles()
+    ]
+    meses_hoteles = await opciones_mes_hoteles(CatalogoHotelesReader())
+    opciones_autos = [
+        {"valor": c, "principal": c, "secundario": None}
+        for c in await AutosRepository().ciudades_disponibles()
+    ]
+    opciones_actividades = [
+        {"valor": c["ciudad"], "principal": c["ciudad"], "secundario": c["pais"] or None}
+        for c in await ActividadesRepository().ciudades_disponibles()
+    ]
+    opciones_cruceros = [
+        {"valor": p, "principal": p, "secundario": None}
+        for p in await CrucerosRepository().puertos_disponibles()
+    ]
+
     return templates.TemplateResponse(
-        request, "inicio.html", {"usuario": usuario, "destinos_populares": destinos_out}
+        request,
+        "inicio.html",
+        {
+            "usuario": usuario,
+            "destinos_populares": destinos_out,
+            "hoteles_destacados": hoteles_destacados,
+            "opciones_vuelos": opciones_vuelos,
+            "meses_vuelos": meses_vuelos,
+            "opciones_hoteles": opciones_hoteles,
+            "meses_hoteles": meses_hoteles,
+            "opciones_autos": opciones_autos,
+            "opciones_actividades": opciones_actividades,
+            "opciones_cruceros": opciones_cruceros,
+        },
     )

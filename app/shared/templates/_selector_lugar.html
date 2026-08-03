@@ -1,0 +1,21 @@
+{# Selector de lugar reutilizable (combobox con autocompletado local) —
+   usado por los 5 buscadores (vuelos/hoteles/autos/actividades/cruceros)
+   y el hero de la home. Requiere public/assets/js/selector-lugar.js
+   (incluido una sola vez en layout_portal.html) para mejorar el input de
+   texto plano a un combobox real; sin JS, sigue funcionando como input
+   normal con su `name` real.
+
+   `opciones` es una lista de dicts {"valor":..., "principal":...,
+   "secundario":...} — `secundario` es opcional (ej. Autos no tiene país). #}
+{% macro campo(id, name, valor, opciones, label='', placeholder='', icono='geo-alt', requerido=True) %}
+<div class="selector-lugar" id="{{ id }}-wrap" data-selector-lugar data-opciones='{{ opciones | tojson }}'>
+    {% if label %}<label class="form-label-at" for="{{ id }}">{{ label }}</label>{% endif %}
+    <div class="selector-lugar-input-wrap">
+        <i class="bi bi-{{ icono }} selector-lugar-icon" aria-hidden="true"></i>
+        <input type="text" class="form-control-at selector-lugar-input" id="{{ id }}" name="{{ name }}"
+               value="{{ valor or '' }}" placeholder="{{ placeholder }}" autocomplete="off"
+               {% if requerido %}required{% endif %}>
+    </div>
+    <ul class="selector-lugar-panel" hidden></ul>
+</div>
+{% endmacro %}

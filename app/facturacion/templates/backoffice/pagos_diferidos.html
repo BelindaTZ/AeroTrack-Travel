@@ -1,0 +1,40 @@
+{% extends "layout_app.html" %}
+{% block title %}Pagos diferidos — AeroTrack Travel{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <h1><span class="heading-icon"><i class="bi bi-hourglass-split"></i></span>Pagos diferidos</h1>
+    <p>RF-FAC-012 (CU-O86) — reservas de hotel autorizadas en Stripe, esperando que el hotel confirme la disponibilidad para completar el cobro.</p>
+</div>
+
+<div class="at-table-wrapper">
+    {% if pagos %}
+    <div class="at-table-scroll">
+        <table class="at-table">
+            <thead><tr><th>Reserva</th><th>Monto</th><th>Autorizado</th><th></th></tr></thead>
+            <tbody>
+                {% for p in pagos %}
+                <tr>
+                    <td class="at-mono">{{ p.codigo_reserva }}</td>
+                    <td class="at-mono">${{ "%.2f"|format(p.pago.monto) }}</td>
+                    <td class="at-mono" style="font-size:12px">{{ p.pago.fecha_autorizacion[:10] if p.pago.fecha_autorizacion else "" }}</td>
+                    <td>
+                        <form method="post" action="/backoffice/pagos-diferidos/{{ p.pago.id }}/capturar"
+                              onsubmit="return confirm('¿Capturar este pago? Se completará el cargo real en Stripe.');">
+                            <button type="submit" class="btn-at-accent" style="padding:6px 12px;font-size:12.5px">
+                                <i class="bi bi-lock-fill"></i>Capturar pago
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="at-empty">
+        <i class="bi bi-hourglass-split at-empty-icon" aria-hidden="true"></i>
+        <strong>Sin pagos diferidos pendientes de captura</strong>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

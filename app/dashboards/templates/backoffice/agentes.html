@@ -1,0 +1,116 @@
+{% extends "layout_app.html" %}
+{% block title %}Productividad del Agente — AeroTrack Travel{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <h1><span class="heading-icon"><i class="bi bi-person-workspace"></i></span>Productividad del Agente</h1>
+    <p id="db-agentes-subtitulo">Reservas asistidas, casos de soporte y cartera gestionada.</p>
+</div>
+
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <div id="selector-periodo" class="filter-bar mb-0"></div>
+    <button type="button" class="btn-at-ghost" onclick="window.print()"><i class="bi bi-file-earmark-pdf"></i> Exportar PDF</button>
+</div>
+
+<div id="db-agentes-cargando" style="text-align:center;padding:50px 0;color:var(--at-muted)">
+    <div class="spinner-border" style="color:var(--at-primary)" role="status"></div>
+</div>
+
+<div id="db-agentes-contenido" style="display:none">
+    <div class="row g-3 mb-3">
+        <div class="col-12 col-md-4">
+            <div class="at-card" style="height:100%">
+                <div style="font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--at-sub)" id="kpi-reservas-label">Total reservas asistidas del período</div>
+                <div class="at-mono" id="kpi-reservas" style="font-size:30px;font-weight:700;color:var(--at-primary)">—</div>
+                <div style="font-size:11.5px;color:var(--at-muted)">Valor gestionado: $<span id="kpi-valor"></span></div>
+            </div>
+        </div>
+        <div class="col-12 col-md-4" id="card-agente-top">
+            <div class="at-card" style="height:100%">
+                <div style="font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--at-sub)">Agente con más reservas cerradas</div>
+                <div class="at-mono" id="kpi-agente-top" style="font-size:20px;font-weight:700;color:var(--at-text);margin-top:6px">—</div>
+            </div>
+        </div>
+        <div class="col-12 col-md-4">
+            <div class="at-card" style="height:100%">
+                <div style="font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--at-sub)">Casos de soporte</div>
+                <div style="display:flex;gap:16px;margin-top:6px">
+                    <div><div class="at-mono" id="kpi-casos-resueltos" style="font-size:22px;font-weight:700;color:var(--at-success)">—</div><div style="font-size:10.5px;color:var(--at-muted)">Resueltos</div></div>
+                    <div><div class="at-mono" id="kpi-casos-pendientes" style="font-size:22px;font-weight:700;color:var(--at-danger)">—</div><div style="font-size:10.5px;color:var(--at-muted)">Pendientes</div></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="at-table-wrapper mb-3" id="tabla-ranking-wrapper">
+        <div class="at-table-header"><span class="at-table-title">Ranking de agentes</span></div>
+        <table class="table" style="font-size:12.5px;margin-bottom:0">
+            <thead><tr><th>Agente</th><th class="text-end">Reservas</th><th class="text-end">Valor</th><th class="text-end">Casos resueltos</th></tr></thead>
+            <tbody id="tabla-ranking"></tbody>
+        </table>
+    </div>
+    <div class="at-card mb-3" id="card-reservas-agente">
+        <div style="font-size:12.5px;font-weight:700;margin-bottom:6px">Reservas por agente</div>
+        <div id="chart-reservas-agente" style="height:220px"></div>
+    </div>
+    <div class="at-card">
+        <div style="font-size:12.5px;font-weight:700;margin-bottom:6px">Productividad en el tiempo <span style="font-weight:400;color:var(--at-muted);font-size:11.5px">(top 3 agentes, últimas 8 semanas)</span></div>
+        <div id="chart-productividad-tiempo" style="height:220px"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+var chartsAgentes = [];
+function cargarDatosAgentes(desde, hasta) {
+    document.getElementById('db-agentes-cargando').style.display = '';
+    document.getElementById('db-agentes-contenido').style.display = 'none';
+    fetch('/backoffice/dashboards/agentes/datos?desde=' + desde + '&hasta=' + hasta).then(function (r) { return r.json(); }).then(renderAgentes);
+}
+function renderAgentes(d) {
+    document.getElementById('db-agentes-cargando').style.display = 'none';
+    document.getElementById('db-agentes-contenido').style.display = '';
+    chartsAgentes.forEach(function (c) { c && c.dispose(); });
+    chartsAgentes = [];
+
+    if (d.vista_propia) {
+        document.getElementById('db-agentes-subtitulo').textContent = 'Tu cartera y productividad — vista filtrada automáticamente.';
+        document.getElementById('kpi-reservas-label').textContent = 'Mis reservas asistidas del período';
+        document.getElementById('card-agente-top').style.display = 'none';
+        document.getElementById('tabla-ranking-wrapper').style.display = 'none';
+        document.getElementById('card-reservas-agente').style.display = 'none';
+    }
+
+    document.getElementById('kpi-reservas').textContent = d.total_reservas_asistidas;
+    document.getElementById('kpi-valor').textContent = d.valor_total_gestionado.toLocaleString('es', { maximumFractionDigits: 0 });
+    document.getElementById('kpi-agente-top').textContent = d.agente_top || 'Sin datos';
+    document.getElementById('kpi-casos-resueltos').textContent = d.casos_resueltos;
+    document.getElementById('kpi-casos-pendientes').textContent = d.casos_pendientes;
+
+    document.getElementById('tabla-ranking').innerHTML = d.ranking_agentes.map(function (a) {
+        return '<tr><td>' + a.nombre + '</td><td class="text-end">' + a.reservas + '</td>' +
+               '<td class="text-end">$' + a.valor.toLocaleString('es', { maximumFractionDigits: 0 }) + '</td>' +
+               '<td class="text-end">' + a.casos_resueltos + '</td></tr>';
+    }).join('') || '<tr><td colspan="4" class="text-center" style="color:var(--at-muted)">Sin agentes con actividad en el período</td></tr>';
+
+    if (!d.vista_propia) {
+        chartsAgentes.push(initChart('chart-reservas-agente', {
+            xAxis: { type: 'category', data: d.ranking_agentes.map(function (a) { return a.nombre; }), axisLabel: { rotate: 30 } },
+            yAxis: { type: 'value' },
+            series: [{ type: 'bar', data: d.ranking_agentes.map(function (a) { return a.reservas; }) }],
+        }));
+    }
+
+    var series = Object.keys(d.productividad_top3).map(function (nombre) {
+        return { name: nombre, type: 'line', smooth: true, data: d.productividad_top3[nombre] };
+    });
+    chartsAgentes.push(initChart('chart-productividad-tiempo', {
+        legend: { bottom: 0 },
+        xAxis: { type: 'category', data: d.semanas },
+        yAxis: { type: 'value' },
+        series: series,
+    }));
+}
+initSelectorPeriodo('selector-periodo', function (periodo) { cargarDatosAgentes(periodo.desde, periodo.hasta); });
+</script>
+{% endblock %}

@@ -2,8 +2,9 @@
 {% block title %}Buscar hoteles — AeroTrack Travel{% endblock %}
 {% block description %}Compara hoteles por destino y fechas, con cupo y precio reales.{% endblock %}
 
+{% import "_selector_lugar.html" as sel %}
 {% block hero %}
-<section class="at-hero-search {% if resultados is not none %}compact{% endif %}" aria-label="Buscador de hoteles">
+<section class="at-hero-search hero-hoteles {% if resultados is not none %}compact{% endif %}" aria-label="Buscador de hoteles">
     <div style="max-width:960px;margin:0 auto;position:relative;z-index:2">
         {% if not resultados %}
         <div class="hero-eyebrow">
@@ -14,35 +15,58 @@
         <p class="hero-sub">Cupo y precio reales, con reseñas verificadas de otros huéspedes.</p>
         {% endif %}
 
-        <datalist id="lista-ciudades-hoteles">
-            {% for c in ciudades %}<option value="{{ c }}">{% endfor %}
-        </datalist>
-
         <form method="get" action="/hoteles/buscar" id="form-busqueda-hoteles"
               class="{% if resultados %}search-card-compact{% else %}search-card{% endif %}">
+            <input type="hidden" name="paquete_id" value="{{ paquete_id or '' }}">
             <div class="row g-3 align-items-end">
                 <div class="col-12 col-md-4">
-                    <label class="form-label-at" for="ciudad">Destino</label>
-                    <input type="text" class="form-control-at" id="ciudad" name="ciudad"
-                           list="lista-ciudades-hoteles" placeholder="Paris"
-                           value="{{ filtros.ciudad }}" required autocomplete="off">
+                    {{ sel.campo('ciudad', 'ciudad', filtros.ciudad, ciudades, 'Destino', 'Ciudad', 'building') }}
                 </div>
-                <div class="col-6 col-md-2">
+                <div class="col-6 col-md-2" id="campo-fecha-exacta" {% if filtros.mes %}hidden{% endif %}>
                     <label class="form-label-at" for="checkin">Check-in</label>
-                    <input type="date" class="form-control-at" id="checkin" name="checkin" value="{{ filtros.checkin }}">
+                    <input type="date" class="form-control-at" id="checkin" name="checkin" value="{{ filtros.checkin }}" {% if filtros.mes %}disabled{% endif %}>
                 </div>
-                <div class="col-6 col-md-2">
+                <div class="col-6 col-md-2" id="campo-fecha-exacta-2" {% if filtros.mes %}hidden{% endif %}>
                     <label class="form-label-at" for="checkout">Check-out</label>
-                    <input type="date" class="form-control-at" id="checkout" name="checkout" value="{{ filtros.checkout }}">
+                    <input type="date" class="form-control-at" id="checkout" name="checkout" value="{{ filtros.checkout }}" {% if filtros.mes %}disabled{% endif %}>
                 </div>
-                <div class="col-6 col-md-2">
-                    <label class="form-label-at" for="huespedes">Huéspedes</label>
-                    <input type="number" class="form-control-at" id="huespedes" name="huespedes" min="1" max="10" value="{{ filtros.huespedes }}">
+                <div class="col-12 col-md-4" id="campo-mes-flexible" {% if not filtros.mes %}hidden{% endif %}>
+                    <label class="form-label-at" for="mes">Mes</label>
+                    <select class="form-control-at" id="mes" name="mes" {% if not filtros.mes %}disabled{% endif %}>
+                        <option value="" disabled {% if not filtros.mes %}selected{% endif %}>Elegí un mes…</option>
+                        <option value="todos" {% if filtros.mes == "todos" %}selected{% endif %}>Todos los meses</option>
+                        {% for m in meses %}
+                        <option value="{{ m.valor }}" {% if filtros.mes == m.valor %}selected{% endif %}>{{ m.legible | capitalize }}</option>
+                        {% endfor %}
+                    </select>
                 </div>
-                <div class="col-6 col-md-2">
+                <div class="col-6 col-md-3">
+                    <label class="form-label-at" id="lbl-pasajeros-habitaciones">Pasajeros y habitaciones</label>
+                    <div class="dropdown">
+                        <button type="button" class="form-control-at text-start dropdown-toggle w-100" id="btn-pasajeros-habitaciones"
+                                data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" {% if filtros.mes %}disabled{% endif %}>
+                            <span id="txt-pasajeros-habitaciones">{{ filtros.huespedes }} persona{{ 's' if filtros.huespedes != 1 else '' }}, {{ filtros.habitaciones }} habitación{{ 'es' if filtros.habitaciones != 1 else '' }}</span>
+                        </button>
+                        <div class="dropdown-menu p-3" style="min-width:280px;max-height:320px;overflow-y:auto" aria-labelledby="btn-pasajeros-habitaciones">
+                            <div id="lista-habitaciones"></div>
+                            <button type="button" class="btn-at-ghost" id="btn-anadir-habitacion" style="font-size:12.5px;color:var(--at-primary);border:none;background:none;padding:0">+ Añadir habitación</button>
+                            <button type="button" class="btn-at-primary w-100 justify-content-center mt-3" data-bs-toggle="dropdown">Aplicar</button>
+                        </div>
+                        <input type="hidden" id="huespedes" name="huespedes" value="{{ filtros.huespedes }}" {% if filtros.mes %}disabled{% endif %}>
+                        <input type="hidden" id="habitaciones" name="habitaciones" value="{{ filtros.habitaciones }}" {% if filtros.mes %}disabled{% endif %}>
+                        <script>window.aeroTrackHabitacionesIniciales = {{ filtros.habitaciones | default(1) }};</script>
+                    </div>
+                </div>
+                <div class="col-6 col-md-1">
                     <button type="submit" id="btn-buscar-hoteles" class="btn-search-hero w-100 justify-content-center">
                         <i class="bi bi-search" aria-hidden="true"></i> Buscar
                     </button>
+                </div>
+                <div class="col-12">
+                    <label class="d-flex align-items-center gap-2" style="font-size:12.5px;color:var(--at-sub);cursor:pointer">
+                        <input type="checkbox" id="chk-fecha-flexible" {% if filtros.mes %}checked{% endif %}>
+                        Aún no definí la fecha — buscar por mes
+                    </label>
                 </div>
             </div>
         </form>
@@ -51,22 +75,27 @@
 {% endblock %}
 
 {% block content %}
-{% if resultados is not none %}
 
 <form id="form-filtros-hoteles" method="get" action="/hoteles/buscar" style="display:none">
     <input type="hidden" name="ciudad" value="{{ filtros.ciudad }}">
     <input type="hidden" name="checkin" value="{{ filtros.checkin }}">
     <input type="hidden" name="checkout" value="{{ filtros.checkout }}">
+    <input type="hidden" name="mes" value="{{ filtros.mes }}">
     <input type="hidden" name="huespedes" value="{{ filtros.huespedes }}">
+    <input type="hidden" name="habitaciones" value="{{ filtros.habitaciones }}">
     <input type="hidden" name="estrellas_min" id="f-estrellas-min" value="{{ filtros.estrellas_min }}">
     <input type="hidden" name="precio_max" id="f-precio-max" value="{{ filtros.precio_max }}">
     <input type="hidden" name="calificacion_min" id="f-calificacion-min" value="{{ filtros.calificacion_min }}">
+    <input type="hidden" name="paquete_id" value="{{ paquete_id or '' }}">
 </form>
 
+{# Filtros visibles desde el inicio (antes solo aparecían después de una
+   primera búsqueda) — REG-J9 los sigue aplicando instantáneamente vía
+   form-filtros-hoteles, sea cual sea el estado del listado. #}
 <div class="search-layout">
     <aside class="search-sidebar" aria-label="Filtros de búsqueda">
         <div class="sidebar-section" style="background:var(--navy-50);border-bottom:1px solid var(--navy-100)">
-            <div style="font-size:13px;font-weight:700;color:var(--navy-800)">{{ filtros.ciudad }}</div>
+            <div style="font-size:13px;font-weight:700;color:var(--navy-800)">{{ filtros.ciudad or "Todos los destinos" }}</div>
         </div>
 
         <div class="sidebar-section">
@@ -115,12 +144,38 @@
     </aside>
 
     <div class="search-results-area">
+        {% if resultados is none %}
+        <div class="at-empty" style="border:1px solid var(--at-border);border-radius:var(--at-r-lg);background:var(--at-surface)">
+            <i class="bi bi-search at-empty-icon" aria-hidden="true"></i>
+            <strong>Elige un destino para ver hoteles disponibles</strong>
+            <p>Usa el buscador de arriba para empezar — los filtros ya quedan listos.</p>
+        </div>
+        {% else %}
         <div class="results-header">
             <div>
                 <div class="results-title">{{ resultados | length }} hotel(es) encontrado(s)</div>
-                <div class="results-sub">{{ filtros.ciudad }}</div>
+                <div class="results-sub">
+                    {{ filtros.ciudad }}
+                    {% if busqueda_mes_legible %}· buscando en {{ busqueda_mes_legible }} (fechas exactas y cupo se confirman en el detalle){% endif %}
+                </div>
             </div>
         </div>
+
+        <!-- Armando un paquete: ahorro en vivo con % real de
+             tipos_paquete_descuento, calculado por hotel más abajo. -->
+        {% if paquete_id and ahorro_paquete_porcentaje %}
+        <div class="d-flex align-items-center gap-2 mb-3" style="font-size:12.5px;padding:10px 14px;border-radius:var(--at-r-md);
+             background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.25)">
+            <i class="bi bi-box-seam" style="font-size:15px;color:var(--sky-600)"></i>
+            <span>
+                <strong>Armando tu paquete</strong> — el hotel que elijas se suma con
+                {{ ahorro_paquete_porcentaje | int }}% de descuento combinado. El ahorro estimado ya aparece en cada tarjeta.
+            </span>
+            <a href="/paquetes/{{ paquete_id }}/armar" class="ms-auto" style="font-size:12px;font-weight:600;white-space:nowrap">
+                Ver mi paquete <i class="bi bi-arrow-right"></i>
+            </a>
+        </div>
+        {% endif %}
 
         {% if resultados %}
         <div class="row g-3">
@@ -132,8 +187,12 @@
                         <img src="{{ h.imagen_principal }}" alt="" style="width:100%;height:100%;object-fit:cover;filter:grayscale(1)">
                     </div>
                     {% endif %}
-                    <div class="d-flex justify-content-between align-items-start mb-2">
+                    <div class="d-flex justify-content-between align-items-start mb-2 gap-2">
                         <strong style="font-size:14.5px;font-weight:700;line-height:1.3">{{ h.nombre }}</strong>
+                        <label class="d-flex align-items-center gap-1 flex-shrink-0" style="font-size:11px;color:var(--at-muted);cursor:pointer">
+                            <input type="checkbox" class="chk-comparar" value="{{ h.id }}" data-nombre="{{ h.nombre }}">
+                            Comparar
+                        </label>
                     </div>
                     <div style="font-size:12px;color:var(--at-muted);margin-bottom:10px">
                         {% if h.estrellas %}{{ h.estrellas | int }}<i class="bi bi-star-fill" style="color:var(--amber-400)"></i>{% endif %}
@@ -147,10 +206,18 @@
                         <div class="at-mono" style="font-size:18px;font-weight:800;color:var(--at-primary)">
                             ${{ "%.0f"|format(h.precio_desde) }}<span style="font-size:11px;font-weight:500;color:var(--at-muted)"> /noche</span>
                         </div>
+                        {% if h.noches %}
+                        <div style="font-size:11px;color:var(--at-sub)">${{ "%.0f"|format(h.precio_desde * h.noches) }} total · {{ h.noches }} noche{{ 's' if h.noches != 1 else '' }}</div>
+                        {% endif %}
+                        {% if ahorros_por_hotel and h.id in ahorros_por_hotel %}
+                        <div style="font-size:11.5px;color:var(--at-success);font-weight:600">
+                            <i class="bi bi-piggy-bank-fill"></i> Ahorras ${{ "%.0f"|format(ahorros_por_hotel[h.id]) }} en tu paquete
+                        </div>
+                        {% endif %}
                         {% else %}
                         <div style="font-size:12px;color:var(--at-sub)">Sin tarifas disponibles</div>
                         {% endif %}
-                        <a href="/hoteles/{{ h.id }}" class="btn-at-ghost w-100 justify-content-center mt-2">
+                        <a href="/hoteles/{{ h.id }}?checkin={{ filtros.checkin }}&checkout={{ filtros.checkout }}&habitaciones={{ filtros.habitaciones }}{% if request.query_params.get('paquete_id') %}&paquete_id={{ request.query_params.get('paquete_id') }}{% endif %}" class="btn-at-ghost w-100 justify-content-center mt-2">
                             Ver detalle <i class="bi bi-chevron-right"></i>
                         </a>
                     </div>
@@ -166,13 +233,65 @@
             <a href="/hoteles/buscar" class="btn-at-ghost mt-2"><i class="bi bi-arrow-left"></i> Nueva búsqueda</a>
         </div>
         {% endif %}
+        {% endif %}
+    </div>
+
+    <!-- Barra flotante de comparación (CU-T09) -->
+    <div id="barra-comparar" class="d-none"
+         style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:80;background:var(--navy-900);
+                color:#fff;border-radius:var(--at-r-full);padding:10px 10px 10px 20px;box-shadow:var(--at-shadow-lg);
+                display:flex;align-items:center;gap:14px;font-size:13px">
+        <span id="comparar-contador">0 seleccionados</span>
+        <button type="button" id="btn-ir-a-comparar" class="btn-at-accent" style="padding:8px 18px;font-size:13px" disabled>
+            Comparar <i class="bi bi-arrow-right"></i>
+        </button>
     </div>
 </div>
-{% endif %}
 {% endblock %}
 
 {% block scripts %}
 <script>
+const MAXIMO_COMPARAR = 5;
+const checksComparar = document.querySelectorAll('.chk-comparar');
+const barraComparar = document.getElementById('barra-comparar');
+const contadorComparar = document.getElementById('comparar-contador');
+const btnIrAComparar = document.getElementById('btn-ir-a-comparar');
+
+function seleccionActual() {
+    return Array.from(checksComparar).filter(function (c) { return c.checked; });
+}
+
+function actualizarBarraComparar() {
+    const seleccion = seleccionActual();
+    if (seleccion.length === 0) {
+        barraComparar.classList.add('d-none');
+        return;
+    }
+    barraComparar.classList.remove('d-none');
+    contadorComparar.textContent = seleccion.length + ' de ' + MAXIMO_COMPARAR + ' seleccionados';
+    btnIrAComparar.disabled = seleccion.length < 2;
+}
+
+checksComparar.forEach(function (chk) {
+    chk.addEventListener('change', function () {
+        // RN-HOT-T01: un sexto intento se rechaza explícitamente, nunca
+        // reemplaza en silencio una selección previa.
+        if (chk.checked && seleccionActual().length > MAXIMO_COMPARAR) {
+            chk.checked = false;
+            alert('Solo puedes comparar hasta ' + MAXIMO_COMPARAR + ' hoteles a la vez. Quita uno antes de agregar otro.');
+            return;
+        }
+        actualizarBarraComparar();
+    });
+});
+
+if (btnIrAComparar) {
+    btnIrAComparar.addEventListener('click', function () {
+        const ids = seleccionActual().map(function (c) { return c.value; });
+        window.location.href = '/hoteles/comparar?ids=' + ids.join(',');
+    });
+}
+
 function setFiltro(campoId, valor) {
     document.getElementById(campoId).value = valor;
     document.getElementById('form-filtros-hoteles').submit();
@@ -194,5 +313,150 @@ document.querySelectorAll('.sidebar-section-title').forEach(function (title) {
         }
     });
 });
+
+/* "Pasajeros y habitaciones" — desglose real por habitación (agregar/
+   eliminar habitación, cantidad de personas por habitación hasta 8),
+   igual que Despegar: 3 habitaciones para 1 persona no tenía sentido con
+   el contador plano de antes. Sin distinción mayores/menores — la BD
+   (hoteles_tarifas) no trae ninguna política de edad desde HotelLens, así
+   que agregar esa distinción sería una regla de negocio inventada sin
+   respaldo real; se dejó fuera a propósito. `huespedes`/`habitaciones`
+   (los dos campos que el form ya envía) se derivan de este estado:
+   habitaciones = cantidad de filas, huéspedes = suma de personas de
+   todas — el backend nunca necesitó el desglose por habitación en sí,
+   solo el total. */
+var aeroTrackHabitaciones = [];
+for (var _i = 0; _i < (window.aeroTrackHabitacionesIniciales || 1); _i++) {
+    aeroTrackHabitaciones.push({personas: 1});
+}
+
+function aeroTrackRenderHabitaciones() {
+    var cont = document.getElementById('lista-habitaciones');
+    cont.innerHTML = '';
+    aeroTrackHabitaciones.forEach(function (hab, idx) {
+        var div = document.createElement('div');
+        div.className = 'mb-3 pb-3';
+        if (idx < aeroTrackHabitaciones.length - 1) {
+            div.style.borderBottom = '1px solid var(--at-border)';
+        }
+        var eliminar = aeroTrackHabitaciones.length > 1
+            ? '<a href="#" class="aero-eliminar-habitacion" data-idx="' + idx + '" style="font-size:12px;color:var(--at-primary);text-decoration:none">Eliminar</a>'
+            : '';
+        div.innerHTML =
+            '<div class="d-flex justify-content-between align-items-center mb-2">' +
+                '<strong style="font-size:13px">Habitación ' + (idx + 1) + '</strong>' + eliminar +
+            '</div>' +
+            '<div class="d-flex justify-content-between align-items-center">' +
+                '<div style="font-size:13px">Personas</div>' +
+                '<div class="d-flex align-items-center gap-2">' +
+                    '<button type="button" class="btn-at-ghost aero-ajustar" data-idx="' + idx + '" data-delta="-1" style="padding:2px 10px">−</button>' +
+                    '<span style="min-width:18px;text-align:center">' + hab.personas + '</span>' +
+                    '<button type="button" class="btn-at-ghost aero-ajustar" data-idx="' + idx + '" data-delta="1" style="padding:2px 10px">+</button>' +
+                '</div>' +
+            '</div>';
+        cont.appendChild(div);
+    });
+    cont.querySelectorAll('.aero-ajustar').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            aeroTrackAjustarHabitacion(parseInt(btn.dataset.idx, 10), parseInt(btn.dataset.delta, 10));
+        });
+    });
+    cont.querySelectorAll('.aero-eliminar-habitacion').forEach(function (btn) {
+        btn.addEventListener('click', function (ev) {
+            ev.preventDefault();
+            aeroTrackHabitaciones.splice(parseInt(btn.dataset.idx, 10), 1);
+            aeroTrackRenderHabitaciones();
+        });
+    });
+    aeroTrackActualizarResumenPasajeros();
+}
+function aeroTrackAjustarHabitacion(idx, delta) {
+    var hab = aeroTrackHabitaciones[idx];
+    hab.personas = Math.min(8, Math.max(1, hab.personas + delta));
+    aeroTrackRenderHabitaciones();
+}
+function aeroTrackActualizarResumenPasajeros() {
+    var huespedes = aeroTrackHabitaciones.reduce(function (s, h) { return s + h.personas; }, 0);
+    var habitaciones = aeroTrackHabitaciones.length;
+    document.getElementById('huespedes').value = huespedes;
+    document.getElementById('habitaciones').value = habitaciones;
+    document.getElementById('txt-pasajeros-habitaciones').textContent =
+        huespedes + (huespedes === 1 ? ' persona, ' : ' personas, ') +
+        habitaciones + (habitaciones === 1 ? ' habitación' : ' habitaciones');
+}
+var btnAnadirHabitacion = document.getElementById('btn-anadir-habitacion');
+if (btnAnadirHabitacion) {
+    btnAnadirHabitacion.addEventListener('click', function () {
+        if (aeroTrackHabitaciones.length >= 8) return;
+        aeroTrackHabitaciones.push({personas: 1});
+        aeroTrackRenderHabitaciones();
+    });
+}
+aeroTrackRenderHabitaciones();
+
+// El botón vive dentro de `.at-hero-search`, que tiene `overflow:hidden`
+// (recorta el fondo decorativo) — eso recorta el menú desplegado sin
+// importar la estrategia de Popper (`strategy:'fixed'` por sí sola NO
+// alcanza: Chromium igual recorta los descendientes `position:fixed` de
+// un ancestro con `overflow:hidden`). Única forma real de escapar: mover
+// el propio `.dropdown-menu` a `document.body` mientras está abierto, y
+// devolverlo a su lugar al cerrar.
+var btnPasHabEl = document.getElementById('btn-pasajeros-habitaciones');
+if (btnPasHabEl && window.bootstrap) {
+    var menuPasHabEl = btnPasHabEl.nextElementSibling;
+    new bootstrap.Dropdown(btnPasHabEl, {
+        popperConfig: function (defaultConfig) {
+            return Object.assign({}, defaultConfig, {
+                strategy: 'fixed',
+                modifiers: (defaultConfig.modifiers || []).concat([{name: 'flip', options: {fallbackPlacements: []}}]),
+            });
+        },
+    });
+    btnPasHabEl.addEventListener('show.bs.dropdown', function () {
+        document.body.appendChild(menuPasHabEl);
+    });
+    btnPasHabEl.addEventListener('hidden.bs.dropdown', function () {
+        btnPasHabEl.insertAdjacentElement('afterend', menuPasHabEl);
+    });
+}
+
+/* Toggle "aún no definí la fecha": fecha exacta <-> selector de mes —
+   mismo patrón que /vuelos/buscar. A diferencia de vuelos, acá también
+   se desactiva "Pasajeros y habitaciones" (queda fijo en 1/1 para la
+   búsqueda): sin fecha puntual no tiene sentido filtrar por cupo de
+   habitaciones todavía, eso se decide recién en el detalle del hotel. */
+var chkFlexibleHoteles = document.getElementById('chk-fecha-flexible');
+var campoFechaHoteles = document.getElementById('campo-fecha-exacta');
+var campoFechaHoteles2 = document.getElementById('campo-fecha-exacta-2');
+var campoMesHoteles = document.getElementById('campo-mes-flexible');
+var inputCheckin = document.getElementById('checkin');
+var inputCheckout = document.getElementById('checkout');
+var selectMesHoteles = document.getElementById('mes');
+var btnPasajerosHabitaciones = document.getElementById('btn-pasajeros-habitaciones');
+var inputHuespedes = document.getElementById('huespedes');
+var inputHabitaciones = document.getElementById('habitaciones');
+function aeroTrackActualizarModoFechaHoteles() {
+    var flexible = chkFlexibleHoteles.checked;
+    campoFechaHoteles.hidden = flexible;
+    campoFechaHoteles2.hidden = flexible;
+    campoMesHoteles.hidden = !flexible;
+    inputCheckin.disabled = flexible;
+    inputCheckout.disabled = flexible;
+    selectMesHoteles.disabled = !flexible;
+    btnPasajerosHabitaciones.disabled = flexible;
+    inputHuespedes.disabled = flexible;
+    inputHabitaciones.disabled = flexible;
+    if (flexible) {
+        inputCheckin.value = '';
+        inputCheckout.value = '';
+        aeroTrackHabitaciones = [{personas: 1}];
+        aeroTrackRenderHabitaciones();
+    } else {
+        selectMesHoteles.value = '';
+    }
+}
+if (chkFlexibleHoteles) {
+    chkFlexibleHoteles.addEventListener('change', aeroTrackActualizarModoFechaHoteles);
+}
 </script>
 {% endblock %}

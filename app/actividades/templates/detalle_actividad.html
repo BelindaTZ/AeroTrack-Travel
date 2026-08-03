@@ -106,6 +106,9 @@
 
             {% if fechas_disponibles %}
             <form method="get" action="/actividades/{{ actividad.id }}" class="mb-3">
+                {% if request.query_params.get('paquete_id') %}
+                <input type="hidden" name="paquete_id" value="{{ request.query_params.get('paquete_id') }}">
+                {% endif %}
                 <label class="form-label-at" for="fecha">Fecha</label>
                 <select class="form-control-at" id="fecha" name="fecha" onchange="this.form.submit()">
                     <option value="">Todas las fechas próximas</option>
@@ -137,6 +140,18 @@
                         </button>
                     </div>
                 </form>
+                {% if request.query_params.get('paquete_id') %}
+                <form method="post" action="/paquetes/{{ request.query_params.get('paquete_id') }}/agregar"
+                      style="padding:0 10px">
+                    <input type="hidden" name="tipo_producto" value="actividad">
+                    <input type="hidden" name="actividad_id" value="{{ actividad.id }}">
+                    <input type="hidden" name="actividad_horario_id" value="{{ h.id }}">
+                    <input type="hidden" name="precio_final" value="{{ h.precio }}">
+                    <button type="submit" class="btn-at-ghost" style="padding:3px 8px;font-size:10.5px">
+                        <i class="bi bi-box-seam"></i> Agregar a mi paquete
+                    </button>
+                </form>
+                {% endif %}
                 {% endfor %}
             </div>
             {% else %}

@@ -1,0 +1,178 @@
+{% extends "layout_app.html" %}
+{% from "_paginacion.html" import controles %}
+{% block title %}Métodos de pago — AeroTrack Travel{% endblock %}
+{% block content %}
+<a href="/admin/configuracion" class="d-inline-flex align-items-center gap-1 mb-2" style="font-size:13px;color:var(--at-muted);text-decoration:none">
+    <i class="bi bi-arrow-left"></i>Configuración del sistema
+</a>
+<div class="page-heading">
+    <h1><span class="heading-icon"><i class="bi bi-credit-card-2-front"></i></span>Métodos de pago</h1>
+    <p>Catálogo de procesadores de pago aceptados.</p>
+</div>
+
+<div class="at-table-wrapper">
+    <div class="at-table-header">
+        <form method="get" data-auto-filtros class="d-flex flex-wrap gap-2 align-items-end">
+            <div>
+                <label class="form-label-at" for="f-nombre">Nombre</label>
+                <input type="text" id="f-nombre" name="nombre" class="form-control-at" value="{{ filtros.nombre }}" style="min-width:180px">
+            </div>
+            <div>
+                <label class="form-label-at" for="f-estado">Estado</label>
+                <select class="form-control-at" id="f-estado" name="estado" style="min-width:120px">
+                    <option value="">Todos</option>
+                    <option value="activo" {% if filtros.estado == 'activo' %}selected{% endif %}>Activo</option>
+                    <option value="inactivo" {% if filtros.estado == 'inactivo' %}selected{% endif %}>Inactivo</option>
+                </select>
+            </div>
+            {% if filtros.nombre or filtros.estado %}
+            <a href="/admin/configuracion/metodos-pago" class="btn-at-ghost">Limpiar</a>
+            {% endif %}
+        </form>
+        <button class="btn-at-primary" data-bs-toggle="modal" data-bs-target="#modal-crear">
+            <i class="bi bi-plus-lg" aria-hidden="true"></i>Nuevo método
+        </button>
+    </div>
+
+    {% if not pagina.items %}
+    <div class="at-empty">
+        <i class="bi bi-credit-card-2-front at-empty-icon" aria-hidden="true"></i>
+        <strong>Sin métodos de pago con estos filtros</strong>
+    </div>
+    {% else %}
+    <div class="at-table-scroll">
+        <table class="at-table">
+            <thead><tr><th>Nombre</th><th>Tipo</th><th>Procesador</th><th>Estado</th><th class="actions-col">Acciones</th></tr></thead>
+            <tbody>
+            {% for m in pagina.items %}
+            <tr>
+                <td style="font-weight:600">{{ m.nombre }}</td>
+                <td>{{ m.tipo.replace('_',' ') }}</td>
+                <td class="at-mono">{{ m.procesador }}</td>
+                <td>{% if m.activo %}<span class="badge-sistema">activo</span>{% else %}<span class="badge-sistema" style="opacity:.6">inactivo</span>{% endif %}</td>
+                <td class="actions-col">
+                    <button type="button" class="btn-icon" data-bs-toggle="modal" data-bs-target="#modal-editar-{{ m.id }}" title="Editar">
+                        <i class="bi bi-pencil" aria-hidden="true"></i>
+                    </button>
+                    <button type="button" class="btn-icon {% if m.activo %}danger{% endif %}" data-bs-toggle="modal"
+                            data-bs-target="#modal-alternar-{{ m.id }}" title="{{ 'Desactivar' if m.activo else 'Reactivar' }}">
+                        <i class="bi {{ 'bi-slash-circle' if m.activo else 'bi-arrow-counterclockwise' }}" aria-hidden="true"></i>
+                    </button>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {{ controles(pagina, request) }}
+    {% endif %}
+</div>
+
+<!-- Modal: nuevo método -->
+<div class="modal fade" id="modal-crear" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title d-flex align-items-center gap-2" style="font-size:16px;font-weight:700">
+                    <span class="modal-icon-title"><i class="bi bi-credit-card-2-front" aria-hidden="true"></i></span>Nuevo método de pago
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <form method="post" action="/admin/configuracion/metodos-pago">
+                <div class="modal-body d-flex flex-column gap-3">
+                    <div>
+                        <label class="form-label-at" for="c-nombre">Nombre</label>
+                        <input type="text" class="form-control-at" id="c-nombre" name="nombre" required>
+                    </div>
+                    <div>
+                        <label class="form-label-at" for="c-tipo">Tipo</label>
+                        <select class="form-control-at" id="c-tipo" name="tipo" required>
+                            <option value="tarjeta_credito">Tarjeta de crédito</option>
+                            <option value="tarjeta_debito">Tarjeta de débito</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label-at" for="c-procesador">Procesador</label>
+                        <input type="text" class="form-control-at" id="c-procesador" name="procesador" placeholder="stripe" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-at-ghost" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn-at-primary"><i class="bi bi-check2"></i>Crear método</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% for m in pagina.items %}
+<!-- Modal: editar -->
+<div class="modal fade" id="modal-editar-{{ m.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title d-flex align-items-center gap-2" style="font-size:16px;font-weight:700">
+                    <span class="modal-icon-title"><i class="bi bi-pencil" aria-hidden="true"></i></span>Editar — {{ m.nombre }}
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <form method="post" action="/admin/configuracion/metodos-pago/{{ m.id }}">
+                <div class="modal-body d-flex flex-column gap-3">
+                    <div>
+                        <label class="form-label-at">Nombre</label>
+                        <input type="text" class="form-control-at" name="nombre" value="{{ m.nombre }}" required>
+                    </div>
+                    <div>
+                        <label class="form-label-at">Tipo</label>
+                        <select class="form-control-at" name="tipo" required>
+                            <option value="tarjeta_credito" {% if m.tipo == 'tarjeta_credito' %}selected{% endif %}>Tarjeta de crédito</option>
+                            <option value="tarjeta_debito" {% if m.tipo == 'tarjeta_debito' %}selected{% endif %}>Tarjeta de débito</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label-at">Procesador</label>
+                        <input type="text" class="form-control-at" name="procesador" value="{{ m.procesador }}" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-at-ghost" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn-at-primary"><i class="bi bi-check2"></i>Guardar cambios</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: desactivar / reactivar -->
+<div class="modal fade" id="modal-alternar-{{ m.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width:420px">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title d-flex align-items-center gap-2" style="font-size:16px;font-weight:700">
+                    <span class="modal-icon-title" style="{% if m.activo %}background:var(--at-failed-bg);color:var(--at-danger){% endif %}">
+                        <i class="bi {{ 'bi-slash-circle' if m.activo else 'bi-arrow-counterclockwise' }}" aria-hidden="true"></i>
+                    </span>{{ 'Desactivar método' if m.activo else 'Reactivar método' }}
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body" style="font-size:13.5px">
+                {% if m.activo %}
+                ¿Desactivar <strong>{{ m.nombre }}</strong>? Si es el único método activo, la desactivación se rechazará (el flujo de pago necesita al menos uno).
+                {% else %}
+                ¿Reactivar <strong>{{ m.nombre }}</strong>?
+                {% endif %}
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-at-ghost" data-bs-dismiss="modal">Cancelar</button>
+                <form method="post" action="/admin/configuracion/metodos-pago/{{ m.id }}/alternar-activo" class="m-0">
+                    <button type="submit" class="{{ 'btn-at-danger' if m.activo else 'btn-at-primary' }}">
+                        <i class="bi {{ 'bi-slash-circle' if m.activo else 'bi-arrow-counterclockwise' }}" aria-hidden="true"></i>
+                        {{ 'Desactivar' if m.activo else 'Reactivar' }}
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% endblock %}

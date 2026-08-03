@@ -168,6 +168,29 @@ def main() -> None:
     ensure_collection(
         headers,
         {
+            # Disponibilidad real por NOCHE — antes check-in/check-out eran
+            # cosméticos (ver errores-conocidos.md). `hotel_id` va denormalizado
+            # (no solo `hotel_tarifa_id`) porque `hoteles_tarifas` se borra y
+            # recrea entera con IDs nuevos en cada refresh de catálogo
+            # (`eliminar_tarifas_de_hotel`) — sin este campo no se podría
+            # limpiar las filas de disponibilidad huérfanas de un solo golpe.
+            "name": "hoteles_disponibilidad",
+            "type": "base",
+            "schema": [
+                relation_field("hotel_id", hoteles_catalogo["id"], required=True),
+                relation_field("hotel_tarifa_id", cache["hoteles_tarifas"]["id"], required=True),
+                date_field("fecha", required=True),
+                number_field("cupos_disponibles"),
+                date_field("fecha_actualizacion", required=True),
+            ],
+            **LOCKED_RULES,
+        },
+        cache,
+    )
+
+    ensure_collection(
+        headers,
+        {
             "name": "hoteles_resenas",
             "type": "base",
             "schema": [

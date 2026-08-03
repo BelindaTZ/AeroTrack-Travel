@@ -1,31 +1,40 @@
 {% extends "layout_app.html" %}
+{% from "_paginacion.html" import controles %}
+{% from "_informe_header.html" import header %}
 {% block title %}Auditoría — AeroTrack Travel{% endblock %}
 {% block content %}
-<div class="page-heading">
-    <h1><span class="heading-icon"><i class="bi bi-journal-text"></i></span>Log de auditoría</h1>
-    <p>Registro inmutable de toda mutación del sistema — solo lectura.</p>
-</div>
+{{ header(
+    "bi-journal-text",
+    "Log de auditoría por período y actor",
+    "Registro inmutable de toda mutación del sistema — solo lectura.",
+    request,
+    cu_ref="CU-O12/13",
+    export_path="/admin/auditoria/exportar"
+) }}
 
 <div class="at-table-wrapper">
     <div class="at-table-header">
-        <form method="get" action="/admin/auditoria" id="form-filtros" class="d-flex gap-2 align-items-center flex-wrap">
+        <form method="get" action="/admin/auditoria" data-auto-filtros class="d-flex gap-2 align-items-center flex-wrap">
             <div class="at-search-wrap">
                 <i class="bi bi-search"></i>
                 <input type="text" class="at-search" name="accion" placeholder="Acción (login, crear...)" value="{{ filtros.accion }}">
             </div>
             <input type="text" class="form-control-at" style="width:150px" name="tabla" placeholder="Tabla" value="{{ filtros.tabla }}">
+            <input type="text" class="form-control-at" style="width:200px" name="actor_email" placeholder="Email del actor" value="{{ filtros.actor_email }}">
             <input type="datetime-local" class="form-control-at" style="width:180px" name="desde" value="{{ filtros.desde }}">
             <input type="datetime-local" class="form-control-at" style="width:180px" name="hasta" value="{{ filtros.hasta }}">
+            {% if filtros.accion or filtros.tabla or filtros.actor_email or filtros.desde or filtros.hasta %}
+            <a href="/admin/auditoria" class="btn-at-ghost">Limpiar</a>
+            {% endif %}
         </form>
-        <a class="btn-at-ghost" id="link-exportar" href="#"><i class="bi bi-download"></i>Exportar CSV</a>
     </div>
 
-    {% if registros %}
+    {% if pagina.items %}
     <div class="at-table-scroll">
         <table class="at-table">
             <thead><tr><th>Fecha</th><th>Usuario</th><th>Acción</th><th>Tabla</th><th>Registro</th><th>IP</th></tr></thead>
             <tbody>
-                {% for r in registros %}
+                {% for r in pagina.items %}
                 <tr>
                     <td class="at-mono" style="white-space:nowrap;font-size:12.5px">{{ r.created }}</td>
                     <td style="font-size:12.5px">{{ r.usuario_id or "sistema" }}</td>
@@ -38,6 +47,7 @@
             </tbody>
         </table>
     </div>
+    {{ controles(pagina, request) }}
     {% else %}
     <div class="at-empty">
         <i class="bi bi-journal-x at-empty-icon" aria-hidden="true"></i>
@@ -45,17 +55,4 @@
     </div>
     {% endif %}
 </div>
-{% endblock %}
-
-{% block scripts %}
-<script>
-document.querySelectorAll('#form-filtros input').forEach(function (el) {
-    el.addEventListener('change', function () { document.getElementById('form-filtros').requestSubmit(); });
-});
-document.getElementById('link-exportar').addEventListener('click', function (ev) {
-    ev.preventDefault();
-    const params = new URLSearchParams(new FormData(document.getElementById('form-filtros')));
-    window.location.href = '/admin/auditoria/exportar?' + params.toString();
-});
-</script>
 {% endblock %}

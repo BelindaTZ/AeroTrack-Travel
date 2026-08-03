@@ -4,6 +4,9 @@ destinos populares, newsletter, términos."""
 import datetime
 import uuid
 
+from app.ofertas.repositories.ofertas_repo import OfertasRepository
+from app.shared import minio_operational_client as moc
+
 
 async def _crear_oferta(pb, **extra) -> dict:
     hoy = datetime.date.today()
@@ -65,18 +68,18 @@ async def test_terminos_oferta_inexistente_404(client):
     assert resp.status_code == 404
 
 
-async def test_suscribirse_newsletter_sin_cuenta(client, pb):
+async def test_suscribirse_newsletter_sin_cuenta(client):
     email = f"suscriptor.{uuid.uuid4().hex[:8]}@aerotrack.test"
     resp = await client.post("/newsletter/suscribirse", data={"email": email}, follow_redirects=True)
     assert resp.status_code == 200
 
-    suscripcion = await pb.get_first("newsletter_suscripciones", f'email="{email}"')
+    suscripcion = await OfertasRepository().suscripcion_existente(email)
     assert suscripcion is not None
     assert suscripcion["pasajero_id"] == ""
-    await pb.delete_record("newsletter_suscripciones", suscripcion["id"])
+    await moc.eliminar("newsletter_suscripciones", suscripcion["id"])
 
 
-async def test_suscribirse_newsletter_logueado_asocia_pasajero(client, pb, pasajero_factory):
+async def test_suscribirse_newsletter_logueado_asocia_pasajero(client, pasajero_factory):
     usuario, pasajero = await pasajero_factory()
     resp = await client.post("/login", data={"email": usuario["email"], "password": usuario["_password"]})
     assert resp.status_code == 303
@@ -86,10 +89,10 @@ async def test_suscribirse_newsletter_logueado_asocia_pasajero(client, pb, pasaj
     )
     assert resp.status_code == 200
 
-    suscripcion = await pb.get_first("newsletter_suscripciones", f'email="{usuario["email"]}"')
+    suscripcion = await OfertasRepository().suscripcion_existente(usuario["email"])
     assert suscripcion is not None
     assert suscripcion["pasajero_id"] == pasajero["id"]
-    await pb.delete_record("newsletter_suscripciones", suscripcion["id"])
+    await moc.eliminar("newsletter_suscripciones", suscripcion["id"])
 
 
 async def test_destinos_populares_sin_origen_muestra_formulario(client):
@@ -98,11 +101,14 @@ async def test_destinos_populares_sin_origen_muestra_formulario(client):
     assert "Destinos populares" in resp.text
 
 
-async def test_destinos_populares_con_origen_agrega_busquedas_reales(client, pb, pasajero_factory):
+async def test_destinos_populares_con_origen_agrega_busquedas_reales(client, pasajero_factory):
     usuario, pasajero = await pasajero_factory()
-    busqueda = await pb.create_record(
+    id_ = moc.generar_id()
+    busqueda = await moc.crear(
         "busquedas_recientes",
+        id_,
         {
+            "id": id_,
             "pasajero_id": pasajero["id"], "tipo_producto": "vuelo",
             "criterios": {"origen": "ZZZ", "destino": "YYY", "fecha": "2027-01-01"},
             "fecha": "2027-01-01 00:00:00.000Z",
@@ -113,19 +119,22 @@ async def test_destinos_populares_con_origen_agrega_busquedas_reales(client, pb,
     assert resp.status_code == 200
     assert "YYY" in resp.text
 
-    await pb.delete_record("busquedas_recientes", busqueda["id"])
+    await moc.eliminar("busquedas_recientes", busqueda["id"])
 
 
-async def test_destinos_populares_infiere_origen_del_historial_del_pasajero(client, pb, pasajero_factory):
+async def test_destinos_populares_infiere_origen_del_historial_del_pasajero(client, pasajero_factory):
     """Regresión: el origen INFERIDO (sin `?origen=` en la URL) debía
     mostrarse en pantalla igual que el declarado explícitamente — un bug
     real pasaba el query param crudo (vacío) a la plantilla en vez del
     origen que el servicio realmente usó, dejando la sección de
     resultados sin renderizar aunque el cálculo interno fuera correcto."""
     usuario, pasajero = await pasajero_factory()
-    busqueda = await pb.create_record(
+    id_ = moc.generar_id()
+    busqueda = await moc.crear(
         "busquedas_recientes",
+        id_,
         {
+            "id": id_,
             "pasajero_id": pasajero["id"], "tipo_producto": "vuelo",
             "criterios": {"origen": "QQQ", "destino": "WWW", "fecha": "2027-01-01"},
             "fecha": "2027-01-01 00:00:00.000Z",
@@ -140,4 +149,4 @@ async def test_destinos_populares_infiere_origen_del_historial_del_pasajero(clie
     assert "QQQ" in resp.text
     assert "WWW" in resp.text
 
-    await pb.delete_record("busquedas_recientes", busqueda["id"])
+    await moc.eliminar("busquedas_recientes", busqueda["id"])

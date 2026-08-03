@@ -62,6 +62,18 @@ CLAVES = [
         "categoria": "autos",
         "descripcion": "RF-AUT-004 — cuántas ciudades de autos.ciudades_seed se procesan en una corrida (rotación por día-del-año); el gate de cuota mensual es la protección real, esto solo da variedad",
     },
+    {
+        "clave": "disponibilidad_autos.dias_adelante",
+        "valor": "30",
+        "categoria": "disponibilidad_autos",
+        "descripcion": "Cuántos días hacia adelante se genera disponibilidad sintética por auto (autos_disponibilidad) — antes recogida/devolución eran cosméticas, ver errores-conocidos.md",
+    },
+    {
+        "clave": "disponibilidad_autos.cupos_default",
+        "valor": "5",
+        "categoria": "disponibilidad_autos",
+        "descripcion": "Cupo por día — Global Rental Cars no da señal de flota real, es regla de negocio interna (mismo criterio que actividades_horarios.cupos_disponibles)",
+    },
 ]
 
 
@@ -81,9 +93,19 @@ def main() -> None:
 
     headers = {"Authorization": admin_token()}
 
+    rol_admin = httpx.get(
+        f"{PB_URL}/api/collections/roles/records",
+        params={"filter": 'nombre="Administrador"', "perPage": 1},
+        headers=headers,
+        timeout=10,
+    )
+    rol_admin.raise_for_status()
+    roles_items = rol_admin.json()["items"]
+    if not roles_items:
+        raise RuntimeError("No existe el rol 'Administrador' — correr scripts/seed_seguridad.py primero")
     resp = httpx.get(
         f"{PB_URL}/api/collections/usuarios/records",
-        params={"filter": 'tipo_actor="administrador"', "perPage": 1},
+        params={"filter": f'rol_id="{roles_items[0]["id"]}"', "perPage": 1},
         headers=headers,
         timeout=10,
     )

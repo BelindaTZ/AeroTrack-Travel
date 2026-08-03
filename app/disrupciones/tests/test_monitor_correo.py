@@ -4,6 +4,7 @@ import pytest
 
 from app.disrupciones.services.deteccion_service import parsear_correo_a_disrupcion
 from app.disrupciones.services.monitor_correo_service import monitorear_correo
+from app.shared import minio_operational_client as moc
 
 
 def _correo(asunto: str, cuerpo: str = "") -> dict:
@@ -35,8 +36,10 @@ async def test_correo_con_cambio_valido_genera_disrupcion(
     assert resumen["disrupciones_creadas"] == 1
     assert resumen["descartados"] == 0
 
-    disrupcion = await pb.get_first(
-        "disrupciones", f'vuelo_id="{vuelo["id"]}" && fuente_deteccion="monitor_correo"'
+    disrupciones = await moc.listar_todos("disrupciones")
+    disrupcion = next(
+        (d for d in disrupciones if d.get("vuelo_id") == vuelo["id"] and d.get("fuente_deteccion") == "monitor_correo"),
+        None,
     )
     assert disrupcion is not None
     assert disrupcion["tipo_cambio"] == "cancelacion"
@@ -44,7 +47,7 @@ async def test_correo_con_cambio_valido_genera_disrupcion(
     vuelo_actualizado = await pb.get_record("vuelos_catalogo", vuelo["id"])
     assert vuelo_actualizado["estado"] == "cancelado"
 
-    await pb.delete_record("disrupciones", disrupcion["id"])
+    await moc.eliminar("disrupciones", disrupcion["id"])
 
 
 # ── CHK003 — los 5 tipos de cambio ──────────────────────────────────────

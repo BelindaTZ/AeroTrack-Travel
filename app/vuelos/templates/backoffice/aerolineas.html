@@ -1,0 +1,190 @@
+{% extends "layout_app.html" %}
+{% from "_paginacion.html" import controles %}
+{% block title %}Aerolíneas — AeroTrack Travel{% endblock %}
+{% block content %}
+<a href="/backoffice/vuelos" class="d-inline-flex align-items-center gap-1 mb-2" style="font-size:13px;color:var(--at-muted);text-decoration:none">
+    <i class="bi bi-arrow-left"></i>Catálogo de vuelos
+</a>
+<div class="page-heading">
+    <h1><span class="heading-icon"><i class="bi bi-building"></i></span>Aerolíneas</h1>
+    <p>Catálogo de aerolíneas — usado para generar vuelos, calcular comisiones y filtrar la búsqueda pública.</p>
+</div>
+
+<div class="at-table-wrapper">
+    <div class="at-table-header">
+        <form method="get" data-auto-filtros class="d-flex flex-wrap gap-2 align-items-end">
+            <div>
+                <label class="form-label-at" for="f-nombre">Nombre</label>
+                <input type="text" id="f-nombre" name="nombre" class="form-control-at" value="{{ filtros.nombre }}"
+                       placeholder="Nombre..." style="min-width:180px">
+            </div>
+            <div>
+                <label class="form-label-at" for="f-estado">Estado</label>
+                <select class="form-control-at" id="f-estado" name="estado" style="min-width:120px">
+                    <option value="">Todos</option>
+                    <option value="activo" {% if filtros.estado == 'activo' %}selected{% endif %}>Activo</option>
+                    <option value="inactivo" {% if filtros.estado == 'inactivo' %}selected{% endif %}>Inactivo</option>
+                </select>
+            </div>
+            {% if filtros.nombre or filtros.estado %}
+            <a href="/backoffice/vuelos/aerolineas" class="btn-at-ghost">Limpiar</a>
+            {% endif %}
+        </form>
+        <button class="btn-at-primary" data-bs-toggle="modal" data-bs-target="#modal-crear">
+            <i class="bi bi-plus-lg" aria-hidden="true"></i>Nueva aerolínea
+        </button>
+    </div>
+
+    {% if not pagina.items %}
+    <div class="at-empty">
+        <i class="bi bi-building at-empty-icon" aria-hidden="true"></i>
+        <strong>Sin aerolíneas con estos filtros</strong>
+    </div>
+    {% else %}
+    <div class="at-table-scroll">
+        <table class="at-table">
+            <thead><tr><th>Nombre</th><th>IATA</th><th>Comisión</th><th>Contacto</th><th>Estado</th><th class="actions-col">Acciones</th></tr></thead>
+            <tbody>
+            {% for a in pagina.items %}
+            <tr>
+                <td style="font-weight:600">{{ a.nombre }}</td>
+                <td class="at-mono">{{ a.codigo_iata }}</td>
+                <td class="at-mono">{% if a.comision_pactada_pct is not none %}{{ a.comision_pactada_pct }}%{% else %}—{% endif %}</td>
+                <td>{{ a.contacto or "—" }}</td>
+                <td>{% if a.activa %}<span class="badge-sistema">activa</span>{% else %}<span class="badge-sistema" style="opacity:.6">inactiva</span>{% endif %}</td>
+                <td class="actions-col">
+                    <button type="button" class="btn-icon" data-bs-toggle="modal" data-bs-target="#modal-editar-{{ a.id }}" title="Editar">
+                        <i class="bi bi-pencil" aria-hidden="true"></i>
+                    </button>
+                    <button type="button" class="btn-icon {% if a.activa %}danger{% endif %}" data-bs-toggle="modal"
+                            data-bs-target="#modal-alternar-{{ a.id }}" title="{{ 'Desactivar' if a.activa else 'Reactivar' }}">
+                        <i class="bi {{ 'bi-slash-circle' if a.activa else 'bi-arrow-counterclockwise' }}" aria-hidden="true"></i>
+                    </button>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {{ controles(pagina, request) }}
+    {% endif %}
+</div>
+
+<!-- Modal: nueva aerolínea -->
+<div class="modal fade" id="modal-crear" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title d-flex align-items-center gap-2" style="font-size:16px;font-weight:700">
+                    <span class="modal-icon-title"><i class="bi bi-building" aria-hidden="true"></i></span>Nueva aerolínea
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <form method="post" action="/backoffice/vuelos/aerolineas">
+                <div class="modal-body d-flex flex-column gap-3">
+                    <div>
+                        <label class="form-label-at" for="c-nombre">Nombre</label>
+                        <input type="text" class="form-control-at" id="c-nombre" name="nombre" required>
+                    </div>
+                    <div>
+                        <label class="form-label-at" for="c-iata">Código IATA</label>
+                        <input type="text" class="form-control-at at-mono text-uppercase" id="c-iata" name="codigo_iata" maxlength="3" required>
+                    </div>
+                    <div>
+                        <label class="form-label-at" for="c-comision">Comisión pactada (%)</label>
+                        <input type="number" step="0.01" min="0" max="100" class="form-control-at" id="c-comision" name="comision_pactada_pct">
+                    </div>
+                    <div>
+                        <label class="form-label-at" for="c-contacto">Contacto</label>
+                        <input type="text" class="form-control-at" id="c-contacto" name="contacto" placeholder="Email o teléfono">
+                    </div>
+                    <div>
+                        <label class="form-label-at" for="c-fecha">Contrato desde</label>
+                        <input type="date" class="form-control-at" id="c-fecha" name="fecha_contrato">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-at-ghost" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn-at-primary"><i class="bi bi-check2"></i>Crear aerolínea</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% for a in pagina.items %}
+<!-- Modal: editar -->
+<div class="modal fade" id="modal-editar-{{ a.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title d-flex align-items-center gap-2" style="font-size:16px;font-weight:700">
+                    <span class="modal-icon-title"><i class="bi bi-pencil" aria-hidden="true"></i></span>Editar — {{ a.nombre }}
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <form method="post" action="/backoffice/vuelos/aerolineas/{{ a.id }}">
+                <div class="modal-body d-flex flex-column gap-3">
+                    <div>
+                        <label class="form-label-at">Nombre</label>
+                        <input type="text" class="form-control-at" name="nombre" value="{{ a.nombre }}" required>
+                    </div>
+                    <div>
+                        <label class="form-label-at">Código IATA</label>
+                        <input type="text" class="form-control-at at-mono text-uppercase" name="codigo_iata" value="{{ a.codigo_iata }}" maxlength="3" required>
+                    </div>
+                    <div>
+                        <label class="form-label-at">Comisión pactada (%)</label>
+                        <input type="number" step="0.01" min="0" max="100" class="form-control-at" name="comision_pactada_pct" value="{{ a.comision_pactada_pct if a.comision_pactada_pct is not none else '' }}">
+                    </div>
+                    <div>
+                        <label class="form-label-at">Contacto</label>
+                        <input type="text" class="form-control-at" name="contacto" value="{{ a.contacto or '' }}">
+                    </div>
+                    <div>
+                        <label class="form-label-at">Contrato desde</label>
+                        <input type="date" class="form-control-at" name="fecha_contrato" value="{{ a.fecha_contrato[:10] if a.fecha_contrato else '' }}">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-at-ghost" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn-at-primary"><i class="bi bi-check2"></i>Guardar cambios</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: desactivar / reactivar -->
+<div class="modal fade" id="modal-alternar-{{ a.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width:420px">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title d-flex align-items-center gap-2" style="font-size:16px;font-weight:700">
+                    <span class="modal-icon-title" style="{% if a.activa %}background:var(--at-failed-bg);color:var(--at-danger){% endif %}">
+                        <i class="bi {{ 'bi-slash-circle' if a.activa else 'bi-arrow-counterclockwise' }}" aria-hidden="true"></i>
+                    </span>{{ 'Desactivar aerolínea' if a.activa else 'Reactivar aerolínea' }}
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body" style="font-size:13.5px">
+                {% if a.activa %}
+                ¿Desactivar <strong>{{ a.nombre }}</strong>? Deja de usarse para generar vuelos nuevos — se puede reactivar cuando quieras.
+                {% else %}
+                ¿Reactivar <strong>{{ a.nombre }}</strong>? Vuelve a estar disponible.
+                {% endif %}
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-at-ghost" data-bs-dismiss="modal">Cancelar</button>
+                <form method="post" action="/backoffice/vuelos/aerolineas/{{ a.id }}/alternar-activa" class="m-0">
+                    <button type="submit" class="{{ 'btn-at-danger' if a.activa else 'btn-at-primary' }}">
+                        <i class="bi {{ 'bi-slash-circle' if a.activa else 'bi-arrow-counterclockwise' }}" aria-hidden="true"></i>
+                        {{ 'Desactivar' if a.activa else 'Reactivar' }}
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% endblock %}

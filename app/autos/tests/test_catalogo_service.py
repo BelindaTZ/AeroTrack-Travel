@@ -66,6 +66,12 @@ async def test_generar_catalogo_crea_auto_desde_tarjeta_real(pb, rentalcars_fals
     log = await pb.get_first("sincronizaciones_log", 'tipo_producto="auto" && estado="exitoso"')
     assert log is not None
 
+    # autos_disponibilidad ANTES que autos_catalogo (relation required, ver
+    # pb_schema_autos.py; generar_catalogo ahora también crea filas de
+    # disponibilidad por día, RF-AUT-004)
+    disponibilidad = await pb.list_records("autos_disponibilidad", {"filter": f'auto_id="{auto["id"]}"', "perPage": 200})
+    for d in disponibilidad["items"]:
+        await pb.delete_record("autos_disponibilidad", d["id"])
     await pb.delete_record("autos_catalogo", auto["id"])
     await pb.delete_record("sincronizaciones_log", log["id"])
 
@@ -84,6 +90,9 @@ async def test_generar_catalogo_es_idempotente_reemplaza_ofertas_viejas(pb, rent
         "sincronizaciones_log", {"filter": 'tipo_producto="auto"', "sort": "-created", "perPage": 5}
     )
     for auto in autos["items"]:
+        disponibilidad = await pb.list_records("autos_disponibilidad", {"filter": f'auto_id="{auto["id"]}"', "perPage": 200})
+        for d in disponibilidad["items"]:
+            await pb.delete_record("autos_disponibilidad", d["id"])
         await pb.delete_record("autos_catalogo", auto["id"])
     for log in logs["items"][:2]:
         await pb.delete_record("sincronizaciones_log", log["id"])

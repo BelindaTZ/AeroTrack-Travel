@@ -7,7 +7,8 @@ from app.main import app
 
 
 async def _crear_fuente(pb, **overrides) -> dict:
-    admin = await pb.get_first("usuarios", 'tipo_actor="administrador"')
+    rol = await pb.get_first("roles", 'nombre="Administrador"')
+    admin = await pb.get_first("usuarios", f'rol_id="{rol["id"]}"')
     data = {
         "nombre": f"Fuente de prueba {overrides.get('_sufijo', '')}".strip(),
         "tipo_uso": "catalogo_periodico",

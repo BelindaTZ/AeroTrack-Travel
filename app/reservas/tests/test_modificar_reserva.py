@@ -1,3 +1,7 @@
+from app.facturacion.repositories.facturacion_repo import FacturacionRepository
+from app.shared import minio_operational_client as moc
+
+
 async def _login(client, usuario):
     resp = await client.post(
         "/login", data={"email": usuario["email"], "password": usuario["_password"]}
@@ -18,12 +22,14 @@ async def test_modificar_cambia_tarifa_cobra_la_diferencia_exacta_de_verdad(
         pasajero["id"], vuelo["id"], tarifa_original["id"], estado="pendiente_pago", total_pagar=200.0
     )
 
+    facturacion_repo = FacturacionRepository()
+
     await _login(client, usuario)
     # Paga de verdad primero (Stripe test mode real) — sin un pago original no
     # hay contra qué cobrar/reembolsar la diferencia.
     resp_pago = await client.post(f"/reservas/{reserva['id']}/pagar", data={"escenario": "exitoso"})
     assert resp_pago.status_code == 303
-    pago_original = await pb.get_first("pagos", f'reserva_id="{reserva["id"]}" && estado="exitoso"')
+    pago_original = await facturacion_repo.pago_exitoso_de_reserva(reserva["id"])
     assert pago_original is not None
 
     resp = await client.put(
@@ -45,22 +51,23 @@ async def test_modificar_cambia_tarifa_cobra_la_diferencia_exacta_de_verdad(
 
     # Cobro real de la diferencia — un `pagos` nuevo, separado del original,
     # nunca el total de la reserva.
-    pago_diferencia = await pb.get_record("pagos", pago_diferencia_id)
+    pago_diferencia = await facturacion_repo.obtener_pago(pago_diferencia_id)
     assert pago_diferencia["estado"] == "exitoso"
     assert pago_diferencia["monto"] == 80.0
     assert pago_diferencia["stripe_payment_intent_id"].startswith("pi_")
 
-    tarifa_original_actualizada = await pb.get_record("tarifas_vuelo", tarifa_original["id"])
+    tarifa_original_actualizada = await moc.obtener("cupos_tarifas_vuelo", tarifa_original["id"])
     assert tarifa_original_actualizada["cupos_disponibles"] == 6  # cupo anterior liberado
 
-    await pb.delete_record("pagos", pago_diferencia["id"])
-    factura = await pb.get_first("facturas", f'pago_id="{pago_original["id"]}"')
+    await moc.eliminar("pagos", pago_diferencia["id"])
+    factura = await facturacion_repo.factura_de_pago(pago_original["id"])
     if factura is not None:
-        await pb.delete_record("facturas", factura["id"])
-    comision = await pb.get_first("comisiones", f'reserva_id="{reserva["id"]}"')
+        await moc.eliminar("facturas", factura["id"])
+    comisiones = await facturacion_repo.listar_comisiones()
+    comision = next((c for c in comisiones if c.get("reserva_id") == reserva["id"]), None)
     if comision is not None:
-        await pb.delete_record("comisiones", comision["id"])
-    await pb.delete_record("pagos", pago_original["id"])
+        await moc.eliminar("comisiones", comision["id"])
+    await moc.eliminar("pagos", pago_original["id"])
 
 
 async def test_modificar_sin_cambio_de_precio_no_dispara_diferencia(

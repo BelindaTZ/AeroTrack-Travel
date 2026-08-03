@@ -1,57 +1,324 @@
 {% extends "layout_app.html" %}
-{% block title %}Buscar pasajeros — Backoffice — AeroTrack Travel{% endblock %}
+{% from "_paginacion.html" import controles %}
+{% block title %}Pasajeros — Backoffice — AeroTrack Travel{% endblock %}
 {% block content %}
+{% set generos_labels = {'M': 'Masculino', 'F': 'Femenino', 'prefiero_no_decir': 'Prefiere no decir'} %}
+
 <div class="page-heading">
-    <h1><span class="heading-icon"><i class="bi bi-search"></i></span>Buscar pasajeros</h1>
-    <p>Busca por nombre o correo del pasajero.</p>
+    <h1><span class="heading-icon"><i class="bi bi-people"></i></span>Pasajeros</h1>
+    <p>Gestión de Clientes — admin_clientes, agente · {{ pagina.total_items }} pasajero(s)</p>
 </div>
 
 <div class="at-table-wrapper">
     <div class="at-table-header">
-        <div class="at-search-wrap">
-            <i class="bi bi-search"></i>
-            <input type="text" class="at-search" id="input-busqueda"
-                   placeholder="Buscar por nombre o correo..." value="{{ q }}" oninput="buscar()" style="min-width:300px">
-        </div>
+        <form method="get" data-auto-filtros class="d-flex flex-wrap gap-2 align-items-end">
+            <div>
+                <label class="form-label-at" for="f-nombre">Nombre</label>
+                <input type="text" id="f-nombre" name="nombre" class="form-control-at" value="{{ filtros.nombre }}"
+                       placeholder="Nombre completo" style="min-width:170px">
+            </div>
+            <div>
+                <label class="form-label-at" for="f-email">Correo</label>
+                <input type="text" id="f-email" name="email" class="form-control-at" value="{{ filtros.email }}"
+                       placeholder="correo@ejemplo.com" style="min-width:190px">
+            </div>
+            <div>
+                <label class="form-label-at" for="f-documento">Documento</label>
+                <input type="text" id="f-documento" name="documento" class="form-control-at" value="{{ filtros.documento }}"
+                       placeholder="N.º de documento" style="min-width:150px">
+            </div>
+            <div>
+                <label class="form-label-at" for="f-telefono">Teléfono</label>
+                <input type="text" id="f-telefono" name="telefono" class="form-control-at" value="{{ filtros.telefono }}"
+                       placeholder="Teléfono" style="min-width:150px">
+            </div>
+            {% if filtros.nombre or filtros.email or filtros.documento or filtros.telefono %}
+            <a href="/backoffice/pasajeros" class="btn-at-ghost">Limpiar</a>
+            {% endif %}
+        </form>
+        <button class="btn-at-primary" data-bs-toggle="modal" data-bs-target="#modal-crear">
+            <i class="bi bi-plus-lg" aria-hidden="true"></i>Nuevo pasajero
+        </button>
     </div>
 
-    <div id="resultados">
-        {% if q and not resultados %}
-        <div class="at-empty">
-            <i class="bi bi-search at-empty-icon" aria-hidden="true"></i>
-            <strong>Sin resultados para "{{ q }}"</strong>
+    {% if not pagina.items %}
+    <div class="at-empty">
+        <i class="bi bi-people at-empty-icon" aria-hidden="true"></i>
+        <strong>Sin resultados</strong>
+        {% if filtros.nombre or filtros.email or filtros.documento or filtros.telefono %}<p>Probá con otros filtros.</p>{% endif %}
+    </div>
+    {% else %}
+    <div class="at-table-scroll">
+        <table class="at-table">
+            <thead>
+                <tr><th>Nombre</th><th>Correo</th><th>Teléfono</th><th>Documento</th><th class="actions-col">Acciones</th></tr>
+            </thead>
+            <tbody>
+                {% for p in pagina.items %}
+                <tr>
+                    <td style="font-weight:600">{{ p.nombre_completo }}</td>
+                    <td>{{ p.email }}</td>
+                    <td>{{ p.telefono or '—' }}</td>
+                    <td class="at-mono">{{ p.numero_documento or '—' }}</td>
+                    <td class="actions-col">
+                        <button type="button" class="btn-icon" data-bs-toggle="modal" data-bs-target="#modal-ver-{{ p.id }}" title="Ver detalle">
+                            <i class="bi bi-eye" aria-hidden="true"></i>
+                        </button>
+                        <button type="button" class="btn-icon" data-bs-toggle="modal" data-bs-target="#modal-editar-{{ p.id }}" title="Editar">
+                            <i class="bi bi-pencil" aria-hidden="true"></i>
+                        </button>
+                        {% if puede_eliminar %}
+                        <button type="button" class="btn-icon danger" data-bs-toggle="modal" data-bs-target="#modal-eliminar-{{ p.id }}" title="Eliminar">
+                            <i class="bi bi-trash" aria-hidden="true"></i>
+                        </button>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {{ controles(pagina, request) }}
+    {% endif %}
+</div>
+
+<!-- ═══════ MODAL: nuevo pasajero ═══════ -->
+<div class="modal fade" id="modal-crear" tabindex="-1" aria-labelledby="modal-crear-title" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title d-flex align-items-center gap-2" id="modal-crear-title" style="font-size:16px;font-weight:700">
+                    <span class="modal-icon-title"><i class="bi bi-person-plus" aria-hidden="true"></i></span>Nuevo pasajero
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <form method="post" action="/backoffice/pasajeros">
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label-at" for="c-nombre">Nombre completo</label>
+                            <input type="text" id="c-nombre" name="nombre_completo" class="form-control-at" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label-at" for="c-email">Correo</label>
+                            <input type="email" id="c-email" name="email" class="form-control-at" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label-at" for="c-password">Contraseña</label>
+                            <input type="password" id="c-password" name="password" class="form-control-at" required minlength="8">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label-at" for="c-telefono">Teléfono</label>
+                            <input type="text" id="c-telefono" name="telefono" class="form-control-at" required placeholder="+593 99 123 4567">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label-at" for="c-fecha-nacimiento">Fecha de nacimiento</label>
+                            <input type="date" id="c-fecha-nacimiento" name="fecha_nacimiento" class="form-control-at" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label-at" for="c-genero">Género</label>
+                            <select id="c-genero" name="genero" class="form-control-at">
+                                <option value="">Prefiere no decir</option>
+                                {% for g in generos %}<option value="{{ g }}">{{ generos_labels[g] }}</option>{% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label-at" for="c-documento">N.º de documento</label>
+                            <input type="text" id="c-documento" name="numero_documento" class="form-control-at">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label-at" for="c-canal">Canal de alta</label>
+                            <select id="c-canal" name="canal_registro" class="form-control-at">
+                                {% for c in canales_alta %}<option value="{{ c }}">{{ c.replace('_', ' ')|capitalize }}</option>{% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label-at" for="c-direccion">Dirección de facturación</label>
+                            <input type="text" id="c-direccion" name="direccion_facturacion" class="form-control-at">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label-at" for="c-contacto">Contacto de emergencia</label>
+                            <input type="text" id="c-contacto" name="contacto_emergencia" class="form-control-at">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-at-ghost" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn-at-primary"><i class="bi bi-check2"></i>Crear pasajero</button>
+                </div>
+            </form>
         </div>
-        {% elif resultados %}
-        <div class="at-table-scroll">
-            <table class="at-table">
-                <thead><tr><th>Nombre</th><th>Correo</th><th>Teléfono</th><th></th></tr></thead>
-                <tbody>
-                    {% for p in resultados %}
-                    <tr>
-                        <td>{{ p.nombre_completo }}</td>
-                        <td>{{ p.email }}</td>
-                        <td>{{ p.telefono or '—' }}</td>
-                        <td>
-                            {% if p.id %}
-                            <a href="/backoffice/pasajeros/{{ p.id }}" class="btn-at-ghost" style="font-size:12.5px">Ver</a>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% endif %}
     </div>
 </div>
+
+{% for p in pagina.items %}
+<!-- ═══════ MODAL: ver (solo lectura) — {{ p.nombre_completo }} ═══════ -->
+<div class="modal fade" id="modal-ver-{{ p.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title d-flex align-items-center gap-2" style="font-size:16px;font-weight:700">
+                    <span class="modal-icon-title"><i class="bi bi-person-badge" aria-hidden="true"></i></span>{{ p.nombre_completo }}
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body d-flex flex-column gap-2" style="font-size:13.5px">
+                <div class="d-flex justify-content-between"><span style="color:var(--at-muted)">Correo</span><span>{{ p.email }}</span></div>
+                <div class="d-flex justify-content-between"><span style="color:var(--at-muted)">Teléfono</span><span>{{ p.telefono or '—' }}</span></div>
+                <div class="d-flex justify-content-between"><span style="color:var(--at-muted)">Fecha de nacimiento</span><span>{{ p.fecha_nacimiento or '—' }}</span></div>
+                <div class="d-flex justify-content-between"><span style="color:var(--at-muted)">Género</span><span>{{ generos_labels.get(p.genero, '—') }}</span></div>
+                <div class="d-flex justify-content-between"><span style="color:var(--at-muted)">N.º de documento</span><span class="at-mono">{{ p.numero_documento or '—' }}</span></div>
+                <div class="d-flex justify-content-between"><span style="color:var(--at-muted)">Dirección de facturación</span><span>{{ p.direccion or '—' }}</span></div>
+                <div class="d-flex justify-content-between"><span style="color:var(--at-muted)">Contacto de emergencia</span><span>{{ p.contacto_emergencia or '—' }}</span></div>
+                {% if p.documentos %}
+                <hr class="at-hr" style="margin:6px 0">
+                <strong style="font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--at-muted)">Documentos de viaje</strong>
+                {% for d in p.documentos %}
+                <div class="d-flex justify-content-between"><span style="color:var(--at-muted)">{{ d.tipo|capitalize }} ({{ d.pais_emision }})</span><span class="at-mono">{{ d.numero }}</span></div>
+                {% endfor %}
+                {% endif %}
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-at-ghost" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════ MODAL: editar — {{ p.nombre_completo }} ═══════ -->
+<div class="modal fade" id="modal-editar-{{ p.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title d-flex align-items-center gap-2" style="font-size:16px;font-weight:700">
+                    <span class="modal-icon-title"><i class="bi bi-pencil" aria-hidden="true"></i></span>Editar — {{ p.nombre_completo }}
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <form method="post" action="/backoffice/pasajeros/{{ p.id }}/editar">
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label-at">Nombre completo</label>
+                            <input type="text" name="nombre_completo" class="form-control-at" value="{{ p.nombre_completo }}" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label-at">Correo</label>
+                            <input type="email" name="email" class="form-control-at" value="{{ p.email }}" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label-at">Teléfono</label>
+                            <input type="text" name="telefono" class="form-control-at" value="{{ p.telefono or '' }}">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label-at">Fecha de nacimiento</label>
+                            <input type="date" name="fecha_nacimiento" class="form-control-at" value="{{ p.fecha_nacimiento or '' }}">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label-at">Género</label>
+                            <select name="genero" class="form-control-at">
+                                <option value="">—</option>
+                                {% for g in generos %}<option value="{{ g }}" {% if p.genero == g %}selected{% endif %}>{{ generos_labels[g] }}</option>{% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label-at">N.º de documento</label>
+                            <input type="text" name="numero_documento" class="form-control-at" value="{{ p.numero_documento or '' }}">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label-at">Dirección de facturación</label>
+                            <input type="text" name="direccion_facturacion" class="form-control-at" value="{{ p.direccion or '' }}">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label-at">Contacto de emergencia</label>
+                            <input type="text" name="contacto_emergencia" class="form-control-at" value="{{ p.contacto_emergencia or '' }}">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-at-ghost" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn-at-primary"><i class="bi bi-check2"></i>Guardar cambios</button>
+                </div>
+            </form>
+
+            <div class="modal-body pt-0" style="border-top:1px solid var(--at-border)">
+                <strong style="font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--at-muted)">Documentos de viaje</strong>
+                {% if p.documentos %}
+                <div class="mt-2 d-flex flex-column gap-2">
+                    {% for d in p.documentos %}
+                    <div class="d-flex justify-content-between align-items-center" style="font-size:13px">
+                        <span>{{ d.tipo|capitalize }} · <span class="at-mono">{{ d.numero }}</span> ({{ d.pais_emision }})</span>
+                        <form method="post" action="/backoffice/pasajeros/{{ p.id }}/documentos/{{ d.id }}/eliminar"
+                              onsubmit="return confirm('¿Eliminar este documento de viaje?')" class="m-0">
+                            <button type="submit" class="btn-icon danger" title="Eliminar documento"><i class="bi bi-trash" aria-hidden="true"></i></button>
+                        </form>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                <form method="post" action="/backoffice/pasajeros/{{ p.id }}/documentos" class="d-flex gap-2 align-items-end mt-3 flex-wrap">
+                    <div>
+                        <label class="form-label-at">Tipo</label>
+                        <select name="tipo" class="form-control-at" required style="min-width:110px">
+                            {% for t in tipos_documento %}<option value="{{ t }}">{{ t|capitalize }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label-at">Número</label>
+                        <input type="text" name="numero" class="form-control-at" required style="min-width:110px">
+                    </div>
+                    <div>
+                        <label class="form-label-at">País emisión</label>
+                        <input type="text" name="pais_emision" class="form-control-at" placeholder="EC" required style="min-width:70px">
+                    </div>
+                    <div>
+                        <label class="form-label-at">Vencimiento</label>
+                        <input type="date" name="fecha_vencimiento" class="form-control-at">
+                    </div>
+                    <button type="submit" class="btn-at-ghost"><i class="bi bi-plus-lg" aria-hidden="true"></i>Agregar</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if puede_eliminar %}
+<!-- ═══════ MODAL: eliminar — {{ p.nombre_completo }} ═══════ -->
+<div class="modal fade" id="modal-eliminar-{{ p.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width:420px">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title d-flex align-items-center gap-2" style="font-size:16px;font-weight:700">
+                    <span class="modal-icon-title" style="background:var(--at-failed-bg);color:var(--at-danger)">
+                        <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+                    </span>Eliminar pasajero
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body" style="font-size:13.5px">
+                ¿Seguro que querés eliminar a <strong>{{ p.nombre_completo }}</strong>? Esta acción no se puede deshacer.
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-at-ghost" data-bs-dismiss="modal">Cancelar</button>
+                <form method="post" action="/backoffice/pasajeros/{{ p.id }}/eliminar" class="m-0">
+                    <button type="submit" class="btn-at-danger"><i class="bi bi-trash" aria-hidden="true"></i>Eliminar</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endfor %}
 {% endblock %}
 
 {% block scripts %}
 {{ super() }}
+{% if abrir %}
 <script>
-function buscar() {
-    const q = document.getElementById('input-busqueda').value;
-    window.location.search = q ? '?q=' + encodeURIComponent(q) : '';
-}
+document.addEventListener('DOMContentLoaded', function () {
+    var el = document.getElementById('modal-{{ abrir }}');
+    if (el && window.bootstrap) new bootstrap.Modal(el).show();
+});
 </script>
+{% endif %}
 {% endblock %}

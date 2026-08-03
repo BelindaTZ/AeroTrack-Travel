@@ -37,11 +37,31 @@ HORIZONTE_DIAS = 7
 
 
 def _rutas_curadas() -> list[dict]:
-    """Rutas reales entre hubs, leídas de dim_ruta (solo lectura)."""
+    """Rutas reales entre hubs, leídas de dim_ruta (solo lectura). Selección
+    round-robin por aeropuerto de origen — con orden alfabético + head(N)
+    (versión anterior), ATL y CLT agotaban todo el cupo de MAX_RUTAS antes
+    de que cualquier otro de los 15 hubs llegara a aparecer como origen
+    (bug confirmado, ver docs/aerotrack-travel-propuesta-tablas-v3.dbml:
+    147-156). El round-robin garantiza que todo hub con al menos una ruta
+    real hacia otro hub del catálogo aparezca como origen."""
     df = read_parquet("dim_ruta", ["OriginCode", "DestCode", "Distance", "OriginCityName", "DestCityName"])
     df = df[df["OriginCode"].isin(HUBS) & df["DestCode"].isin(HUBS)]
     df = df.sort_values(["OriginCode", "DestCode"]).drop_duplicates(subset=["OriginCode", "DestCode"])
-    return df.head(MAX_RUTAS).to_dict("records")
+
+    por_origen: dict[str, list[dict]] = {}
+    for registro in df.to_dict("records"):
+        por_origen.setdefault(registro["OriginCode"], []).append(registro)
+
+    rutas: list[dict] = []
+    while len(rutas) < MAX_RUTAS and any(por_origen.values()):
+        for origen in HUBS:
+            candidatas = por_origen.get(origen)
+            if not candidatas:
+                continue
+            rutas.append(candidatas.pop(0))
+            if len(rutas) >= MAX_RUTAS:
+                break
+    return rutas
 
 
 def generar_vuelos_programables() -> int:

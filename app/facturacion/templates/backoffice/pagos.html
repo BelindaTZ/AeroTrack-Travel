@@ -1,0 +1,106 @@
+{% extends "layout_app.html" %}
+{% from "_paginacion.html" import controles %}
+{% block title %}Pagos — AeroTrack Travel{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <h1><span class="heading-icon"><i class="bi bi-credit-card"></i></span>Pagos</h1>
+    <p>Vista de consulta — sin acciones de escritura. Para capturar un pago diferido de hotel, usa <a href="/backoffice/pagos-diferidos">Pagos diferidos</a>.</p>
+</div>
+
+<div class="at-table-wrapper">
+    <div class="at-table-header">
+        <form method="get" data-auto-filtros class="d-flex flex-wrap gap-2 align-items-end">
+            <div>
+                <label class="form-label-at" for="f-estado">Estado</label>
+                <select class="form-control-at" id="f-estado" name="estado" style="min-width:150px">
+                    <option value="">Todos</option>
+                    <option value="exitoso" {% if filtros.estado == 'exitoso' %}selected{% endif %}>Exitoso</option>
+                    <option value="autorizado" {% if filtros.estado == 'autorizado' %}selected{% endif %}>Autorizado</option>
+                    <option value="fallido" {% if filtros.estado == 'fallido' %}selected{% endif %}>Fallido</option>
+                    <option value="reembolsado" {% if filtros.estado == 'reembolsado' %}selected{% endif %}>Reembolsado</option>
+                </select>
+            </div>
+            <div>
+                <label class="form-label-at" for="f-desde">Desde</label>
+                <input type="date" id="f-desde" name="desde" class="form-control-at" value="{{ filtros.desde }}">
+            </div>
+            <div>
+                <label class="form-label-at" for="f-hasta">Hasta</label>
+                <input type="date" id="f-hasta" name="hasta" class="form-control-at" value="{{ filtros.hasta }}">
+            </div>
+            <div>
+                <label class="form-label-at" for="f-codigo">Código de reserva</label>
+                <input type="text" id="f-codigo" name="codigo_reserva" class="form-control-at at-mono" value="{{ filtros.codigo_reserva }}" style="width:130px">
+            </div>
+            <div>
+                <label class="form-label-at" for="f-nombre">Pasajero</label>
+                <input type="text" id="f-nombre" name="nombre_pasajero" class="form-control-at" value="{{ filtros.nombre_pasajero }}" style="min-width:160px">
+            </div>
+            {% if filtros.estado or filtros.desde or filtros.hasta or filtros.codigo_reserva or filtros.nombre_pasajero %}
+            <a href="/backoffice/pagos" class="btn-at-ghost">Limpiar</a>
+            {% endif %}
+        </form>
+    </div>
+
+    {% if not pagina.items %}
+    <div class="at-empty">
+        <i class="bi bi-credit-card at-empty-icon" aria-hidden="true"></i>
+        <strong>Sin pagos con estos filtros</strong>
+    </div>
+    {% else %}
+    <div class="at-table-scroll">
+        <table class="at-table">
+            <thead><tr><th>Fecha</th><th>Reserva</th><th>Pasajero</th><th>Monto</th><th>Estado</th><th class="actions-col">Acciones</th></tr></thead>
+            <tbody>
+            {% for p in pagina.items %}
+            <tr>
+                <td class="at-mono" style="font-size:12px">{{ p.created[:10] if p.created else "" }}</td>
+                <td class="at-mono">{{ p.codigo_reserva }}</td>
+                <td>{{ p.pasajero_nombre }}</td>
+                <td class="at-mono">${{ "%.2f"|format(p.monto) }}</td>
+                <td>
+                    {% if p.estado == "exitoso" %}<span class="badge-sistema" style="background:var(--at-success-bg);color:var(--at-success-fg)">exitoso</span>
+                    {% elif p.estado == "fallido" %}<span class="badge-sistema" style="background:var(--at-failed-bg);color:var(--at-danger)">fallido</span>
+                    {% elif p.estado == "reembolsado" %}<span class="badge-sistema" style="opacity:.6">reembolsado</span>
+                    {% else %}<span class="badge-sistema" style="background:var(--at-warning-bg);color:var(--at-warning-fg)">{{ p.estado }}</span>{% endif %}
+                </td>
+                <td class="actions-col">
+                    <button type="button" class="btn-icon" data-bs-toggle="modal" data-bs-target="#modal-ver-{{ p.id }}" title="Ver">
+                        <i class="bi bi-eye" aria-hidden="true"></i>
+                    </button>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {{ controles(pagina, request) }}
+    {% endif %}
+</div>
+
+{% for p in pagina.items %}
+<div class="modal fade" id="modal-ver-{{ p.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title d-flex align-items-center gap-2" style="font-size:16px;font-weight:700">
+                    <span class="modal-icon-title"><i class="bi bi-credit-card" aria-hidden="true"></i></span>Pago — <span class="at-mono">{{ p.codigo_reserva }}</span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body d-flex flex-column gap-2" style="font-size:13.5px">
+                <div class="d-flex justify-content-between"><span style="color:var(--at-muted)">Pasajero</span><span>{{ p.pasajero_nombre }}</span></div>
+                <div class="d-flex justify-content-between"><span style="color:var(--at-muted)">Monto</span><span class="at-mono">${{ "%.2f"|format(p.monto) }} {{ p.moneda }}</span></div>
+                <div class="d-flex justify-content-between"><span style="color:var(--at-muted)">Estado</span><span>{{ p.estado }}</span></div>
+                <div class="d-flex justify-content-between"><span style="color:var(--at-muted)">Fecha de pago</span><span class="at-mono">{{ p.fecha_pago[:10] if p.fecha_pago else "—" }}</span></div>
+                <div class="d-flex justify-content-between"><span style="color:var(--at-muted)">Creado</span><span class="at-mono">{{ p.created[:16] if p.created else "—" }}</span></div>
+                <div class="d-flex justify-content-between"><span style="color:var(--at-muted)">Stripe Payment Intent</span><span class="at-mono" style="font-size:11px">{{ p.stripe_payment_intent_id or "—" }}</span></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-at-ghost" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% endblock %}

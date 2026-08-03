@@ -1,26 +1,41 @@
 {% extends "layout_app.html" %}
+{% from "_paginacion.html" import controles %}
+{% from "_informe_header.html" import header %}
 {% block title %}Bitácora de sincronizaciones — AeroTrack Travel{% endblock %}
 {% block content %}
-<div class="page-heading">
-    <h1><span class="heading-icon"><i class="bi bi-journal-text"></i></span>Bitácora de sincronizaciones</h1>
-    <p>Historial de corridas de catálogo por fuente. Una corrida fallida no oculta la última exitosa — el catálogo servido sigue siendo el de esa corrida anterior.</p>
-</div>
+{{ header(
+    "bi-journal-text",
+    "Estado de sincronizaciones por fuente externa",
+    "Historial de corridas de catálogo por fuente. Una corrida fallida no oculta la última exitosa — el catálogo servido sigue siendo el de esa corrida anterior.",
+    request,
+    cu_ref="CU-T38",
+    export_path="/backoffice/integraciones/bitacora/exportar"
+) }}
 
 <div class="at-table-wrapper">
     <div class="at-table-header">
-        <form method="get" action="/backoffice/integraciones/bitacora" id="form-filtros" class="d-flex gap-2 align-items-center flex-wrap">
+        <form method="get" action="/backoffice/integraciones/bitacora" data-auto-filtros class="d-flex gap-2 align-items-center flex-wrap">
             <select class="form-control-at" name="fuente_id" style="width:240px">
                 <option value="">Todas las fuentes</option>
                 {% for f in fuentes %}
                 <option value="{{ f.id }}" {% if filtros.fuente_id == f.id %}selected{% endif %}>{{ f.nombre }}</option>
                 {% endfor %}
             </select>
+            <select class="form-control-at" name="estado" style="width:170px">
+                <option value="">Todos los estados</option>
+                {% for e in estados %}
+                <option value="{{ e }}" {% if filtros.estado == e %}selected{% endif %}>{{ e }}</option>
+                {% endfor %}
+            </select>
             <input type="date" class="form-control-at" name="desde" value="{{ filtros.desde }}" style="width:160px">
             <input type="date" class="form-control-at" name="hasta" value="{{ filtros.hasta }}" style="width:160px">
+            {% if filtros.fuente_id or filtros.estado or filtros.desde or filtros.hasta %}
+            <a href="/backoffice/integraciones/bitacora" class="btn-at-ghost">Limpiar</a>
+            {% endif %}
         </form>
     </div>
 
-    {% if corridas %}
+    {% if pagina.items %}
     <div class="at-table-scroll">
         <table class="at-table">
             <thead>
@@ -35,7 +50,7 @@
                 </tr>
             </thead>
             <tbody>
-                {% for c in corridas %}
+                {% for c in pagina.items %}
                 <tr id="log-{{ c.id }}">
                     <td class="at-mono" style="font-size:12px">{{ c.fecha_inicio[:16] if c.fecha_inicio else "" }}</td>
                     <td>{{ c.fuente_nombre }}</td>
@@ -58,6 +73,7 @@
             </tbody>
         </table>
     </div>
+    {{ controles(pagina, request) }}
     {% else %}
     <div class="at-empty">
         <i class="bi bi-journal-text at-empty-icon" aria-hidden="true"></i>
@@ -65,12 +81,4 @@
     </div>
     {% endif %}
 </div>
-{% endblock %}
-
-{% block scripts %}
-<script>
-document.querySelectorAll('#form-filtros select, #form-filtros input').forEach(function (el) {
-    el.addEventListener('change', function () { document.getElementById('form-filtros').requestSubmit(); });
-});
-</script>
 {% endblock %}

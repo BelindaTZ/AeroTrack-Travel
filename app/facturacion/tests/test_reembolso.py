@@ -1,3 +1,7 @@
+from app.facturacion.repositories.facturacion_repo import FacturacionRepository
+from app.shared import minio_operational_client as moc
+
+
 async def _login(client, usuario):
     resp = await client.post(
         "/login", data={"email": usuario["email"], "password": usuario["_password"]}
@@ -5,22 +9,24 @@ async def _login(client, usuario):
     assert resp.status_code == 303
 
 
-async def _pagar(client, pb, reserva_id) -> dict:
+async def _pagar(client, reserva_id) -> dict:
     resp = await client.post(f"/reservas/{reserva_id}/pagar", data={"escenario": "exitoso"})
     assert resp.status_code == 303
-    pago = await pb.get_first("pagos", f'reserva_id="{reserva_id}" && estado="exitoso"')
+    pago = await FacturacionRepository().pago_exitoso_de_reserva(reserva_id)
     assert pago is not None
     return pago
 
 
-async def _limpiar_pago(pb, pago_id: str, reserva_id: str) -> None:
-    factura = await pb.get_first("facturas", f'pago_id="{pago_id}"')
+async def _limpiar_pago(pago_id: str, reserva_id: str) -> None:
+    repo = FacturacionRepository()
+    factura = await repo.factura_de_pago(pago_id)
     if factura is not None:
-        await pb.delete_record("facturas", factura["id"])
-    comision = await pb.get_first("comisiones", f'reserva_id="{reserva_id}"')
+        await moc.eliminar("facturas", factura["id"])
+    comisiones = await repo.listar_comisiones()
+    comision = next((c for c in comisiones if c.get("reserva_id") == reserva_id), None)
     if comision is not None:
-        await pb.delete_record("comisiones", comision["id"])
-    await pb.delete_record("pagos", pago_id)
+        await moc.eliminar("comisiones", comision["id"])
+    await moc.eliminar("pagos", pago_id)
 
 
 async def _nivel_tarifa_id(pb, nombre: str) -> str:
@@ -40,8 +46,10 @@ async def test_reembolso_segun_politica_real(
         pasajero["id"], vuelo["id"], tarifa["id"], estado="pendiente_pago", total_pagar=200.0
     )
 
+    facturacion_repo = FacturacionRepository()
+
     await _login(client, usuario)
-    pago = await _pagar(client, pb, reserva["id"])
+    pago = await _pagar(client, reserva["id"])
 
     resp = await client.post(
         "/internal/reembolsos", data={"reserva_id": reserva["id"], "motivo": "Prueba de reembolso parcial"}
@@ -52,11 +60,11 @@ async def test_reembolso_segun_politica_real(
     assert cuerpo["monto"] == 100.0  # 50% de 200.0
     assert cuerpo["stripe_refund_id"].startswith("re_")
 
-    pago_actualizado = await pb.get_record("pagos", pago["id"])
+    pago_actualizado = await facturacion_repo.obtener_pago(pago["id"])
     assert pago_actualizado["estado"] == "reembolsado"
 
-    await pb.delete_record("reembolsos", cuerpo["id"])
-    await _limpiar_pago(pb, pago["id"], reserva["id"])
+    await moc.eliminar("reembolsos", cuerpo["id"])
+    await _limpiar_pago(pago["id"], reserva["id"])
 
 
 async def test_reembolso_fuera_de_politica_no_se_procesa_sin_override(
@@ -70,8 +78,10 @@ async def test_reembolso_fuera_de_politica_no_se_procesa_sin_override(
         pasajero["id"], vuelo["id"], tarifa["id"], estado="pendiente_pago", total_pagar=150.0
     )
 
+    facturacion_repo = FacturacionRepository()
+
     await _login(client, usuario)
-    pago = await _pagar(client, pb, reserva["id"])
+    pago = await _pagar(client, reserva["id"])
 
     resp = await client.post(
         "/internal/reembolsos", data={"reserva_id": reserva["id"], "motivo": "Intento fuera de política"}
@@ -80,10 +90,11 @@ async def test_reembolso_fuera_de_politica_no_se_procesa_sin_override(
 
     # La firma de `procesar_reembolso` no acepta un monto manual — no hay
     # ninguna vía por la que este reembolso pueda materializarse (RN-FAC-001).
-    reembolso = await pb.get_first("reembolsos", f'reserva_id="{reserva["id"]}"')
+    reembolsos = await moc.listar_todos("reembolsos")
+    reembolso = next((r for r in reembolsos if r.get("reserva_id") == reserva["id"]), None)
     assert reembolso is None
 
-    pago_sin_cambios = await pb.get_record("pagos", pago["id"])
+    pago_sin_cambios = await facturacion_repo.obtener_pago(pago["id"])
     assert pago_sin_cambios["estado"] == "exitoso"
 
-    await _limpiar_pago(pb, pago["id"], reserva["id"])
+    await _limpiar_pago(pago["id"], reserva["id"])

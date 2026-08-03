@@ -1,0 +1,39 @@
+{% extends "layout_app.html" %}
+{% block title %}Configurar abandono de carrito — AeroTrack Travel{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <h1><span class="heading-icon"><i class="bi bi-cart-x"></i></span>Recuperación de carrito abandonado</h1>
+    <p>CU-T26 — umbral de inactividad y plantilla del email de recordatorio que se envía cuando un carrito se marca abandonado.</p>
+</div>
+
+{% if error %}
+<div class="flash-bar" role="alert">
+    <div class="flash-error"><i class="bi bi-exclamation-triangle-fill"></i>{{ error }}</div>
+</div>
+{% endif %}
+
+<div class="at-card" style="max-width:640px">
+    <form method="post" action="/backoffice/carrito/config-abandono">
+        <div class="mb-3">
+            <label class="form-label-at" for="umbral_horas">Horas de inactividad antes de marcar abandonado</label>
+            <input type="number" class="form-control-at" id="umbral_horas" name="umbral_horas"
+                   value="{{ umbral_horas }}" min="0.1" step="0.1" required>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label-at" for="plantilla_asunto">Asunto del email de recordatorio</label>
+            <input type="text" class="form-control-at" id="plantilla_asunto" name="plantilla_asunto"
+                   value="{{ plantilla_asunto }}" required>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label-at" for="plantilla_cuerpo">Cuerpo del email de recordatorio</label>
+            <textarea class="form-control-at" id="plantilla_cuerpo" name="plantilla_cuerpo" rows="4" required>{{ plantilla_cuerpo }}</textarea>
+        </div>
+
+        <button type="submit" class="btn-at-primary">
+            <i class="bi bi-check2"></i>Guardar
+        </button>
+    </form>
+</div>
+{% endblock %}

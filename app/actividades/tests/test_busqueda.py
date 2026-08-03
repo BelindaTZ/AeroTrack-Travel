@@ -1,6 +1,8 @@
 """RF-ACT-001,002,003,007,009 (CU-O65,O66,O67,O68,O70) — buscar, detalle
 con reseñas/horarios y filtrar."""
 
+from app.shared.cupo_service import verificar_y_reservar_cupo
+
 
 async def test_buscar_sin_resultados_muestra_mensaje_claro(client):
     resp = await client.get("/actividades/buscar", params={"ciudad": "CiudadInexistente9999"})
@@ -33,6 +35,27 @@ async def test_filtro_calificacion_minima(client, actividad_factory):
     resp = await client.get("/actividades/buscar", params={"ciudad": "Roma", "calificacion_min": 4.0})
     assert "TopRated" in resp.text
     assert "BajaNota" not in resp.text
+
+
+async def test_filtro_desde_hasta_excluye_actividad_sin_horario_en_rango(client, actividad_factory, horario_factory):
+    dentro = await actividad_factory(ciudad="Lisboa", nombre="Tour dentro de rango")
+    await horario_factory(dentro["id"], fecha="2027-06-15", hora="09:00")
+    fuera = await actividad_factory(ciudad="Lisboa", nombre="Tour fuera de rango")
+    await horario_factory(fuera["id"], fecha="2027-09-01", hora="09:00")
+
+    resp = await client.get("/actividades/buscar", params={"ciudad": "Lisboa", "desde": "2027-06-01", "hasta": "2027-06-30"})
+    assert "Tour dentro de rango" in resp.text
+    assert "Tour fuera de rango" not in resp.text
+
+
+async def test_filtro_desde_hasta_excluye_actividad_sin_cupo_real(client, actividad_factory, horario_factory):
+    actividad = await actividad_factory(ciudad="Cusco", nombre="Tour agotado")
+    horario = await horario_factory(actividad["id"], fecha="2027-06-15", hora="09:00", cupos_disponibles=1)
+    assert await verificar_y_reservar_cupo("actividades_horarios", horario["id"], cantidad=1)
+
+    resp = await client.get("/actividades/buscar", params={"ciudad": "Cusco", "desde": "2027-06-01", "hasta": "2027-06-30"})
+    assert "Tour agotado" not in resp.text
+    assert "No hay actividades disponibles" in resp.text
 
 
 async def test_detalle_muestra_descripcion_resenas_y_horarios(client, actividad_factory, horario_factory, resena_factory):

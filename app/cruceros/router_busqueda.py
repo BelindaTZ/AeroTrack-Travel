@@ -6,12 +6,16 @@ RF-CRU-007 (CU-O75, seleccionar camarote) se resuelve posteando directo a
 `/carrito/agregar` (Carrito), mismo criterio de reutilización que Autos —
 no hay `router_seleccion.py` propio."""
 
+from datetime import date
+
 from fastapi import APIRouter, Depends, Request
 
+from app.cruceros.repositories.catalogo_reader import CatalogoCrucerosReader
 from app.cruceros.repositories.cruceros_repo import CrucerosRepository
 from app.cruceros.schemas import CruceroBusquedaOut
 from app.seguridad.services.session_service import usuario_opcional
 from app.shared.busqueda_reciente import registrar_busqueda_reciente
+from app.shared.cupo_service import cupos_vigentes
 from app.shared.google_apis.maps_embed import url_mapa_ruta
 from app.shared.templating import templates
 
@@ -28,9 +32,9 @@ def _nombre_puerto(puerto) -> str:
     return str(puerto)
 
 
-async def _armar_resultado(repo: CrucerosRepository, crucero: dict) -> CruceroBusquedaOut | None:
-    naviera = await repo.obtener_naviera(crucero["naviera_id"])
-    barco = await repo.obtener_barco(crucero["barco_id"])
+async def _armar_resultado(catalogo: CatalogoCrucerosReader, crucero: dict) -> CruceroBusquedaOut | None:
+    naviera = await catalogo.obtener_naviera(crucero["naviera_id"])
+    barco = await catalogo.obtener_barco(crucero["barco_id"])
     if naviera is None or barco is None:
         return None
     return CruceroBusquedaOut(
@@ -41,7 +45,23 @@ async def _armar_resultado(repo: CrucerosRepository, crucero: dict) -> CruceroBu
     )
 
 
-def _filtrar(cruceros: list[dict], destino: str, duracion_min: float | None, duracion_max: float | None, precio_max: float | None) -> list[dict]:
+def _parse_float(valor: str | None) -> float | None:
+    """String, no `float` nativo de FastAPI: el form oculto de filtros
+    siempre manda estos campos aunque estén vacíos — con un tipo `float`
+    nativo, FastAPI rechaza "" con 422 en vez de tratarlo como "sin valor"
+    (mismo fix que en vuelos/hoteles/autos/actividades)."""
+    if not valor:
+        return None
+    try:
+        return float(valor)
+    except ValueError:
+        return None
+
+
+def _filtrar(
+    cruceros: list[dict], destino: str, duracion_min: float | None, duracion_max: float | None, precio_max: float | None,
+    desde: str | None = None, hasta: str | None = None,
+) -> list[dict]:
     resultado = cruceros
     if destino:
         termino = destino.lower()
@@ -55,29 +75,58 @@ def _filtrar(cruceros: list[dict], destino: str, duracion_min: float | None, dur
         resultado = [c for c in resultado if (c.get("duracion_dias") or 0) <= duracion_max]
     if precio_max is not None:
         resultado = [c for c in resultado if c.get("precio_base") is not None and c["precio_base"] <= precio_max]
+    if desde:
+        # `cruceros_catalogo` es una fila POR ZARPE real (Cruise Pricing
+        # API) — a diferencia de hoteles/actividades no hace falta ningún
+        # overlay de cupo por fecha, `fecha_zarpe` ya es la fecha real.
+        resultado = [c for c in resultado if (c.get("fecha_zarpe") or "")[:10] >= desde]
+    if hasta:
+        resultado = [c for c in resultado if (c.get("fecha_zarpe") or "")[:10] <= hasta]
     return resultado
+
+
+def _opciones_puertos(puertos: list[str]) -> list[dict]:
+    return [{"valor": p, "principal": p, "secundario": None} for p in puertos]
 
 
 @router.get("/buscar")
 async def buscar(
     request: Request,
     destino: str | None = None,
-    duracion_min: float | None = None,
-    duracion_max: float | None = None,
-    precio_max: float | None = None,
+    duracion_min: str | None = None,
+    duracion_max: str | None = None,
+    precio_max: str | None = None,
+    desde: date | None = None,
+    hasta: date | None = None,
     usuario: dict | None = Depends(usuario_opcional),
 ):
-    repo = CrucerosRepository()
+    duracion_min_val = _parse_float(duracion_min)
+    duracion_max_val = _parse_float(duracion_max)
+    precio_max_val = _parse_float(precio_max)
+    desde_iso = desde.isoformat() if desde else ""
+    hasta_iso = hasta.isoformat() if hasta else ""
+
+    catalogo = CatalogoCrucerosReader()
+    puertos = _opciones_puertos(await catalogo.puertos_disponibles())
 
     if not destino:
         return templates.TemplateResponse(
             request, "buscar_cruceros.html",
-            {"resultados": None, "filtros": {"destino": "", "duracion_min": "", "duracion_max": "", "precio_max": ""}, "usuario": usuario},
+            {
+                "resultados": None, "puertos": puertos,
+                "filtros": {
+                    "destino": "", "duracion_min": "", "duracion_max": "", "precio_max": "",
+                    "desde": desde_iso, "hasta": hasta_iso,
+                },
+                "usuario": usuario,
+            },
         )
 
     await registrar_busqueda_reciente(usuario, "crucero", {"destino": destino})
-    cruceros = _filtrar(await repo.listar_cruceros(), destino, duracion_min, duracion_max, precio_max)
-    resultados = [r for c in cruceros if (r := await _armar_resultado(repo, c)) is not None]
+    cruceros = _filtrar(
+        await catalogo.listar_cruceros(), destino, duracion_min_val, duracion_max_val, precio_max_val, desde_iso, hasta_iso
+    )
+    resultados = [r for c in cruceros if (r := await _armar_resultado(catalogo, c)) is not None]
     resultados.sort(key=lambda r: r.precio_base)
 
     return templates.TemplateResponse(
@@ -85,9 +134,10 @@ async def buscar(
         "buscar_cruceros.html",
         {
             "resultados": resultados,
+            "puertos": puertos,
             "filtros": {
-                "destino": destino, "duracion_min": duracion_min or "", "duracion_max": duracion_max or "",
-                "precio_max": precio_max or "",
+                "destino": destino, "duracion_min": duracion_min_val or "", "duracion_max": duracion_max_val or "",
+                "precio_max": precio_max_val or "", "desde": desde_iso, "hasta": hasta_iso,
             },
             "usuario": usuario,
         },
@@ -98,16 +148,16 @@ async def buscar(
 async def comparar_fechas(request: Request, barco_id: str, usuario: dict | None = Depends(usuario_opcional)):
     """RF-CRU-004 (CU-O73) — mismo barco, distintas fechas de zarpe, precio
     por tipo de camarote de cada una lado a lado."""
-    repo = CrucerosRepository()
-    barco = await repo.obtener_barco(barco_id)
+    catalogo = CatalogoCrucerosReader()
+    barco = await catalogo.obtener_barco(barco_id)
     if barco is None:
         return templates.TemplateResponse(request, "comparar_fechas.html", {"barco": None, "usuario": usuario}, status_code=404)
 
-    naviera = await repo.obtener_naviera(barco["naviera_id"])
-    cruceros = await repo.cruceros_de_barco(barco_id)
+    naviera = await catalogo.obtener_naviera(barco["naviera_id"])
+    cruceros = await catalogo.cruceros_de_barco(barco_id)
     salidas = []
     for c in cruceros:
-        camarotes = await repo.camarotes_de_crucero(c["id"])
+        camarotes = await catalogo.camarotes_de_crucero(c["id"])
         salidas.append({"crucero": c, "camarotes": camarotes})
 
     return templates.TemplateResponse(
@@ -119,14 +169,22 @@ async def comparar_fechas(request: Request, barco_id: str, usuario: dict | None 
 async def detalle(request: Request, crucero_id: str, usuario: dict | None = Depends(usuario_opcional)):
     """RF-CRU-002,003,007 (CU-O72,O74,O75) — itinerario, barco y selección
     de camarote en una sola pantalla."""
-    repo = CrucerosRepository()
-    crucero = await repo.obtener_crucero(crucero_id)
+    repo = CrucerosRepository()  # solo para lectura CONFIG (maps_embed_api_key)
+    catalogo = CatalogoCrucerosReader()
+    crucero = await catalogo.obtener_crucero(crucero_id)
     if crucero is None:
         return templates.TemplateResponse(request, "detalle_crucero.html", {"crucero": None, "usuario": usuario}, status_code=404)
 
-    naviera = await repo.obtener_naviera(crucero["naviera_id"])
-    barco = await repo.obtener_barco(crucero["barco_id"])
-    camarotes = await repo.camarotes_de_crucero(crucero_id)
+    naviera = await catalogo.obtener_naviera(crucero["naviera_id"])
+    barco = await catalogo.obtener_barco(crucero["barco_id"])
+    camarotes = await catalogo.camarotes_de_crucero(crucero_id)
+    # `cruceros_camarotes_tarifa.cupos_disponibles` queda congelado en
+    # PocketBase desde que el cupo real se decrementa en MinIO — overlay
+    # con el valor vigente sin mutar los dicts cacheados del catálogo.
+    cupos_reales = await cupos_vigentes("cruceros_camarotes_tarifa")
+    camarotes = [
+        {**c, "cupos_disponibles": cupos_reales.get(c["id"], c.get("cupos_disponibles"))} for c in camarotes
+    ]
 
     itinerario = [
         {"day": p.get("day") if isinstance(p, dict) else None, "port": _nombre_puerto(p)}

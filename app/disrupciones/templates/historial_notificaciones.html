@@ -1,19 +1,27 @@
 {% extends layout_base %}
+{% from "_paginacion.html" import controles %}
+{% from "_informe_header.html" import header %}
 {% block title %}Notificaciones — AeroTrack Travel{% endblock %}
 {% block content %}
 {% if es_backoffice %}
-<div class="page-heading">
-    <h1><span class="heading-icon"><i class="bi bi-bell"></i></span>Notificaciones</h1>
-    <p>Historial de notificaciones enviadas a pasajeros por disrupciones de vuelo.</p>
-</div>
+{{ header(
+    "bi-bell",
+    "Notificaciones de disrupción",
+    "Historial de notificaciones enviadas a pasajeros por disrupciones de vuelo — para controlar volumen y detectar envíos fallidos.",
+    request,
+    cu_ref="CU-O31",
+    export_path="/backoffice/notificaciones/exportar"
+) }}
+{% set items = pagina.items %}
 {% else %}
 <h1 class="h5 mb-3" style="font-family:var(--font-display)">Mis notificaciones</h1>
+{% set items = notificaciones %}
 {% endif %}
 
 <div class="{{ 'at-table-wrapper' if es_backoffice else '' }}">
     <div class="{{ 'at-table-header' if es_backoffice else 'd-flex gap-2 align-items-center flex-wrap mb-3' }}">
         <form method="get" action="{{ '/backoffice/notificaciones' if es_backoffice else '/notificaciones' }}"
-              id="form-filtros" class="d-flex gap-2 align-items-center flex-wrap">
+              {% if es_backoffice %}data-auto-filtros{% else %}id="form-filtros"{% endif %} class="d-flex gap-2 align-items-end flex-wrap">
             <select class="form-control-at" name="canal" style="width:160px">
                 <option value="">Todos los canales</option>
                 <option value="email" {% if filtro_canal == 'email' %}selected{% endif %}>Email</option>
@@ -23,18 +31,31 @@
                 <option value="">Todos los estados</option>
                 <option value="pendiente" {% if filtro_estado == 'pendiente' %}selected{% endif %}>Pendiente</option>
                 <option value="enviado" {% if filtro_estado == 'enviado' %}selected{% endif %}>Enviado</option>
-                <option value="fallido" {% if filtro_estado == 'fallido' %}selected{% endif %}>Fallido</option>
+                <option value="fallido" {% if filtro_estado == 'fallido' %}selected{% endif %}>Fallido (reintentable)</option>
                 <option value="fallido_definitivo" {% if filtro_estado == 'fallido_definitivo' %}selected{% endif %}>Fallo definitivo</option>
             </select>
+            {% if es_backoffice %}
+            <div>
+                <label class="form-label-at" for="f-desde">Desde</label>
+                <input type="date" id="f-desde" name="desde" class="form-control-at" value="{{ filtro_desde }}">
+            </div>
+            <div>
+                <label class="form-label-at" for="f-hasta">Hasta</label>
+                <input type="date" id="f-hasta" name="hasta" class="form-control-at" value="{{ filtro_hasta }}">
+            </div>
+            {% if filtro_canal or filtro_estado or filtro_desde or filtro_hasta %}
+            <a href="/backoffice/notificaciones" class="btn-at-ghost">Limpiar</a>
+            {% endif %}
+            {% endif %}
         </form>
     </div>
 
-    {% if notificaciones %}
+    {% if items %}
     <div class="{{ 'at-table-scroll' if es_backoffice else '' }}">
         <table class="at-table">
             <thead><tr><th>Fecha</th><th>Reserva</th><th>Canal</th><th>Asunto</th><th>Estado</th></tr></thead>
             <tbody>
-                {% for n in notificaciones %}
+                {% for n in items %}
                 <tr>
                     <td class="at-mono" style="font-size:12px">{{ n.created[:16] if n.created else "" }}</td>
                     <td><a href="/reservas/{{ n.reserva_id }}">{{ n.codigo_reserva }}</a></td>
@@ -56,6 +77,7 @@
             </tbody>
         </table>
     </div>
+    {% if es_backoffice %}{{ controles(pagina, request) }}{% endif %}
     {% else %}
     <div class="at-empty">
         <i class="bi bi-bell-slash at-empty-icon" aria-hidden="true"></i>
@@ -67,9 +89,11 @@
 
 {% block scripts %}
 {{ super() }}
+{% if not es_backoffice %}
 <script>
 document.querySelectorAll('#form-filtros select').forEach(function (el) {
     el.addEventListener('change', function () { document.getElementById('form-filtros').requestSubmit(); });
 });
 </script>
+{% endif %}
 {% endblock %}

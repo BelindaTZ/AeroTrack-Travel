@@ -1,14 +1,12 @@
 """RF-SEG-015,016 — ver/filtrar/exportar log de auditoría."""
 
-import csv
-import io
-
-from fastapi import APIRouter, Depends, Request
-from fastapi.responses import Response
+from fastapi import APIRouter, Depends, Query, Request
 
 from app.seguridad.repositories.seguridad_repo import SeguridadRepository
 from app.seguridad.services.rbac_service import requiere_permiso
+from app.shared.csv_export import csv_response
 from app.shared.nav import nav_context
+from app.shared.paginacion import Pagina
 from app.shared.templating import templates
 
 router = APIRouter(prefix="/admin/auditoria")
@@ -31,24 +29,44 @@ def _construir_filtro(
     return " && ".join(condiciones) if condiciones else None
 
 
+async def _resolver_actor_id(actor_email: str | None) -> str | None:
+    """IS-02 (auditoría de informes simples, sesión 2026-08-01) — el filtro
+    por actor ya existía en el backend (`usuario_id`) pero no había ningún
+    control en la UI para usarlo (un director no conoce el id interno de un
+    usuario). Se filtra por email, que sí es un dato que el director tiene a
+    mano, y se resuelve a `usuario_id` acá. Si el email no existe, se
+    devuelve un id imposible para que el filtro no se ignore en silencio y
+    en cambio muestre "sin resultados"."""
+    if not actor_email:
+        return None
+    usuario = await SeguridadRepository().get_usuario_by_email(actor_email)
+    return usuario["id"] if usuario else "__sin_coincidencia__"
+
+
 @router.get("")
 async def listar(
     request: Request,
-    usuario_id: str | None = None,
+    actor_email: str | None = None,
     accion: str | None = None,
     tabla: str | None = None,
     desde: str | None = None,
     hasta: str | None = None,
+    page: int = Query(1, ge=1),
     usuario: dict = Depends(requiere_permiso("seguridad", "ver", "auditoria")),
 ):
     repo = SeguridadRepository()
+    usuario_id = await _resolver_actor_id(actor_email)
     filtro = _construir_filtro(usuario_id, accion, tabla, desde, hasta)
-    resultado = await repo.list_auditoria(filtro=filtro, per_page=100)
+    resultado = await repo.list_auditoria(filtro=filtro, page=page, per_page=25)
+    pagina = Pagina(
+        items=resultado["items"], pagina=resultado["page"], total_paginas=max(1, resultado["totalPages"]),
+        total_items=resultado["totalItems"], tamano_pagina=resultado["perPage"],
+    )
     contexto = await nav_context(usuario)
     contexto.update({
-        "registros": resultado["items"],
+        "pagina": pagina,
         "filtros": {
-            "usuario_id": usuario_id or "",
+            "actor_email": actor_email or "",
             "accion": accion or "",
             "tabla": tabla or "",
             "desde": desde or "",
@@ -60,7 +78,7 @@ async def listar(
 
 @router.get("/exportar")
 async def exportar(
-    usuario_id: str | None = None,
+    actor_email: str | None = None,
     accion: str | None = None,
     tabla: str | None = None,
     desde: str | None = None,
@@ -72,19 +90,19 @@ async def exportar(
     usuario: dict = Depends(requiere_permiso("seguridad", "ver", "auditoria")),
 ):
     repo = SeguridadRepository()
+    usuario_id = await _resolver_actor_id(actor_email)
     filtro = _construir_filtro(usuario_id, accion, tabla, desde, hasta)
     resultado = await repo.list_auditoria(filtro=filtro, per_page=500)
-
-    buffer = io.StringIO()
-    writer = csv.writer(buffer)
-    writer.writerow(["fecha", "usuario_id", "accion", "tabla", "registro_id", "ip", "detalle"])
-    for r in resultado["items"]:
-        writer.writerow(
-            [r["created"], r.get("usuario_id", ""), r["accion"], r["tabla"], r.get("registro_id", ""), r.get("ip", ""), r.get("detalle", "")]
-        )
-
-    return Response(
-        content=buffer.getvalue(),
-        media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=auditoria.csv"},
+    return csv_response(
+        resultado["items"],
+        [
+            ("fecha", lambda r: r["created"]),
+            ("usuario_id", lambda r: r.get("usuario_id", "")),
+            ("accion", lambda r: r["accion"]),
+            ("tabla", lambda r: r["tabla"]),
+            ("registro_id", lambda r: r.get("registro_id", "")),
+            ("ip", lambda r: r.get("ip", "")),
+            ("detalle", lambda r: r.get("detalle", "")),
+        ],
+        "auditoria.csv",
     )

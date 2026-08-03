@@ -47,10 +47,16 @@
 
 // ── ENUMS que YA EXISTÍAN (sin cambio) ──────────────────────────────────────
 
-Enum tipo_actor {
-  pasajero
-  agente
-  administrador
+// RETIRADO 2026-07-27 — `tipo_actor` (pasajero/agente/administrador) dejó de
+// ser un campo propio de `usuarios`. Ver `Enum tipo_panel` y `roles.tipo_panel`
+// más abajo: qué panel corresponde a una cuenta ahora es una propiedad del
+// ROL, no algo que cada usuario fije aparte y que pudiera desalinearse.
+
+// NUEVO 2026-07-27 — reemplaza a `Enum tipo_actor`. Vive en `roles`, no en
+// `usuarios`.
+Enum tipo_panel {
+  backoffice
+  autoservicio
 }
 
 Enum genero_enum {
@@ -413,11 +419,19 @@ Enum tipo_valor_cargo {
 // ofertas_promociones, asistente_ia, integraciones) — no es cambio de
 // esquema, es seed de datos al implementar.
 
+// MODIFICADA 2026-07-27 — se agrega `tipo_panel`. Reemplaza a
+// `usuarios.tipo_actor`: antes cada usuario fijaba su propio "tipo"
+// (pasajero/agente/administrador) además de su rol, dos campos que
+// siempre debían coincidir a mano y podían desalinearse (nada impedía
+// tipo_actor=pasajero + rol_id=Administrador). Ahora el panel es una
+// propiedad del rol — se define una sola vez al crear el rol, nunca por
+// usuario. `usuarios.rol_id` (ver abajo) es la única fuente de verdad.
 Table roles {
-  id            varchar   [pk]
-  nombre        varchar   [not null]
+  id            varchar     [pk]
+  nombre        varchar     [not null]
   descripcion   text
-  es_sistema    boolean   [default: false]
+  es_sistema    boolean     [default: false]
+  tipo_panel    tipo_panel  [not null, note: 'NUEVO 2026-07-27 — a qué panel corresponde este rol: backoffice (staff) o autoservicio (pasajero)']
   created       datetime
   updated       datetime
 }
@@ -452,6 +466,11 @@ Table roles_permisos_tablas {
   rol_id      varchar   [not null]
   modulo_id   varchar   [not null]
   tabla       varchar   [not null]
+  // Agregado 2026-07-30 — Nivel 2 restringe por (tabla, accion), no solo
+  // por tabla: cada fila autoriza una única accion sobre esa tabla. Solo
+  // ver/crear/editar/eliminar tienen sentido aquí; ejecutar/exportar quedan
+  // exclusivas de Nivel 1 (roles_permisos). Ver pb_schema_seguridad_fix_nivel2_accion.py.
+  accion      varchar   [not null]
   created     datetime
 }
 
@@ -468,12 +487,27 @@ Table modulo_tablas {
 // ARCHIVOS abajo — el campo es el mismo sin importar dónde PocketBase
 // guarde el archivo físicamente (disco local vs. S3/MinIO), esa decisión
 // es de infraestructura/implementación, no de este esquema.
+// MODIFICADA 2026-07-27 (dos cambios relacionados) —
+// 1) `rol_id` pasa a NOT NULL para los 3 tipos de cuenta. Antes pasajero
+//    quedaba con `rol_id` nulo (autoservicio "sin rol"); ahora todo
+//    usuario, sin excepción, tiene un rol asignado — pasajero recibe
+//    automáticamente el rol de sistema "Pasajero" (sembrado en
+//    scripts/seed_seguridad.py) al registrarse. El modelo de permisos es
+//    siempre módulo -> permiso-por-rol -> permiso-por-tabla, nunca un caso
+//    especial de "usuario sin rol".
+// 2) `tipo_actor` se RETIRA de esta tabla (ver `roles.tipo_panel`): dos
+//    campos que siempre debían coincidir a mano (tipo_actor y rol_id) eran
+//    redundantes y un hueco — nada impedía crear un usuario con
+//    tipo_actor=pasajero y rol_id=Administrador. `rol_id` es ahora la
+//    única fuente de verdad; el panel/layout se resuelve en runtime vía
+//    `session_service.resolver_tipo_actor(rol_id)`, nunca se persiste por
+//    usuario. Autorización ya no dependía de `tipo_actor` desde antes de
+//    este cambio (rbac_service.tiene_permiso(), ver seguridad-spec.md).
 Table usuarios {
   id                  varchar     [pk]
   email               varchar     [not null, unique]
   nombre_completo     varchar     [not null]
-  tipo_actor          tipo_actor  [not null]
-  rol_id              varchar     [note: 'nullable para pasajero']
+  rol_id              varchar     [not null]
   foto_perfil         varchar     [note: 'NUEVO — file field de PocketBase, CU-O05. Faltaba por completo en la versión anterior de este archivo.']
   activo              boolean     [default: true]
   created             datetime

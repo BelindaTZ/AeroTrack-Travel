@@ -1,0 +1,243 @@
+% ================= DOCUMENTO AEROTRACK TRAVEL =================
+% Compilar con XeLaTeX (fuente real Times New Roman de Windows)
+\documentclass[11pt,a4paper]{article}
+
+\usepackage{fontspec}
+\setmainfont{Times New Roman}[Ligatures=TeX]
+
+\usepackage{geometry}
+\usepackage{booktabs}
+\usepackage[table]{xcolor}
+\usepackage{array}
+\usepackage{multirow}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{setspace}
+
+% ---------- Márgenes normales (2.54 cm) ----------
+\geometry{margin=2.54cm}
+
+% ---------- Interlineado 1.0 ----------
+\linespread{1.0}
+
+% ---------- Colores ----------
+\definecolor{azul}{HTML}{1E3A5F}
+\definecolor{filagris}{HTML}{F2F5F9}
+
+% ---------- Títulos: nivel1=16, nivel2=14, nivel3=12, negrita, negro ----------
+\titleformat{\section}
+  {\fontsize{16}{18}\selectfont\bfseries\color{black}}
+  {\thesection.\ }{0pt}{}
+\titleformat{\subsection}
+  {\fontsize{14}{16}\selectfont\bfseries\color{black}}
+  {\thesubsection}{0pt}{}
+\titlespacing*{\section}{0pt}{8pt}{4pt}
+\titlespacing*{\subsection}{0pt}{6pt}{3pt}
+
+% ---------- Numeración de páginas abajo-derecha ----------
+\pagestyle{fancy}
+\fancyhf{}
+\fancyfoot[R]{\thepage}
+\renewcommand{\headrulewidth}{0pt}
+
+% ---------- Formato de columnas ----------
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+\newcommand{\tabla}[1]{\cellcolor{azul}\textcolor{white}{\textbf{#1}}}
+
+% ---------- Leyenda ----------
+\newenvironment{leyenda}[1]{\begin{center}#1\\[2pt]\end{center}}{}
+
+\begin{document}
+
+% =============== ENCABEZADO DE PRIMERA PÁGINA (sin portada) ===============
+\begin{center}
+{\fontsize{11}{14}\selectfont
+Universidad T\'ecnica Estatal de Quevedo $\cdot$ Ingenier\'ia en Software $\cdot$
+Construcci\'on de Software \par
+\medskip
+AeroTrack Travel $\cdot$ Julio 2026 \par
+\smallskip
+\textbf{Autora:} Belinda Toaquiza Zambrano \quad
+\textbf{Docente:} Vicu\~na Pino Ariosto Eugenio
+}
+\end{center}
+
+\vspace{2pt}
+
+% =====================================================================
+\section{Resumen General y Arquitectura}
+
+\renewcommand{\arraystretch}{1.25}
+\rowcolors{2}{filagris}{white}
+\begin{center}
+\setlength\tabcolsep{6pt}
+\begin{tabular}{@{}L{4.0cm} L{3.0cm} L{2.8cm} L{5.7cm}@{}}
+\toprule
+\tabla{Componente} & \tabla{Total} & \tabla{Video} & \tabla{Ruta base} \\
+\midrule
+WorkPanel CRUD & 14 + 4 sugeridos & 3 & /backoffice/ \\
+Informe Simple & 24 & 3 & /backoffice/ \\
+Dashboard Compuesto & 13 & 3 & /backoffice/dashboards/ \\
+\bottomrule
+\end{tabular}
+\end{center}
+\vspace{1pt}
+\textbf{Tabla 1.} Resumen general de componentes implementados por capa de software.
+
+\subsection{Arquitectura de Datos}
+
+\renewcommand{\arraystretch}{1.3}
+\begin{center}
+\setlength\tabcolsep{8pt}
+\begin{tabular}{@{}L{5.4cm} c L{8.4cm}@{}}
+\toprule
+\tabla{Origen} & & \tabla{Destino} \\
+\midrule
+\textbf{PocketBase} (Staging/Configuraci\'on) & $\downarrow$ & Cat\'alogos y configuraci\'on \\
+\midrule
+\textbf{Airflow ETL} (@hourly, 5 DAGs) & $\downarrow$ & Orquestaci\'on de la extracci\'on \\
+\midrule
+\textbf{MinIO} -- \emph{aerotrack-travel-operational} & $\downarrow$ & Base de datos Operacional \\
+\midrule
+\textbf{Airflow ETL} & $\downarrow$ & Transformaci\'on y carga hacia ClickHouse \\
+\midrule
+\textbf{ClickHouse} -- \emph{aerotrack\_travel} & $\bullet$ & Base columnar (10 tablas) \\
+\bottomrule
+\end{tabular}
+\end{center}
+\vspace{1pt}
+\textbf{Figura 1.} Flujo de la arquitectura de datos: PocketBase $\rightarrow$ Airflow $\rightarrow$ MinIO $\rightarrow$ ClickHouse.
+
+% =====================================================================
+\section{Work-Panels}
+
+\subsection{Work-Panels presentados en el video}
+
+\renewcommand{\arraystretch}{1.25}
+\begin{center}
+\setlength\tabcolsep{4pt}
+\begin{tabular}{@{}L{1.1cm} L{2.5cm} L{4.0cm} L{2.6cm} L{2.5cm} L{3.4cm}@{}}
+\toprule
+\tabla{\#} & \tabla{Work-Panel} & \tabla{Acciones} & \tabla{Rol} & \tabla{Colecci\'on} & \tabla{Ruta} \\
+\midrule
+WP-01 & Pasajeros & Crear, Editar, Ver detalle, Eliminar & \emph{admin\_clientes}, \emph{agente} & MinIO -- pasajeros & /backoffice/pasajeros \\
+\addlinespace
+WP-05 & Art\'iculos de Ayuda / FAQ & Crear, Editar, Archivar, Ver & \emph{admin\_operaciones} & MinIO (articulos\_ayuda) & /backoffice/centro-ayuda/articulos \\
+\addlinespace
+WP-06 & Cupones de descuento & Crear, Editar, Desactivar, Ver & \emph{admin\_comercial} & MinIO (cupones\_descuento) & /backoffice/ofertas/cupones \\
+\bottomrule
+\end{tabular}
+\end{center}
+\vspace{1pt}
+\textbf{Tabla 2.} Los tres Work-Panels de gesti\'on interna presentados en el video.
+
+\subsection{Relaci\'on con el nivel operativo (CU-O)}
+
+\renewcommand{\arraystretch}{1.25}
+\begin{center}
+\setlength\tabcolsep{6pt}
+\begin{tabular}{@{}L{6.5cm} L{10.0cm}@{}}
+\toprule
+\tabla{Work-Panel} & \tabla{Casos de uso que gestionan el mismo dato} \\
+\midrule
+WP-01 Pasajeros & CU-O07 (registrar), CU-O15 (editar), CU-O16 (backoffice) \\
+WP-05 Art\'iculos de ayuda & CU-O97 (buscar), CU-O98 (ver) \\
+WP-06 Cupones & CU-O103 (aplicar cup\'on en checkout) \\
+\bottomrule
+\end{tabular}
+\end{center}
+\vspace{1pt}
+\textbf{Tabla 3.} Correspondencia entre cada Work-Panel y los casos de uso operativos (CU-O) sobre el mismo dato.
+
+\textit{Nota:} el Work-Panel es el panel de administraci\'on interna (CRUD); el CU-O es la acci\'on que el pasajero o el sistema ejecuta sobre el mismo dato desde la interfaz p\'ublica.
+
+% =====================================================================
+\section{Informes Simples}
+
+{\small Un informe simple t\'actico es el mismo listado del nivel operativo, consultado por el jefe departamental con prop\'osito de supervisi\'on, no de gesti\'un registro a registro. Mismo dato, distinto actor y prop\'osito. \par}
+
+\renewcommand{\arraystretch}{1.25}
+\begin{center}
+\setlength\tabcolsep{3pt}
+\begin{tabular}{@{}L{0.9cm} L{2.9cm} L{2.0cm} L{1.9cm} L{1.3cm} L{1.3cm} L{2.7cm} L{2.2cm}@{}}
+\toprule
+\tabla{\#} & \tabla{Informe} & \tabla{Depto.} & \tabla{Actor} & \tabla{CU-O} & \tabla{CU-T} & \tabla{Filtros} & \tabla{Colecci\'on} \\
+\midrule
+IS-08 & Reservas por estado y per\'iodo & Ventas y Reservas & \emph{admin\_ventas}, \emph{agente} & CU-O25 & T16, T17 & Estado, Desde/Hasta, Canal & MinIO (reservas) \\
+\addlinespace
+IS-12 & Notificaciones de disrupci\'on enviadas & Operaciones & \emph{admin\_operaciones} & CU-O31 & -- & Canal, Estado, Per\'iodo & MinIO (disrupciones) \\
+\addlinespace
+IS-20 & Comisiones pendentes de cobro & Finanzas & \emph{admin\_finanzas} & CU-O34/35 & T51 & Estado, Aerol\'inea, Per\'iodo & MinIO (comisiones) \\
+\bottomrule
+\end{tabular}
+\end{center}
+\vspace{1pt}
+\textbf{Tabla 4.} Los tres informes simples t\'acticos presentados en el video.
+
+% =====================================================================
+\section{Pipeline ETL para Dashboards}
+
+\renewcommand{\arraystretch}{1.22}
+\begin{center}
+\setlength\tabcolsep{3pt}
+\begin{tabular}{@{}L{4.6cm} L{1.7cm} L{3.2cm} L{5.6cm}@{}}
+\toprule
+\tabla{DAG ID} & \tabla{Frecuencia} & \tabla{Fuente principal} & \tabla{Tablas ClickHouse} \\
+\midrule
+aerotrack\_travel\_etl\_dims & @hourly & MinIO dims (fact\_vuelo) & agg\_otp\_aerolinea\_mes, agg\_causas\_retraso\_mes, agg\_otp\_dia\_semana \\
+\addlinespace
+aerotrack\_travel\_etl\_comercial & @hourly & MinIO (reservas, items) & agg\_ingresos\_por\_producto\_mes, agg\_conversion\_busqueda\_reserva \\
+\addlinespace
+aerotrack\_travel\_etl\_clientes & @hourly & MinIO (pasajeros, alertas) & agg\_segmentos\_pasajero, agg\_alertas\_conversion \\
+\addlinespace
+aerotrack\_travel\_etl\_operaciones & @hourly & MinIO (disrupciones) & agg\_disrupciones\_aerolinea\_ruta, agg\_satisfaccion\_soporte \\
+\addlinespace
+aerotrack\_travel\_etl\_finanzas & @hourly & MinIO (reservas, comisiones) & agg\_paquetes\_margen\_mes \\
+\bottomrule
+\end{tabular}
+\end{center}
+\vspace{1pt}
+\textbf{Tabla 5.} Descripci\'on de los cinco DAGs de Airflow y las tablas columnar que alimentan.
+
+\subsection{Pipeline de archivos Parquet}
+
+\renewcommand{\arraystretch}{1.22}
+\begin{center}
+\setlength\tabcolsep{6pt}
+\begin{tabular}{@{}L{4.5cm} L{3.0cm} L{8.0cm}@{}}
+\toprule
+\tabla{Carpeta} & \tabla{Fase} & \tabla{Contenido} \\
+\midrule
+datos/parquet/crudo/ & Extracci\'on & Copia directa desde MinIO sin transformar; \textnormal{\{tabla\}\_\{YYYY-MM-DD\_HH\}.parquet} \\
+\addlinespace
+datos/parquet/procesando/ & Transformaci\'on & Agregaciones calculadas; en proceso de escritura \\
+\addlinespace
+datos/parquet/terminado/ & Carga & Listos para INSERT en ClickHouse; respaldo de auditor\'a \\
+\bottomrule
+\end{tabular}
+\end{center}
+\vspace{1pt}
+\textbf{Tabla 6.} Fases del pipeline de archivos Parquet dentro de los DAGs.
+
+% =====================================================================
+\section{Dashboards Compuestos}
+
+\renewcommand{\arraystretch}{1.25}
+\begin{center}
+\setlength\tabcolsep{3pt}
+\begin{tabular}{@{}L{2.1cm} L{2.6cm} L{2.8cm} L{3.0cm} L{2.8cm} L{1.3cm} L{2.4cm}@{}}
+\toprule
+\tabla{Departamento} & \tabla{Dashboard} & \tabla{Objetivo} & \tabla{KPIs} & \tabla{Gr\'aficos} & \tabla{CU-T} & \tabla{Ruta} \\
+\midrule
+Operaciones + Pasajero & DB-04 Diferenciador Anal\'tico & Inteligencia hist\'orica de rutas & OTP \%, mejor aerol\'inea, causa de retraso & Barras, L\'a, Dona & T47-T49 & B\'usqueda de vuelos \\
+\addlinespace
+Ventas y Reservas & DB-01 Rend. Comercial & Control del ciclo de reservas y embudo & Conversi\'on, ASV, abandono & L\'nea, Barras, Dona, Gauge & T08,T16,T42 & dashboards/comercial \\
+\addlinespace
+Operaciones & DB-03 Monitor de Disrupciones & Detecci\'on y comunicaci\'on de disrupciones & Vuelos riesgo, efectividad & L\'nea, Barras, Dona & T19,T21,T39 & dashboards/disrupciones \\
+\bottomrule
+\end{tabular}
+\end{center}
+\vspace{1pt}
+\textbf{Tabla 7.} Los tres dashboards compuestos presentados en el video, organizados por departamento.
+
+\end{document}

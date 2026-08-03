@@ -32,11 +32,15 @@ class ActividadesRepository:
         )
         return resultado["items"]
 
-    async def ciudades_disponibles(self) -> list[str]:
+    async def ciudades_disponibles(self) -> list[dict]:
+        """`[{"ciudad":..., "pais":...}]`, deduplicado — `pais` viene real
+        de Travel Advisor, usado en el selector de origen/destino para
+        mostrar "Ciudad, País" en vez de solo el nombre de la ciudad."""
         resultado = await self._client.list_records(
-            "actividades_catalogo", {"perPage": 200, "fields": "ciudad"}
+            "actividades_catalogo", {"perPage": 200, "fields": "ciudad,pais"}
         )
-        return sorted({item["ciudad"] for item in resultado["items"] if item.get("ciudad")})
+        pares = {(item["ciudad"], item.get("pais") or "") for item in resultado["items"] if item.get("ciudad")}
+        return sorted(({"ciudad": c, "pais": p} for c, p in pares), key=lambda x: x["ciudad"])
 
     # ── actividades_resenas ──────────────────────────────────────────
     async def resenas_de_actividad(self, actividad_id: str) -> list[dict]:

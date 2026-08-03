@@ -11,16 +11,15 @@ async def test_crear_usuario_interno_con_rol_obligatorio(admin_client, pb, rol_a
             "nombre_completo": "Agente de Prueba",
             "email": email,
             "password": "ClaveSegura#123",
-            "tipo_actor": "agente",
             "rol_id": rol_agente["id"],
         },
+        follow_redirects=True,
     )
     assert resp.status_code == 200
     assert "Usuario creado" in resp.text
 
     creado = await pb.get_first("usuarios", f'email="{email}"')
     assert creado is not None
-    assert creado["tipo_actor"] == "agente"
     assert creado["rol_id"] == rol_agente["id"]
 
     await pb.delete_record("usuarios", creado["id"])
@@ -88,3 +87,23 @@ async def test_admin_resetea_password_genera_token_y_audita(admin_client, pb, ro
     assert registro is not None
     assert registro["detalle"]["iniciado_por_admin"] is True
     await pb.delete_record("auditoria", registro["id"])
+
+
+# ── WP-02 (auditoría de WorkPanels, 2026-07-31) — filtros ────────────────
+
+async def test_filtros_usuarios_backoffice(admin_client, rol_agente, usuario_factory):
+    usuario = await usuario_factory(
+        tipo_actor="agente", rol_id=rol_agente["id"], nombre_completo="Zoraida Filtro Usuario"
+    )
+
+    resp = await admin_client.get("/admin/usuarios", params={"nombre": "Zoraida Filtro"})
+    assert resp.status_code == 200
+    assert "Zoraida Filtro Usuario" in resp.text
+
+    resp = await admin_client.get("/admin/usuarios", params={"rol_id": rol_agente["id"]})
+    assert resp.status_code == 200
+    assert "Zoraida Filtro Usuario" in resp.text
+
+    resp = await admin_client.get("/admin/usuarios", params={"estado": "inactivo"})
+    assert resp.status_code == 200
+    assert "Zoraida Filtro Usuario" not in resp.text  # está activo, no debe aparecer en "inactivo"

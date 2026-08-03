@@ -1,0 +1,88 @@
+{% extends "layout_app.html" %}
+{% block title %}Programa de beneficios — AeroTrack Travel{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <h1><span class="heading-icon"><i class="bi bi-award"></i></span>Programa de beneficios</h1>
+    <p>Niveles, puntos por dólar y vencimiento (CU-T24).</p>
+</div>
+
+{% if mensaje %}
+<div class="flash-bar"><div class="flash-success toast-autodismiss"><i class="bi bi-check-circle-fill"></i>{{ mensaje }}</div></div>
+{% endif %}
+
+<div class="at-table-wrapper">
+    <div class="at-table-header">
+        <span class="at-table-title">{{ niveles | length }} nivel(es)</span>
+        <button class="btn-at-primary" data-bs-toggle="modal" data-bs-target="#modalNuevoNivel">
+            <i class="bi bi-plus-lg" aria-hidden="true"></i>Nuevo nivel
+        </button>
+    </div>
+    <div class="at-table-scroll">
+        <table class="at-table">
+            <thead>
+                <tr>
+                    <th>Nivel</th><th>Puntos mínimos</th><th>Puntos por $</th>
+                    <th>Vencimiento (meses)</th><th>Beneficios</th><th class="actions-col">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for n in niveles %}
+                <tr>
+                    <form method="post" action="/backoffice/programa-beneficios/{{ n.id }}">
+                        <td><input type="text" class="form-control-at" style="min-width:140px" name="nombre_nivel" value="{{ n.nombre_nivel }}" required></td>
+                        <td><input type="number" class="form-control-at" style="width:100px" name="puntos_minimos" value="{{ n.puntos_minimos or 0 }}" min="0" step="1" required></td>
+                        <td><input type="number" class="form-control-at" style="width:90px" name="puntos_por_dolar" value="{{ n.puntos_por_dolar or 0 }}" min="0" step="0.1" required></td>
+                        <td><input type="number" class="form-control-at" style="width:100px" name="vencimiento_meses" value="{{ n.vencimiento_meses or 0 }}" min="0" step="1" required></td>
+                        <td><input type="text" class="form-control-at" style="min-width:220px" name="beneficios" value="{{ n.beneficios or '' }}"></td>
+                        <td class="actions-col">
+                            <button type="submit" class="btn-at-ghost" style="padding:6px 14px;font-size:12.5px">Guardar</button>
+                        </td>
+                    </form>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="modal fade" id="modalNuevoNivel" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width:460px">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" style="font-size:16px;font-weight:700">Nuevo nivel</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <form method="post" action="/backoffice/programa-beneficios">
+                <div class="modal-body d-flex flex-column gap-3">
+                    <div>
+                        <label class="form-label-at" for="nn-nombre">Nombre del nivel</label>
+                        <input type="text" class="form-control-at" id="nn-nombre" name="nombre_nivel" required>
+                    </div>
+                    <div class="d-flex gap-3">
+                        <div class="flex-fill">
+                            <label class="form-label-at" for="nn-puntos-min">Puntos mínimos</label>
+                            <input type="number" class="form-control-at" id="nn-puntos-min" name="puntos_minimos" min="0" step="1" required>
+                        </div>
+                        <div class="flex-fill">
+                            <label class="form-label-at" for="nn-puntos-dolar">Puntos por $</label>
+                            <input type="number" class="form-control-at" id="nn-puntos-dolar" name="puntos_por_dolar" min="0" step="0.1" required>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="form-label-at" for="nn-vencimiento">Vencimiento (meses)</label>
+                        <input type="number" class="form-control-at" id="nn-vencimiento" name="vencimiento_meses" min="0" step="1" required>
+                    </div>
+                    <div>
+                        <label class="form-label-at" for="nn-beneficios">Beneficios</label>
+                        <input type="text" class="form-control-at" id="nn-beneficios" name="beneficios">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-at-ghost" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn-at-primary">Crear</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

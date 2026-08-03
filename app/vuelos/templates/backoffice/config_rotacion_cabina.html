@@ -1,0 +1,65 @@
+{% extends "layout_app.html" %}
+{% block title %}Configurar rotación de Google Flights — AeroTrack Travel{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <h1><span class="heading-icon"><i class="bi bi-arrow-repeat"></i></span>Rotación de Google Flights</h1>
+    <p>CU-T41 — qué rutas y clases de cabina se refrescan cada día con precio real de SerpApi. Cuota compartida: 250 búsquedas/mes, cada clase activa cuenta como 1 búsqueda por ruta procesada.</p>
+</div>
+
+{% if error %}
+<div class="flash-bar" role="alert">
+    <div class="flash-error"><i class="bi bi-exclamation-triangle-fill"></i>{{ error }}</div>
+</div>
+{% endif %}
+
+<div class="at-card" style="max-width:560px">
+    <form method="post" action="/backoffice/vuelos/config-rotacion-cabina">
+        <div class="mb-3">
+            <label class="form-label-at" for="rutas_por_corrida">Rutas procesadas por corrida (rotación diaria)</label>
+            <input type="number" class="form-control-at" id="rutas_por_corrida" name="rutas_por_corrida"
+                   value="{{ rutas_por_corrida }}" min="1" step="1" required>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label-at">Clases de cabina activas en la rotación</label>
+            <div class="d-flex flex-column gap-2 mt-2">
+                {% for clase in clases_disponibles %}
+                <label class="d-flex align-items-center gap-2" style="cursor:pointer;font-size:13.5px">
+                    <input type="checkbox" class="perm-toggle" name="clases_activas" value="{{ clase }}"
+                           {% if clase in clases_activas %}checked{% endif %}>
+                    {{ clase|capitalize }}
+                </label>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div style="font-size:12px;color:var(--at-muted);background:var(--slate-50);border-radius:var(--at-r-sm);padding:10px 12px;margin-bottom:16px">
+            <i class="bi bi-calculator me-1"></i>
+            Estimado: {{ rutas_por_corrida }} ruta(s) × <span id="preview-clases">{{ clases_activas|length }}</span> clase(s) × 30 días ≈
+            <strong id="preview-mensual">{{ rutas_por_corrida * (clases_activas|length) * 30 }}</strong> búsquedas/mes (techo real: 250).
+        </div>
+
+        <button type="submit" class="btn-at-primary">
+            <i class="bi bi-check2"></i>Guardar
+        </button>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const rutasInput = document.getElementById('rutas_por_corrida');
+const checks = document.querySelectorAll('input[name="clases_activas"]');
+const previewClases = document.getElementById('preview-clases');
+const previewMensual = document.getElementById('preview-mensual');
+
+function actualizarPreview() {
+    const rutas = parseInt(rutasInput.value) || 0;
+    const clases = document.querySelectorAll('input[name="clases_activas"]:checked').length;
+    previewClases.textContent = clases;
+    previewMensual.textContent = rutas * clases * 30;
+}
+rutasInput.addEventListener('input', actualizarPreview);
+checks.forEach(function (c) { c.addEventListener('change', actualizarPreview); });
+</script>
+{% endblock %}

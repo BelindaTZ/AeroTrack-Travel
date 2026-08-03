@@ -1,0 +1,132 @@
+{% extends "layout_app.html" %}
+{% from "_paginacion.html" import controles %}
+{% block title %}Disrupciones — AeroTrack Travel{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <h1><span class="heading-icon"><i class="bi bi-exclamation-triangle"></i></span>Disrupciones</h1>
+    <p>Operaciones — detección automática (API real, monitor de correo, simulador de riesgo) con corrección manual cuando haga falta.</p>
+</div>
+
+<div class="at-table-wrapper">
+    <div class="at-table-header">
+        <form method="get" data-auto-filtros class="d-flex flex-wrap gap-2 align-items-end">
+            <div>
+                <label class="form-label-at" for="f-estado">Estado</label>
+                <select class="form-control-at" id="f-estado" name="estado" style="min-width:130px">
+                    <option value="">Todos</option>
+                    <option value="activa" {% if filtros.estado == 'activa' %}selected{% endif %}>Activa</option>
+                    <option value="resuelta" {% if filtros.estado == 'resuelta' %}selected{% endif %}>Resuelta</option>
+                </select>
+            </div>
+            <div>
+                <label class="form-label-at" for="f-tipo">Tipo de cambio</label>
+                <select class="form-control-at" id="f-tipo" name="tipo_cambio" style="min-width:160px">
+                    <option value="">Todos</option>
+                    <option value="retraso" {% if filtros.tipo_cambio == 'retraso' %}selected{% endif %}>Retraso</option>
+                    <option value="cancelacion" {% if filtros.tipo_cambio == 'cancelacion' %}selected{% endif %}>Cancelación</option>
+                    <option value="cambio_horario" {% if filtros.tipo_cambio == 'cambio_horario' %}selected{% endif %}>Cambio de horario</option>
+                    <option value="cambio_puerta" {% if filtros.tipo_cambio == 'cambio_puerta' %}selected{% endif %}>Cambio de puerta</option>
+                    <option value="desvio" {% if filtros.tipo_cambio == 'desvio' %}selected{% endif %}>Desvío</option>
+                </select>
+            </div>
+            {% if filtros.estado or filtros.tipo_cambio %}
+            <a href="/backoffice/disrupciones" class="btn-at-ghost">Limpiar</a>
+            {% endif %}
+        </form>
+    </div>
+
+    {% if not pagina.items %}
+    <div class="at-empty">
+        <i class="bi bi-exclamation-triangle at-empty-icon" aria-hidden="true"></i>
+        <strong>Sin disrupciones con estos filtros</strong>
+    </div>
+    {% else %}
+    <div class="at-table-scroll">
+        <table class="at-table">
+            <thead><tr><th>Vuelo</th><th>Tipo</th><th>Fuente</th><th>Detectada</th><th>Estado</th><th class="actions-col">Acciones</th></tr></thead>
+            <tbody>
+            {% for d in pagina.items %}
+            <tr>
+                <td class="at-mono" style="font-weight:600">{{ d.vuelo.numero_vuelo if d.vuelo else "—" }}</td>
+                <td>{{ d.tipo_cambio.replace('_',' ') }}</td>
+                <td>{{ d.fuente_deteccion.replace('_',' ') }}</td>
+                <td class="at-mono" style="font-size:12px">{{ d.fecha_deteccion[:16] if d.fecha_deteccion else "—" }}</td>
+                <td>{% if d.estado == 'activa' %}<span class="badge-sistema">activa</span>{% else %}<span class="badge-sistema" style="opacity:.6">resuelta</span>{% endif %}</td>
+                <td class="actions-col">
+                    <button type="button" class="btn-icon" data-bs-toggle="modal" data-bs-target="#modal-ver-{{ d.id }}" title="Ver">
+                        <i class="bi bi-eye" aria-hidden="true"></i>
+                    </button>
+                    {% if d.estado == 'activa' %}
+                    <button type="button" class="btn-icon" data-bs-toggle="modal" data-bs-target="#modal-resolver-{{ d.id }}" title="Marcar resuelta">
+                        <i class="bi bi-check-lg" aria-hidden="true"></i>
+                    </button>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {{ controles(pagina, request) }}
+    {% endif %}
+</div>
+
+{% for d in pagina.items %}
+<!-- Modal: ver detalle -->
+<div class="modal fade" id="modal-ver-{{ d.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title d-flex align-items-center gap-2" style="font-size:16px;font-weight:700">
+                    <span class="modal-icon-title"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i></span>{{ d.vuelo.numero_vuelo if d.vuelo else "Vuelo" }}
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body d-flex flex-column gap-2" style="font-size:13.5px">
+                {% if d.vuelo %}
+                <div class="d-flex justify-content-between"><span style="color:var(--at-muted)">Ruta</span><span class="at-mono">{{ d.vuelo.origen_codigo }} → {{ d.vuelo.destino_codigo }}</span></div>
+                <div class="d-flex justify-content-between"><span style="color:var(--at-muted)">Fecha de salida</span><span class="at-mono">{{ d.vuelo.fecha_salida }}</span></div>
+                {% endif %}
+                <div class="d-flex justify-content-between"><span style="color:var(--at-muted)">Tipo de cambio</span><span>{{ d.tipo_cambio.replace('_',' ') }}</span></div>
+                <div class="d-flex justify-content-between"><span style="color:var(--at-muted)">Fuente de detección</span><span>{{ d.fuente_deteccion.replace('_',' ') }}</span></div>
+                <div class="d-flex justify-content-between"><span style="color:var(--at-muted)">Detectada</span><span class="at-mono">{{ d.fecha_deteccion[:16] if d.fecha_deteccion else "—" }}</span></div>
+                <div class="d-flex justify-content-between"><span style="color:var(--at-muted)">Estado</span><span>{% if d.estado == 'activa' %}<span class="badge-sistema">activa</span>{% else %}<span class="badge-sistema" style="opacity:.6">resuelta</span>{% endif %}</span></div>
+                <hr class="my-1">
+                <div>
+                    <div style="color:var(--at-muted);margin-bottom:4px">Detalle</div>
+                    <p style="margin:0;white-space:pre-wrap">{{ d.detalle or "—" }}</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-at-ghost" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if d.estado == 'activa' %}
+<!-- Modal: confirmar resolución manual -->
+<div class="modal fade" id="modal-resolver-{{ d.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width:420px">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title d-flex align-items-center gap-2" style="font-size:16px;font-weight:700">
+                    <span class="modal-icon-title"><i class="bi bi-check-lg" aria-hidden="true"></i></span>Marcar resuelta
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body" style="font-size:13.5px">
+                ¿Marcar la disrupción de <strong class="at-mono">{{ d.vuelo.numero_vuelo if d.vuelo else "este vuelo" }}</strong> como resuelta manualmente? Úsalo cuando se resolvió por fuera del sistema (contacto directo con la aerolínea).
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-at-ghost" data-bs-dismiss="modal">Cancelar</button>
+                <form method="post" action="/backoffice/disrupciones/{{ d.id }}/resolver" class="m-0">
+                    <button type="submit" class="btn-at-primary"><i class="bi bi-check-lg"></i> Marcar resuelta</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endfor %}
+{% endblock %}

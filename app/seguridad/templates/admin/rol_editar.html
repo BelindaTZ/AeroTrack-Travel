@@ -6,60 +6,140 @@
 </a>
 <div class="page-heading">
     <h1><span class="heading-icon"><i class="bi bi-sliders"></i></span>Editar permisos: {{ rol.nombre }}</h1>
-    <p>Nivel 1 autoriza módulos completos. Nivel 2, dentro de un módulo ya autorizado, restringe a tablas
-       específicas — nunca puede otorgar acceso a un módulo que Nivel 1 no autorizó.</p>
+    <p>Nivel 1 autoriza módulos completos, acción por acción. Nivel 2, dentro de un módulo ya autorizado, ajusta esas
+       mismas acciones tabla por tabla — nunca puede otorgar en una tabla una acción que Nivel 1 no autorizó para el
+       módulo (RN-SEG-009).</p>
 </div>
 
 <div id="mensaje-guardado" class="flash-bar d-none"></div>
 
 <form id="form-permisos">
-    <input type="hidden" name="nombre" value="{{ rol.nombre }}">
-    <input type="hidden" name="descripcion" value="{{ rol.descripcion or '' }}">
-
-    <div class="d-flex flex-column gap-3">
-    {% for modulo in modulos %}
-    {% set permisos_modulo = permisos | selectattr('modulo_id', 'equalto', modulo.id) | list %}
-    {% set tablas_modulo = modulo_tablas | selectattr('modulo_id', 'equalto', modulo.id) | list %}
-    <div class="at-card">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <strong style="font-size:14.5px">{{ modulo.nombre_display }}</strong>
-            <span class="badge-sistema" style="background:var(--at-running-bg);color:var(--at-primary)">
-                {% set tablas_restringidas = tablas_actuales | selectattr('0', 'equalto', modulo.id) | list %}
-                {% if tablas_restringidas %}Nivel 2 activo: {{ tablas_restringidas | length }} tabla(s){% else %}Sin restricción de Nivel 2{% endif %}
-            </span>
-        </div>
-
-        <div class="mb-2">
-            <span class="form-label-at">Nivel 1 — acciones autorizadas</span>
-            <div class="d-flex flex-wrap gap-3 mt-1">
-                {% for permiso in permisos_modulo %}
-                <label class="d-flex align-items-center" style="font-size:13.5px;cursor:pointer">
-                    <input class="perm-toggle" type="checkbox" name="permiso_id" value="{{ permiso.id }}"
-                           {% if permiso.id in permiso_ids_actuales %}checked{% endif %}>
-                    {{ permiso.accion }}
-                </label>
-                {% endfor %}
+    <div class="at-card mb-3">
+        <div class="row g-3">
+            <div class="col-12 col-md-4">
+                <label class="form-label-at" for="rol-nombre">Nombre</label>
+                <input type="text" class="form-control-at" id="rol-nombre" name="nombre" value="{{ rol.nombre }}"
+                       {% if rol.es_sistema %}disabled{% endif %} required>
+                {% if rol.es_sistema %}
+                <div style="font-size:11.5px;color:var(--at-sub);margin-top:4px">Rol de sistema — el nombre no se puede cambiar (se usa internamente).</div>
+                {% endif %}
+            </div>
+            <div class="col-12 col-md-8">
+                <label class="form-label-at" for="rol-descripcion">Descripción</label>
+                <input type="text" class="form-control-at" id="rol-descripcion" name="descripcion" value="{{ rol.descripcion or '' }}">
             </div>
         </div>
-        {% if tablas_modulo %}
-        <div>
-            <span class="form-label-at">Nivel 2 — restringir a tablas específicas (opcional)</span>
-            <div class="d-flex flex-wrap gap-3 mt-1">
-                {% for mt in tablas_modulo %}
-                <label class="d-flex align-items-center" style="font-size:13.5px;cursor:pointer">
-                    <input class="perm-toggle" type="checkbox" name="tabla_nivel2" value="{{ modulo.id }}::{{ mt.tabla }}"
-                           {% if (modulo.id, mt.tabla) in tablas_actuales %}checked{% endif %}>
-                    {{ mt.tabla }}
-                </label>
-                {% endfor %}
-            </div>
+    </div>
+
+    <!-- ── NIVEL 1 — MÓDULOS ─────────────────────────────────────── -->
+    <div class="d-flex justify-content-between align-items-end gap-3 mb-2 flex-wrap">
+        <strong style="font-size:14.5px">Nivel 1 — Acceso a módulos</strong>
+        <span style="font-size:12.5px;color:var(--at-muted)">Casilla atenuada = la acción no existe en ese módulo.</span>
+    </div>
+    <div class="at-table-wrapper mb-4">
+        <div class="perm-matrix-scroll">
+            <table class="perm-matrix" id="tabla-nivel1">
+                <thead>
+                    <tr>
+                        <th class="perm-matrix-col-nombre">Módulo</th>
+                        {% for accion in acciones_nivel1 %}<th>{{ accion|capitalize }}</th>{% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for modulo in modulos %}
+                    {% set permisos_modulo = permisos | selectattr('modulo_id', 'equalto', modulo.id) | list %}
+                    <tr data-modulo="{{ modulo.id }}">
+                        <td class="perm-matrix-col-nombre">{{ modulo.nombre_display }}</td>
+                        {% for accion in acciones_nivel1 %}
+                        {% set match = permisos_modulo | selectattr('accion', 'equalto', accion) | list %}
+                        <td>
+                            {% if match %}
+                            <input class="perm-toggle" type="checkbox" name="permiso_id" value="{{ match[0].id }}"
+                                   data-modulo="{{ modulo.id }}" data-accion="{{ accion }}"
+                                   {% if match[0].id in permiso_ids_actuales %}checked{% endif %}>
+                            {% else %}
+                            <span class="perm-na">—</span>
+                            {% endif %}
+                        </td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
+    </div>
+
+    <!-- ── NIVEL 2 — TABLAS ──────────────────────────────────────── -->
+    <div class="d-flex justify-content-between align-items-end gap-3 mb-2 flex-wrap">
+        <strong style="font-size:14.5px">Nivel 2 — Permisos por tabla</strong>
+        <span style="font-size:12.5px;color:var(--at-muted)">Solo ver/crear/editar/eliminar — cada columna se bloquea si esa acción no está en Nivel 1.</span>
+    </div>
+    <div class="at-table-wrapper mb-2">
+        {% for modulo in modulos %}
+        {% set tablas_modulo = modulo_tablas | selectattr('modulo_id', 'equalto', modulo.id) | list %}
+        {# Con 1 sola tabla, "restringir a algunas tablas" no tiene efecto posible
+           (0 filas explícitas = igual a "sin restricción"): se omite el control
+           en vez de mostrar algo que nunca puede bloquear nada. #}
+        {% if tablas_modulo | length > 1 %}
+        {% set permisos_modulo = permisos | selectattr('modulo_id', 'equalto', modulo.id) | list %}
+        <details class="perm-grupo" data-modulo="{{ modulo.id }}">
+            <summary>
+                <i class="bi bi-chevron-right perm-chev"></i>
+                <span class="perm-grupo-nombre">{{ modulo.nombre_display }}</span>
+                <span class="perm-grupo-count">{{ tablas_modulo | length }} tabla(s)</span>
+                <span class="badge-status" data-role="badge-grupo"></span>
+            </summary>
+            <div class="perm-grupo-body">
+                <table class="perm-matrix perm-matrix-inner">
+                    <thead>
+                        <tr>
+                            <th class="perm-matrix-col-nombre">Tabla</th>
+                            {% for accion in acciones_nivel2 %}<th>{{ accion|capitalize }}</th>{% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for mt in tablas_modulo %}
+                        <tr data-tabla="{{ mt.tabla }}">
+                            <td class="perm-matrix-col-nombre">{{ mt.tabla }}</td>
+                            {% for accion in acciones_nivel2 %}
+                            {% set existe_en_nivel1 = permisos_modulo | selectattr('accion', 'equalto', accion) | list %}
+                            <td>
+                                {% if existe_en_nivel1 %}
+                                {% if (modulo.id, accion) in columnas_restringidas_nivel2 %}
+                                <input class="perm-toggle" type="checkbox" name="tabla_nivel2"
+                                       value="{{ modulo.id }}::{{ mt.tabla }}::{{ accion }}"
+                                       data-modulo="{{ modulo.id }}" data-accion="{{ accion }}"
+                                       {% if (modulo.id, mt.tabla, accion) in tablas_actuales %}checked{% endif %}>
+                                {% else %}
+                                {# Sin restricción explícita: hereda Nivel 1 completo — se muestra
+                                   tildado por defecto pero SIN `name`, así no viaja en el submit
+                                   hasta que se toque (ver activarColumnaHeredada() más abajo). #}
+                                <input class="perm-toggle perm-heredado" type="checkbox"
+                                       data-modulo="{{ modulo.id }}" data-accion="{{ accion }}"
+                                       data-pending-value="{{ modulo.id }}::{{ mt.tabla }}::{{ accion }}"
+                                       {% if existe_en_nivel1[0].id in permiso_ids_actuales %}checked{% endif %}>
+                                {% endif %}
+                                {% else %}
+                                <span class="perm-na">—</span>
+                                {% endif %}
+                            </td>
+                            {% endfor %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </details>
         {% endif %}
+        {% endfor %}
     </div>
-    {% endfor %}
-    </div>
+    <p style="font-size:12px;color:var(--at-muted);margin:0 0 24px">
+        Regla RN-SEG-009, extendida a nivel de tabla — una casilla de tabla solo puede activarse si esa misma acción
+        ya está autorizada en Nivel 1 para el módulo. Si ninguna tabla de un módulo tiene casillas marcadas, aplica
+        el permiso general de Nivel 1 a todas.
+    </p>
 
-    <div class="d-flex gap-2 mt-4">
+    <div class="d-flex gap-2 mt-2">
         <button type="submit" class="btn-at-primary"><i class="bi bi-check2"></i>Guardar matriz de permisos</button>
         <a href="/admin/roles" class="btn-at-ghost">Cancelar</a>
     </div>
@@ -68,6 +148,76 @@
 
 {% block scripts %}
 <script>
+(function () {
+    const tabla1 = document.getElementById('tabla-nivel1');
+
+    function accionesActivasPorModulo(moduloId) {
+        const activas = new Set();
+        tabla1.querySelectorAll(`tr[data-modulo="${moduloId}"] input.perm-toggle`).forEach((c) => {
+            if (c.checked) activas.add(c.dataset.accion);
+        });
+        return activas;
+    }
+
+    function actualizarGrupo(grupo) {
+        const moduloId = grupo.dataset.modulo;
+        const activas = accionesActivasPorModulo(moduloId);
+        const badge = grupo.querySelector('[data-role="badge-grupo"]');
+        const checks = [...grupo.querySelectorAll('input.perm-toggle')];
+
+        checks.forEach((c) => { c.disabled = !activas.has(c.dataset.accion); });
+
+        if (activas.size === 0) {
+            grupo.open = false;
+            badge.className = 'badge-status failed';
+            badge.textContent = 'Bloqueado — sin Nivel 1';
+        } else {
+            // Las casillas ".perm-heredado" todavía sin tocar muestran el
+            // acceso heredado de Nivel 1 (por eso aparecen tildadas), pero no
+            // cuentan como restricción real hasta que el usuario las activa.
+            const activos = checks.filter((c) => c.checked && !c.disabled && !c.classList.contains('perm-heredado')).length;
+            if (activos > 0) {
+                badge.className = 'badge-status running';
+                badge.textContent = `Nivel 2 activo: ${activos} permiso(s)`;
+            } else {
+                badge.className = 'badge-status pending';
+                badge.textContent = 'Sin restricción de Nivel 2';
+            }
+        }
+    }
+
+    function activarColumnaHeredada(grupo, accion) {
+        // Primer toque sobre una columna heredada: pasa de "vista informativa
+        // sin name" a casillas reales que sí viajan en el submit, con el
+        // estado tildado actual de TODAS las tablas de esa columna (no solo
+        // la que se tocó) — así se guarda la restricción explícita completa.
+        grupo.querySelectorAll(`input.perm-toggle.perm-heredado[data-accion="${accion}"]`).forEach((c) => {
+            c.classList.remove('perm-heredado');
+            c.name = 'tabla_nivel2';
+            c.value = c.dataset.pendingValue;
+        });
+    }
+
+    function actualizarTodosLosGrupos() {
+        document.querySelectorAll('.perm-grupo').forEach(actualizarGrupo);
+    }
+
+    tabla1.addEventListener('change', (ev) => {
+        if (ev.target.matches('input.perm-toggle')) actualizarTodosLosGrupos();
+    });
+    document.querySelectorAll('.perm-grupo').forEach((grupo) => {
+        grupo.addEventListener('change', (ev) => {
+            if (!ev.target.matches('input.perm-toggle')) return;
+            if (ev.target.classList.contains('perm-heredado')) {
+                activarColumnaHeredada(grupo, ev.target.dataset.accion);
+            }
+            actualizarGrupo(grupo);
+        });
+    });
+
+    actualizarTodosLosGrupos();
+})();
+
 document.getElementById('form-permisos').addEventListener('submit', async function (ev) {
     ev.preventDefault();
     const body = new URLSearchParams(new FormData(ev.target));
@@ -77,7 +227,7 @@ document.getElementById('form-permisos').addEventListener('submit', async functi
     const mensaje = document.getElementById('mensaje-guardado');
     mensaje.classList.remove('d-none');
     if (resp.ok) {
-        mensaje.innerHTML = '<div class="flash-success"><i class="bi bi-check-circle-fill"></i>Matriz de permisos guardada.</div>';
+        mensaje.innerHTML = '<div class="flash-success"><i class="bi bi-check-circle-fill"></i>Cambios guardados.</div>';
     } else {
         const data = await resp.json();
         mensaje.innerHTML = '<div class="flash-error"><i class="bi bi-exclamation-triangle-fill"></i>' + data.detail + '</div>';

@@ -42,7 +42,9 @@
                         <span class="sep">·</span>
                         <span>{{ vuelo.hora_salida_programada }}</span>
                         <span class="sep">·</span>
-                        <span class="flight-duration-badge">Tarifa {{ nivel.nombre }}</span>
+                        <span class="flight-duration-badge">
+                            Tarifa {{ nivel.nombre }}{% if tarifa.clase_cabina and tarifa.clase_cabina != 'economy' %} · {{ tarifa.clase_cabina|capitalize }}{% endif %}
+                        </span>
                     </div>
                 </div>
             </div>
@@ -52,6 +54,37 @@
         <form method="post" action="/reservas" id="form-checkout">
             <input type="hidden" name="tarifa_id" value="{{ tarifa.id }}">
             <input type="hidden" name="precio_esperado" value="{{ tarifa.precio_final }}">
+            <input type="hidden" name="asiento_id" id="input-asiento-id" value="">
+
+            <div class="at-card mb-4">
+                <div class="d-flex align-items-center justify-content-between mb-3">
+                    <h2 style="font-size:15px;font-weight:700;margin:0;letter-spacing:-.01em">
+                        <i class="bi bi-grid-3x3 me-2" style="color:var(--at-primary)"></i>
+                        Elige tu asiento
+                    </h2>
+                    <span id="asiento-seleccionado-label" style="font-size:12.5px;color:var(--at-muted);font-weight:600"></span>
+                </div>
+
+                {% if not seleccion_estandar_habilitada %}
+                <p style="font-size:12px;color:var(--at-muted);background:var(--slate-50);border-radius:var(--at-r-sm);padding:8px 11px;margin-bottom:12px">
+                    <i class="bi bi-info-circle me-1"></i>
+                    Con tarifa {{ nivel.nombre }}, los asientos estándar se habilitan cerca del check-in.
+                    Puedes elegir un asiento premium ahora pagando el recargo.
+                </p>
+                {% endif %}
+
+                <div id="mapa-asientos-estado" style="font-size:13px;color:var(--at-muted);padding:20px 0;text-align:center">
+                    Cargando mapa de asientos…
+                </div>
+                <div id="mapa-asientos" class="d-none"></div>
+
+                <div class="d-flex flex-wrap gap-3 mt-3" style="font-size:11.5px;color:var(--at-muted)">
+                    <span><span class="asiento-leyenda asiento-leyenda-libre"></span> Estándar</span>
+                    <span><span class="asiento-leyenda asiento-leyenda-premium"></span> Premium (+recargo)</span>
+                    <span><span class="asiento-leyenda asiento-leyenda-ocupado"></span> Ocupado</span>
+                    <span><span class="asiento-leyenda asiento-leyenda-elegido"></span> Tu elección</span>
+                </div>
+            </div>
 
             <div class="at-card">
                 <h2 style="font-size:15px;font-weight:700;margin-bottom:14px;letter-spacing:-.01em">
@@ -145,6 +178,8 @@
 {% block scripts %}
 <script>
 const precioBase = {{ tarifa.precio_final }};
+const seleccionEstandarHabilitada = {{ 'true' if seleccion_estandar_habilitada else 'false' }};
+let asientoElegido = null; // {id, fila, columna, es_premium, recargo}
 
 function actualizarResumen() {
     let total = precioBase;
@@ -152,15 +187,20 @@ function actualizarResumen() {
     document.querySelectorAll('input[name="extras"]:checked').forEach(function (el) {
         const precio = parseFloat(el.dataset.precio);
         total += precio;
-        const label = el.closest('label').querySelector('span:last-child, span[style]');
-        const desc  = el.closest('label').querySelector('span > span:last-of-type') ||
-                      el.parentElement.textContent.trim();
         filas.push(
             `<div class="d-flex justify-content-between align-items-center mb-2" style="font-size:13.5px">` +
             `<span style="color:var(--at-muted)">${el.closest('label').querySelectorAll('span')[1]?.textContent?.trim() || 'Extra'}</span>` +
             `<span class="at-mono">+$${precio.toFixed(2)}</span></div>`
         );
     });
+    if (asientoElegido && asientoElegido.es_premium) {
+        total += asientoElegido.recargo;
+        filas.push(
+            `<div class="d-flex justify-content-between align-items-center mb-2" style="font-size:13.5px">` +
+            `<span style="color:var(--at-muted)">Asiento premium ${asientoElegido.fila}${asientoElegido.columna}</span>` +
+            `<span class="at-mono">+$${asientoElegido.recargo.toFixed(2)}</span></div>`
+        );
+    }
     document.getElementById('resumen-extras').innerHTML = filas.join('');
     document.getElementById('resumen-total').textContent = '$' + total.toFixed(2);
 }
@@ -168,6 +208,75 @@ function actualizarResumen() {
 document.querySelectorAll('input[name="extras"]').forEach(function (el) {
     el.addEventListener('change', actualizarResumen);
 });
+
+/* Mapa de asientos (RF-VUE-011/012) */
+function elegirAsiento(asiento, btn) {
+    document.querySelectorAll('.asiento-btn.elegido').forEach(function (b) { b.classList.remove('elegido'); });
+    if (asientoElegido && asientoElegido.id === asiento.id) {
+        // clic sobre el mismo asiento ya elegido: deseleccionar
+        asientoElegido = null;
+        document.getElementById('input-asiento-id').value = '';
+        document.getElementById('asiento-seleccionado-label').textContent = '';
+        actualizarResumen();
+        return;
+    }
+    asientoElegido = asiento;
+    btn.classList.add('elegido');
+    document.getElementById('input-asiento-id').value = asiento.id;
+    document.getElementById('asiento-seleccionado-label').textContent =
+        'Asiento ' + asiento.fila + asiento.columna + (asiento.es_premium ? ' (premium)' : '');
+    actualizarResumen();
+}
+
+fetch('/vuelos/{{ vuelo.id }}/asientos')
+    .then(function (r) { return r.json(); })
+    .then(function (asientos) {
+        const porFila = {};
+        asientos.forEach(function (a) {
+            (porFila[a.fila] = porFila[a.fila] || []).push(a);
+        });
+        const cont = document.getElementById('mapa-asientos');
+        Object.keys(porFila).sort(function (a, b) { return a - b; }).forEach(function (fila) {
+            const filaEl = document.createElement('div');
+            filaEl.className = 'mapa-asientos-fila';
+            const num = document.createElement('span');
+            num.className = 'mapa-asientos-fila-num';
+            num.textContent = fila;
+            filaEl.appendChild(num);
+            porFila[fila].sort(function (a, b) { return a.columna.localeCompare(b.columna); }).forEach(function (a) {
+                if (a.columna === 'D') {
+                    const pasillo = document.createElement('span');
+                    pasillo.className = 'mapa-asientos-pasillo';
+                    filaEl.appendChild(pasillo);
+                }
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'asiento-btn';
+                btn.textContent = a.columna;
+                btn.title = 'Asiento ' + a.fila + a.columna + (a.es_premium ? ' · Premium +$' + a.recargo.toFixed(2) : ' · Estándar');
+                const bloqueadoPorVentana = !a.es_premium && !seleccionEstandarHabilitada;
+                if (!a.disponible) {
+                    btn.classList.add('ocupado');
+                    btn.disabled = true;
+                } else if (bloqueadoPorVentana) {
+                    btn.classList.add('bloqueado');
+                    btn.disabled = true;
+                    btn.title += ' · Se habilita cerca del check-in';
+                } else {
+                    if (a.es_premium) btn.classList.add('premium');
+                    btn.addEventListener('click', function () { elegirAsiento(a, btn); });
+                }
+                filaEl.appendChild(btn);
+            });
+            cont.appendChild(filaEl);
+        });
+        document.getElementById('mapa-asientos-estado').classList.add('d-none');
+        cont.classList.remove('d-none');
+    })
+    .catch(function () {
+        document.getElementById('mapa-asientos-estado').textContent =
+            'No se pudo cargar el mapa de asientos — puedes reservar igual y elegir asiento más tarde.';
+    });
 
 /* Loading en submit */
 var form = document.getElementById('form-checkout');

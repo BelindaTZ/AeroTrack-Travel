@@ -1,21 +1,46 @@
 {% extends "layout_app.html" %}
+{% from "_paginacion.html" import controles %}
+{% from "_informe_header.html" import header %}
 {% block title %}Casos escalados — AeroTrack Travel{% endblock %}
 {% block content %}
-<div class="page-heading">
-    <h1><span class="heading-icon"><i class="bi bi-headset"></i></span>Casos escalados</h1>
-    <p>La respuesta al pasajero ocurre en Gmail (hilo real vinculado) — aquí solo se da seguimiento al estado.</p>
-</div>
+{{ header(
+    "bi-headset",
+    "Bandeja de tickets de soporte escalados",
+    "La respuesta al pasajero ocurre en Gmail (hilo real vinculado) — aquí solo se da seguimiento al estado y antigüedad.",
+    request,
+    cu_ref="CU-T36/T46",
+    export_path="/backoffice/ayuda/casos/exportar"
+) }}
 
-<div class="filter-bar mb-3">
-    <a href="/backoffice/ayuda/casos" class="btn-at-ghost {% if not estado_filtro %}active{% endif %}">Todos</a>
+<div class="filter-bar mb-2">
+    <a href="/backoffice/ayuda/casos" class="btn-at-ghost {% if not estado_filtro and not mi_bandeja %}active{% endif %}">Todos</a>
     <a href="/backoffice/ayuda/casos?estado=abierto" class="btn-at-ghost {% if estado_filtro == 'abierto' %}active{% endif %}">Abiertos</a>
     <a href="/backoffice/ayuda/casos?estado=en_proceso" class="btn-at-ghost {% if estado_filtro == 'en_proceso' %}active{% endif %}">En proceso</a>
     <a href="/backoffice/ayuda/casos?estado=resuelto" class="btn-at-ghost {% if estado_filtro == 'resuelto' %}active{% endif %}">Resueltos</a>
+    <a href="/backoffice/ayuda/casos?mi_bandeja=true" class="btn-at-ghost {% if mi_bandeja %}active{% endif %}">
+        <i class="bi bi-person-check"></i>Mi bandeja
+    </a>
 </div>
 
-{% if casos %}
+<form method="get" action="/backoffice/ayuda/casos" data-auto-filtros class="d-flex flex-wrap gap-3 align-items-end mb-3">
+    <input type="hidden" name="estado" value="{{ estado_filtro }}">
+    <input type="hidden" name="mi_bandeja" value="{{ 'true' if mi_bandeja else '' }}">
+    <div>
+        <label class="form-label-at" for="f-desde">Escalado desde</label>
+        <input type="date" class="form-control-at" id="f-desde" name="desde" value="{{ filtros.desde }}">
+    </div>
+    <div>
+        <label class="form-label-at" for="f-hasta">Escalado hasta</label>
+        <input type="date" class="form-control-at" id="f-hasta" name="hasta" value="{{ filtros.hasta }}">
+    </div>
+    {% if filtros.desde or filtros.hasta %}
+    <a href="/backoffice/ayuda/casos?{{ ('estado=' ~ estado_filtro) if estado_filtro else '' }}{{ '&mi_bandeja=true' if mi_bandeja else '' }}" class="btn-at-ghost">Limpiar período</a>
+    {% endif %}
+</form>
+
+{% if pagina.items %}
 <div class="d-flex flex-column gap-2">
-    {% for c in casos %}
+    {% for c in pagina.items %}
     <div class="at-card">
         <div class="d-flex align-items-start justify-content-between gap-3 flex-wrap">
             <div>
@@ -27,6 +52,11 @@
             </div>
             <div class="text-end">
                 <span class="badge-sistema">{{ c.estado.replace('_',' ') }}</span>
+                {% if c.dias_abierto is not none %}
+                <div style="font-size:11.5px;color:var(--at-muted);margin-top:4px">
+                    {{ c.dias_abierto }} día{{ 's' if c.dias_abierto != 1 else '' }} {{ 'abierto' if c.estado != 'resuelto' else 'hasta resolver' }}
+                </div>
+                {% endif %}
                 {% if c.gmail_thread_id %}
                 <div style="font-size:11px;color:var(--at-sub);margin-top:4px">
                     <i class="bi bi-envelope-check"></i> hilo vinculado
@@ -38,18 +68,85 @@
                 {% endif %}
             </div>
         </div>
-        {% if c.estado != 'resuelto' %}
-        <form method="post" action="/backoffice/ayuda/casos/{{ c.id }}/resolver" class="mt-3 m-0">
-            <button type="submit" class="btn-at-ghost btn-sm"><i class="bi bi-check-lg"></i> Marcar resuelto</button>
-        </form>
-        {% endif %}
+        <div class="mt-3 d-flex gap-2">
+            <button type="button" class="btn-at-ghost btn-sm" data-bs-toggle="modal" data-bs-target="#modal-ver-{{ c.id }}">
+                <i class="bi bi-eye"></i> Ver detalle
+            </button>
+            {% if c.estado != 'resuelto' %}
+            <button type="button" class="btn-at-ghost btn-sm" data-bs-toggle="modal" data-bs-target="#modal-resolver-{{ c.id }}">
+                <i class="bi bi-check-lg"></i> Marcar resuelto
+            </button>
+            {% endif %}
+        </div>
     </div>
     {% endfor %}
 </div>
+{{ controles(pagina, request) }}
 {% else %}
 <div class="at-empty">
     <i class="bi bi-headset at-empty-icon" aria-hidden="true"></i>
     <strong>Sin casos escalados{% if estado_filtro %} en este estado{% endif %}</strong>
 </div>
 {% endif %}
+
+{% for c in pagina.items %}
+<!-- Modal: ver detalle -->
+<div class="modal fade" id="modal-ver-{{ c.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title d-flex align-items-center gap-2" style="font-size:16px;font-weight:700">
+                    <span class="modal-icon-title"><i class="bi bi-headset" aria-hidden="true"></i></span>{{ c.asunto }}
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body d-flex flex-column gap-2" style="font-size:13.5px">
+                <div class="d-flex justify-content-between"><span style="color:var(--at-muted)">Pasajero</span><span>{{ c.pasajero_nombre or "—" }}</span></div>
+                <div class="d-flex justify-content-between"><span style="color:var(--at-muted)">Email</span><span class="at-mono">{{ c.pasajero_email or "—" }}</span></div>
+                <div class="d-flex justify-content-between"><span style="color:var(--at-muted)">Teléfono</span><span class="at-mono">{{ c.pasajero_telefono or "—" }}</span></div>
+                <div class="d-flex justify-content-between"><span style="color:var(--at-muted)">Escalado</span><span class="at-mono">{{ c.fecha_creacion[:10] }}</span></div>
+                <div class="d-flex justify-content-between"><span style="color:var(--at-muted)">Estado</span><span class="badge-sistema">{{ c.estado.replace('_',' ') }}</span></div>
+                <div class="d-flex justify-content-between"><span style="color:var(--at-muted)">Hilo Gmail</span><span>{% if c.gmail_thread_id %}<i class="bi bi-envelope-check"></i> vinculado{% else %}<i class="bi bi-envelope-exclamation" style="color:var(--red-600)"></i> sin hilo{% endif %}</span></div>
+                {% if c.estado == 'resuelto' %}
+                <div class="d-flex justify-content-between"><span style="color:var(--at-muted)">Resuelto</span><span class="at-mono">{{ c.fecha_resolucion[:10] if c.fecha_resolucion else "—" }}</span></div>
+                <div class="d-flex justify-content-between"><span style="color:var(--at-muted)">Resuelto por</span><span>{{ c.agente_nombre or "—" }}</span></div>
+                {% endif %}
+                <hr class="my-1">
+                <div>
+                    <div style="color:var(--at-muted);margin-bottom:4px">Mensaje completo</div>
+                    <p style="margin:0;white-space:pre-wrap">{{ c.mensaje }}</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-at-ghost" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if c.estado != 'resuelto' %}
+<!-- Modal: confirmar resolución -->
+<div class="modal fade" id="modal-resolver-{{ c.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width:420px">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title d-flex align-items-center gap-2" style="font-size:16px;font-weight:700">
+                    <span class="modal-icon-title"><i class="bi bi-check-lg" aria-hidden="true"></i></span>Marcar resuelto
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body" style="font-size:13.5px">
+                ¿Marcar <strong>{{ c.asunto }}</strong> como resuelto? Esta acción no se puede revertir desde aquí.
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-at-ghost" data-bs-dismiss="modal">Cancelar</button>
+                <form method="post" action="/backoffice/ayuda/casos/{{ c.id }}/resolver" class="m-0">
+                    <button type="submit" class="btn-at-primary"><i class="bi bi-check-lg"></i> Marcar resuelto</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endfor %}
 {% endblock %}

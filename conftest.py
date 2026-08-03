@@ -13,6 +13,9 @@ import pytest
 from httpx import ASGITransport
 
 from app.main import app
+from app.pasajeros.repositories.pasajeros_repo import PasajerosRepository
+from app.reservas.repositories.reservas_repo import ReservasRepository
+from app.shared import minio_catalog_reader, minio_operational_client
 from app.shared.pocketbase_client import get_pocketbase_client
 
 DEFAULT_PASSWORD = "ClaveSegura#123"
@@ -42,13 +45,24 @@ async def usuario_factory(pb):
         password: str = DEFAULT_PASSWORD,
         **extra,
     ) -> dict:
+        # `usuarios.rol_id` es obligatorio para los 3 tipos de actor (migración
+        # 2026-07-27) — si el llamador no pasa uno explícito y es pasajero, se
+        # usa el rol de sistema "Pasajero" sembrado por seed_seguridad.py,
+        # igual que en producción (autoregistro / alta manual).
+        if rol_id is None and tipo_actor == "pasajero" and "rol_id" not in extra:
+            rol_pasajero = await pb.get_first("roles", 'nombre="Pasajero"')
+            assert rol_pasajero is not None, "seed_seguridad.py debe correrse antes de la suite de tests"
+            rol_id = rol_pasajero["id"]
+
         email = f"test.{uuid.uuid4().hex[:10]}@aerotrack.test"
+        # `usuarios` ya no tiene columna `tipo_actor` (migración 2026-07-27,
+        # ver roles.tipo_panel) — el parámetro de arriba solo se usa para
+        # resolver un `rol_id` por default cuando no se pasa uno explícito.
         data = {
             "email": email,
             "password": password,
             "passwordConfirm": password,
             "nombre_completo": "Usuario de Prueba",
-            "tipo_actor": tipo_actor,
             "activo": activo,
             "emailVisibility": True,
             "verified": True,
@@ -110,7 +124,13 @@ async def agente_client(client, usuario_factory, rol_agente):
 
 @pytest.fixture
 async def vuelo_factory(pb):
-    """Crea vuelos_catalogo desechables para pruebas; los borra al finalizar."""
+    """Crea vuelos_catalogo desechables para pruebas; los borra al finalizar.
+
+    `vuelos_catalogo` es STAGING (ver plan de migración) — las búsquedas
+    (`router_busqueda.py`) leen del snapshot NDJSON en MinIO, no de
+    PocketBase directo. Por eso cada creación/borrado republica la
+    colección para que el vuelo de prueba sea visible de inmediato en vez
+    de esperar al DAG diario (`aerotrack_travel_publicar_catalogo`)."""
     creados: list[str] = []
 
     async def _crear(estado: str = "programado", generado_por: str = "sistema", **extra) -> dict:
@@ -131,6 +151,7 @@ async def vuelo_factory(pb):
         data.update(extra)
         vuelo = await pb.create_record("vuelos_catalogo", data)
         creados.append(vuelo["id"])
+        await minio_catalog_reader.publicar_y_refrescar("vuelos_catalogo")
         return vuelo
 
     yield _crear
@@ -140,11 +161,14 @@ async def vuelo_factory(pb):
             await pb.delete_record("vuelos_catalogo", vuelo_id)
         except Exception:
             pass
+    if creados:
+        await minio_catalog_reader.publicar_y_refrescar("vuelos_catalogo")
 
 
 @pytest.fixture
 async def tarifa_factory(pb):
-    """Crea tarifas_vuelo desechables para pruebas; las borra al finalizar."""
+    """Crea tarifas_vuelo desechables para pruebas; las borra al finalizar.
+    Mismo motivo de republicación que `vuelo_factory` — ver ahí."""
     creadas: list[str] = []
 
     async def _crear(
@@ -166,6 +190,7 @@ async def tarifa_factory(pb):
             },
         )
         creadas.append(tarifa["id"])
+        await minio_catalog_reader.publicar_y_refrescar("tarifas_vuelo")
         return tarifa
 
     yield _crear
@@ -175,18 +200,23 @@ async def tarifa_factory(pb):
             await pb.delete_record("tarifas_vuelo", tarifa_id)
         except Exception:
             pass
+    if creadas:
+        await minio_catalog_reader.publicar_y_refrescar("tarifas_vuelo")
 
 
 @pytest.fixture
 async def pasajero_factory(pb, usuario_factory):
     """Crea un usuario tipo_actor=pasajero CON su perfil `pasajeros` vinculado
-    (reservas.pasajero_titular_id apunta a `pasajeros`, no a `usuarios`)."""
+    (reservas.pasajero_titular_id apunta a `pasajeros`, no a `usuarios`).
+
+    `pasajeros` es OPERACIONAL, migrado a MinIO — se crea vía
+    `PasajerosRepository`, no `pb.create_record` directo (ver plan de
+    migración)."""
     creados_pasajeros: list[str] = []
 
     async def _crear(**extra_usuario) -> tuple[dict, dict]:
         usuario = await usuario_factory(tipo_actor="pasajero", **extra_usuario)
-        pasajero = await pb.create_record(
-            "pasajeros",
+        pasajero = await PasajerosRepository().crear_pasajero(
             {"usuario_id": usuario["id"], "fecha_nacimiento": "1990-01-01", "telefono": "0999999999"},
         )
         creados_pasajeros.append(pasajero["id"])
@@ -196,7 +226,11 @@ async def pasajero_factory(pb, usuario_factory):
 
     for pasajero_id in creados_pasajeros:
         try:
-            await pb.delete_record("pasajeros", pasajero_id)
+            await minio_operational_client.eliminar("pasajeros", pasajero_id)
+        except Exception:
+            pass
+        try:
+            await pb.delete_record("pasajeros", pasajero_id)  # limpia el espejo, ver RC-OP-003
         except Exception:
             pass
 
@@ -217,18 +251,23 @@ async def pasajero_client(client, pasajero_factory):
 
 
 @pytest.fixture
-async def reserva_factory(pb):
+async def reserva_factory():
     """Crea una `reservas` desechable directamente (sin pasar por el
     servicio) — para pruebas que necesitan una reserva ya existente.
 
     También crea el `reserva_items` correspondiente (tipo_producto=vuelo),
     mismo dual-write que `crear_reserva_service.py` — para que las pruebas
     que arman datos con esta fábrica reflejen el modelo v3 real, no solo el
-    campo legado `reservas.vuelo_id`."""
+    campo legado `reservas.vuelo_id`.
+
+    `reservas`/`reserva_items` son OPERACIONAL, migradas a MinIO (paso 5
+    del plan) — se crean vía `ReservasRepository`, no `pb.create_record`
+    directo."""
     creadas: list[str] = []
     items_creados: list[str] = []
 
     async def _crear(pasajero_id: str, vuelo_id: str, tarifa_id: str, **extra) -> dict:
+        repo = ReservasRepository()
         ahora = datetime.datetime.now(datetime.timezone.utc)
         precio_final = extra.get("total_pagar", 199.0)
         data = {
@@ -245,10 +284,9 @@ async def reserva_factory(pb):
             ),
         }
         data.update(extra)
-        reserva = await pb.create_record("reservas", data)
+        reserva = await repo.crear_reserva(data)
         creadas.append(reserva["id"])
-        item = await pb.create_record(
-            "reserva_items",
+        item = await repo.crear_item(
             {
                 "reserva_id": reserva["id"],
                 "tipo_producto": "vuelo",
@@ -265,12 +303,12 @@ async def reserva_factory(pb):
 
     for item_id in items_creados:
         try:
-            await pb.delete_record("reserva_items", item_id)
+            await minio_operational_client.eliminar("reserva_items", item_id)
         except Exception:
             pass
 
     for reserva_id in creadas:
         try:
-            await pb.delete_record("reservas", reserva_id)
+            await minio_operational_client.eliminar("reservas", reserva_id)
         except Exception:
             pass

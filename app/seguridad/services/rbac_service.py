@@ -20,44 +20,59 @@ class AccesoDenegado(Exception):
         super().__init__(f"Acceso denegado: módulo={modulo!r} tabla={tabla!r}")
 
 
+async def tiene_permiso(usuario: dict, modulo_clave: str, accion: str, tabla: str | None = None) -> bool:
+    """Misma verificación de dos niveles que `requiere_permiso`, pero como
+    función simple (sin FastAPI `Depends`) para llamar desde código que no
+    es un handler de ruta — p. ej. un service que necesita comprobar si el
+    rol del usuario tiene autorización de módulo antes de saltarse un
+    chequeo de propiedad (RN-SEG-009: nunca un atajo por `tipo_actor`)."""
+    repo = SeguridadRepository()
+    client = repo._client
+
+    rol_id = usuario.get("rol_id")
+    if not rol_id:
+        return False
+
+    modulo = await client.get_first("modulos", f'clave="{modulo_clave}"')
+    if modulo is None:
+        return False
+
+    # Nivel 1 — ¿el rol tiene el permiso (módulo, acción)?
+    permiso = await client.get_first(
+        "permisos", f'modulo_id="{modulo["id"]}" && accion="{accion}"'
+    )
+    if permiso is None:
+        return False
+
+    nivel1 = await client.get_first(
+        "roles_permisos", f'rol_id="{rol_id}" && permiso_id="{permiso["id"]}"'
+    )
+    if nivel1 is None:
+        return False
+
+    # Nivel 2 (opcional) — si el rol tiene alguna restricción de tabla para
+    # este módulo Y esta acción puntual, la tabla solicitada debe estar
+    # entre ellas. Sin restricciones definidas para (módulo, acción), Nivel 1
+    # ya autorizó esa acción sobre todas las tablas del módulo.
+    if tabla:
+        restricciones = await client.list_records(
+            "roles_permisos_tablas",
+            {
+                "filter": f'rol_id="{rol_id}" && modulo_id="{modulo["id"]}" && accion="{accion}"',
+                "perPage": 200,
+            },
+        )
+        items = restricciones.get("items", [])
+        if items and not any(r["tabla"] == tabla for r in items):
+            return False
+
+    return True
+
+
 def requiere_permiso(modulo_clave: str, accion: str, tabla: str | None = None):
     async def _verificar(usuario: dict = Depends(verificar_sesion)) -> dict:
-        repo = SeguridadRepository()
-        client = repo._client
-
-        rol_id = usuario.get("rol_id")
-        if not rol_id:
+        if not await tiene_permiso(usuario, modulo_clave, accion, tabla):
             raise AccesoDenegado(modulo_clave, tabla)
-
-        modulo = await client.get_first("modulos", f'clave="{modulo_clave}"')
-        if modulo is None:
-            raise AccesoDenegado(modulo_clave, tabla)
-
-        # Nivel 1 — ¿el rol tiene el permiso (módulo, acción)?
-        permiso = await client.get_first(
-            "permisos", f'modulo_id="{modulo["id"]}" && accion="{accion}"'
-        )
-        if permiso is None:
-            raise AccesoDenegado(modulo_clave, tabla)
-
-        nivel1 = await client.get_first(
-            "roles_permisos", f'rol_id="{rol_id}" && permiso_id="{permiso["id"]}"'
-        )
-        if nivel1 is None:
-            raise AccesoDenegado(modulo_clave, tabla)
-
-        # Nivel 2 (opcional) — si el rol tiene alguna restricción de tabla
-        # para este módulo, la tabla solicitada debe estar entre ellas.
-        # Sin restricciones definidas, Nivel 1 ya autorizó el módulo entero.
-        if tabla:
-            restricciones = await client.list_records(
-                "roles_permisos_tablas",
-                {"filter": f'rol_id="{rol_id}" && modulo_id="{modulo["id"]}"', "perPage": 200},
-            )
-            items = restricciones.get("items", [])
-            if items and not any(r["tabla"] == tabla for r in items):
-                raise AccesoDenegado(modulo_clave, tabla)
-
         return usuario
 
     return _verificar

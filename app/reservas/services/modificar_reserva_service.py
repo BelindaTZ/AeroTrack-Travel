@@ -13,7 +13,8 @@ from app.facturacion.services.diferencia_tarifa_service import (
 )
 from app.reservas.repositories.reservas_repo import ReservasRepository
 from app.seguridad.services.audit_service import AuditService
-from app.shared.pocketbase_client import get_pocketbase_client
+from app.seguridad.services.rbac_service import tiene_permiso
+from app.shared.cupo_service import liberar_cupo
 from app.vuelos.repositories.vuelos_repo import VuelosRepository
 from app.vuelos.services.cupo_service import verificar_y_reservar_cupo
 
@@ -40,11 +41,12 @@ class CupoNoDisponible(Exception):
     pass
 
 
-def _autorizado(usuario: dict, reserva: dict, pasajero: dict | None) -> bool:
+async def _autorizado(usuario: dict, reserva: dict, pasajero: dict | None) -> bool:
     es_titular = pasajero is not None and reserva["pasajero_titular_id"] == pasajero["id"]
     es_agente_de_la_reserva = reserva.get("agente_id") == usuario["id"]
-    es_administrador = usuario.get("tipo_actor") == "administrador"
-    return es_titular or es_agente_de_la_reserva or es_administrador
+    if es_titular or es_agente_de_la_reserva:
+        return True
+    return await tiene_permiso(usuario, "reservas", "eliminar")
 
 
 async def modificar_reserva(usuario: dict, reserva_id: str, nueva_tarifa_id: str | None = None) -> dict:
@@ -56,7 +58,7 @@ async def modificar_reserva(usuario: dict, reserva_id: str, nueva_tarifa_id: str
         raise ReservaNoEncontrada()
 
     pasajero = await repo.pasajero_de_usuario(usuario["id"])
-    if not _autorizado(usuario, reserva, pasajero):
+    if not await _autorizado(usuario, reserva, pasajero):
         raise SinPermiso()
 
     if reserva["estado"] in ESTADOS_BLOQUEADOS:
@@ -75,15 +77,12 @@ async def modificar_reserva(usuario: dict, reserva_id: str, nueva_tarifa_id: str
     if not await verificar_y_reservar_cupo(nueva_tarifa_id):
         raise CupoNoDisponible()
 
-    # Libera el cupo de la tarifa anterior — sin esto quedaría "atrapado"
-    # (mismo patrón de incremento directo que `expiracion_service`).
+    # Libera el cupo de la tarifa anterior — sin esto quedaría "atrapado".
+    # Vía `cupo_service` (mismo servicio que lo reservó), no un update
+    # directo a PocketBase — `tarifas_vuelo.cupos_disponibles` quedó
+    # congelado ahí desde que el cupo real se decrementa en MinIO.
     if tarifa_actual is not None:
-        client = get_pocketbase_client()
-        await client.update_record(
-            "tarifas_vuelo",
-            tarifa_actual["id"],
-            {"cupos_disponibles": tarifa_actual["cupos_disponibles"] + 1},
-        )
+        await liberar_cupo("tarifas_vuelo", tarifa_actual["id"], "cupos_disponibles")
 
     diferencia = round(nueva_tarifa["precio_final"] - (tarifa_actual["precio_final"] if tarifa_actual else 0), 2)
     nuevo_total = round(reserva["total_pagar"] + diferencia, 2)

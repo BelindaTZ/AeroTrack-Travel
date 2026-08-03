@@ -15,6 +15,7 @@ volumes:
   pocketbase-travel-data:
   postgres-travel-data:
   minio-travel-data:
+  clickhouse-travel-data:
 
 services:
 
@@ -74,8 +75,41 @@ services:
       /bin/sh -c "
         mc alias set localtravel http://minio-travel:9000 ${MINIO_TRAVEL_ACCESS:-admin} ${MINIO_TRAVEL_SECRET:-admin1234};
         mc mb --ignore-existing localtravel/${MINIO_BUCKET_TRAVEL_DIMS:-aerotrack-travel-dims};
-        echo 'Bucket de Travel listo.';
+        mc mb --ignore-existing localtravel/${MINIO_BUCKET_TRAVEL_OPERATIONAL:-aerotrack-travel-operational};
+        mc mb --ignore-existing localtravel/${MINIO_BUCKET_TRAVEL_CATALOG:-aerotrack-travel-catalog};
+        echo 'Buckets de Travel listos.';
       "
+
+  # ── CLICKHOUSE (Travel) — BD analítica táctica/estratégica (paso 7 del
+  #    plan de migración). Solo infraestructura por ahora: sin DAGs de
+  #    carga ni esquema de tablas todavía — los CU tácticos/estratégicos
+  #    que la usarían no están completos aún. Se deja levantada y
+  #    alcanzable para cuando llegue esa fase. ───────────────────────────
+  clickhouse-travel:
+    image: clickhouse/clickhouse-server:24.8
+    container_name: clickhouse-travel
+    ports:
+      - "${CLICKHOUSE_TRAVEL_HTTP_PORT:-8123}:8123"   # interfaz HTTP
+      - "${CLICKHOUSE_TRAVEL_NATIVE_PORT:-9004}:9000"   # protocolo nativo (clickhouse-client)
+    environment:
+      TZ: America/Guayaquil
+      CLICKHOUSE_USER: ${CLICKHOUSE_TRAVEL_USER:-admin}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_TRAVEL_PASSWORD:-admin1234}
+      CLICKHOUSE_DB: ${CLICKHOUSE_TRAVEL_DB:-aerotrack_travel_analitico}
+    volumes:
+      - clickhouse-travel-data:/var/lib/clickhouse
+    networks:
+      - travel-network
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8123/ping"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   # ── APP FASTAPI (Travel) — módulos operativos (Seguridad, Vuelos, ...) ──
   app-travel:
@@ -97,10 +131,19 @@ services:
       MINIO_ACCESS: ${MINIO_TRAVEL_ACCESS:-admin}
       MINIO_SECRET: ${MINIO_TRAVEL_SECRET:-admin1234}
       MINIO_BUCKET_TRAVEL_DIMS: ${MINIO_BUCKET_TRAVEL_DIMS:-aerotrack-travel-dims}
+      MINIO_BUCKET_TRAVEL_OPERATIONAL: ${MINIO_BUCKET_TRAVEL_OPERATIONAL:-aerotrack-travel-operational}
+      MINIO_BUCKET_TRAVEL_CATALOG: ${MINIO_BUCKET_TRAVEL_CATALOG:-aerotrack-travel-catalog}
+      AIRFLOW_TRAVEL_URL_DOCKER: ${AIRFLOW_TRAVEL_URL_DOCKER:-http://airflow-webserver-travel:8080}
+      AIRFLOW_TRAVEL_ADMIN_USER: ${AIRFLOW_TRAVEL_ADMIN_USER:-admin}
+      AIRFLOW_TRAVEL_ADMIN_PASSWORD: ${AIRFLOW_TRAVEL_ADMIN_PASSWORD:-admin1234}
+      CLICKHOUSE_TRAVEL_USER: ${CLICKHOUSE_TRAVEL_USER:-admin}
+      CLICKHOUSE_TRAVEL_PASSWORD: ${CLICKHOUSE_TRAVEL_PASSWORD:-admin1234}
     depends_on:
       pocketbase-travel:
         condition: service_healthy
       minio-travel:
+        condition: service_healthy
+      clickhouse-travel:
         condition: service_healthy
     networks:
       - travel-network
@@ -171,7 +214,7 @@ services:
       AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
       AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session'
       AIRFLOW__FAB__UPDATE_FAB_PERMS: 'true'
-      _PIP_ADDITIONAL_REQUIREMENTS: "requests pandas pyarrow minio python-dotenv"
+      _PIP_ADDITIONAL_REQUIREMENTS: "requests pandas pyarrow minio python-dotenv clickhouse-driver"
       PYTHONPATH: /opt/airflow
     env_file:
       - .env
@@ -208,7 +251,7 @@ services:
       AIRFLOW__CORE__FERNET_KEY: ${FERNET_KEY_TRAVEL}
       AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
       AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session'
-      _PIP_ADDITIONAL_REQUIREMENTS: "requests pandas pyarrow minio python-dotenv docker"
+      _PIP_ADDITIONAL_REQUIREMENTS: "requests pandas pyarrow minio python-dotenv docker clickhouse-driver"
       PYTHONPATH: /opt/airflow
     env_file:
       - .env
@@ -217,6 +260,10 @@ services:
       - ./dags:/opt/airflow/dags
       - ./logs:/opt/airflow/logs
       - ./plugins:/opt/airflow/plugins
+      # Staging de Parquet crudo/procesando/terminado del pipeline ETL a
+      # ClickHouse — SOLO en el scheduler (ejecuta el código de tareas bajo
+      # LocalExecutor); persiste entre reinicios del contenedor.
+      - ./datos/parquet:/opt/airflow/datos/parquet
       # Socket de Docker del host — SOLO en el scheduler (es el que ejecuta
       # código de tareas bajo LocalExecutor), no en el webserver. Usado
       # únicamente por aerotrack_travel_sync_dims para arrancar los 5

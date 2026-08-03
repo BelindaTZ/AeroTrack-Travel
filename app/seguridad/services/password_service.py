@@ -10,7 +10,8 @@ from app.seguridad.repositories.seguridad_repo import SeguridadRepository
 # RNF-SEG-004: default documentado en código si `configuracion_sistema` no
 # tiene la clave (ya sembrada como "password_reset.expiracion_minutos").
 DEFAULT_EXPIRACION_MINUTOS = 30
-MIN_LENGTH = 8
+DEFAULT_MIN_LENGTH = 8
+DEFAULT_REQUIERE_NUMERO = True
 
 
 class PasswordDebil(Exception):
@@ -27,11 +28,29 @@ class PasswordService:
     def __init__(self, repo: SeguridadRepository | None = None) -> None:
         self._repo = repo or SeguridadRepository()
 
-    # ── RN-SEG-005 — política mínima de fortaleza ───────────────────────
-    def validar_fortaleza(self, password: str) -> None:
-        if len(password) < MIN_LENGTH:
-            raise PasswordDebil(f"La contraseña debe tener al menos {MIN_LENGTH} caracteres")
-        if not re.search(r"[A-Za-z]", password) or not re.search(r"\d", password):
+    # ── RN-SEG-005 / CU-T03 — política mínima de fortaleza, configurable
+    # desde /admin/configuracion (RNF-SEG-007: si la clave no existe en
+    # `configuracion_sistema`, se usa el default documentado en código).
+    async def validar_fortaleza(self, password: str) -> None:
+        min_length = DEFAULT_MIN_LENGTH
+        config_len = await self._repo.get_config("password.min_length")
+        if config_len is not None:
+            try:
+                min_length = int(config_len["valor"])
+            except (TypeError, ValueError):
+                pass
+
+        if len(password) < min_length:
+            raise PasswordDebil(f"La contraseña debe tener al menos {min_length} caracteres")
+
+        requiere_numero = DEFAULT_REQUIERE_NUMERO
+        config_num = await self._repo.get_config("password.requiere_numero")
+        if config_num is not None:
+            requiere_numero = config_num["valor"] not in ("false", "0", "")
+
+        if not re.search(r"[A-Za-z]", password):
+            raise PasswordDebil("La contraseña debe incluir letras")
+        if requiere_numero and not re.search(r"\d", password):
             raise PasswordDebil("La contraseña debe combinar letras y números")
 
     # ── RNF-SEG-004 — expiración configurable ───────────────────────────

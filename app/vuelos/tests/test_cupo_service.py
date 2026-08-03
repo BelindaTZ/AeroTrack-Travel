@@ -1,5 +1,6 @@
 import asyncio
 
+from app.shared import minio_operational_client as moc
 from app.vuelos.services.cupo_service import verificar_y_reservar_cupo
 
 
@@ -12,7 +13,7 @@ async def test_cupo_disponible_decrementa_y_confirma(pb, vuelo_factory, tarifa_f
     resultado = await verificar_y_reservar_cupo(tarifa["id"])
     assert resultado is True
 
-    actualizada = await pb.get_record("tarifas_vuelo", tarifa["id"])
+    actualizada = await moc.obtener("cupos_tarifas_vuelo", tarifa["id"])
     assert actualizada["cupos_disponibles"] == 4
 
 
@@ -23,7 +24,7 @@ async def test_cupo_cero_no_decrementa_y_responde_sin_disponibilidad(pb, vuelo_f
     resultado = await verificar_y_reservar_cupo(tarifa["id"])
     assert resultado is False
 
-    sin_cambios = await pb.get_record("tarifas_vuelo", tarifa["id"])
+    sin_cambios = await moc.obtener("cupos_tarifas_vuelo", tarifa["id"])
     assert sin_cambios["cupos_disponibles"] == 0
 
 
@@ -43,5 +44,5 @@ async def test_concurrencia_nunca_vende_mas_cupo_del_disponible(pb, vuelo_factor
     assert exitosos == cupo_inicial
     assert fallidos == 50 - cupo_inicial
 
-    final = await pb.get_record("tarifas_vuelo", tarifa["id"])
+    final = await moc.obtener("cupos_tarifas_vuelo", tarifa["id"])
     assert final["cupos_disponibles"] == 0  # nunca negativo, nunca por debajo de cero

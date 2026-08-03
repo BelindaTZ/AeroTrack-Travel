@@ -1,0 +1,25 @@
+{% extends "layout_app.html" %}
+{% block title %}Umbral de risk score — AeroTrack Travel{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <h1><span class="heading-icon"><i class="bi bi-speedometer2"></i></span>Umbral de risk score</h1>
+    <p>% de riesgo estimado a partir del cual se dispara una alerta proactiva de disrupción (CU-T20).</p>
+</div>
+
+{% if mensaje %}
+<div class="flash-bar"><div class="flash-success toast-autodismiss"><i class="bi bi-check-circle-fill"></i>{{ mensaje }}</div></div>
+{% endif %}
+
+<form method="post" action="/backoffice/disrupciones/config-riesgo" class="at-card" style="max-width:420px">
+    <div class="mb-3">
+        <label class="form-label-at" for="umbral">Umbral de riesgo (%)</label>
+        <input type="number" class="form-control-at" id="umbral" name="umbral_riesgo_pct"
+               value="{{ umbral_riesgo_pct }}" min="0" max="100" step="1" required>
+        <div style="font-size:12.5px;color:var(--at-muted);margin-top:6px">
+            Vuelos con riesgo estimado igual o superior a este porcentaje disparan una disrupción proactiva
+            (fuente: <code>simulador_estadistico</code>).
+        </div>
+    </div>
+    <button type="submit" class="btn-at-primary"><i class="bi bi-check-lg"></i>Guardar</button>
+</form>
+{% endblock %}

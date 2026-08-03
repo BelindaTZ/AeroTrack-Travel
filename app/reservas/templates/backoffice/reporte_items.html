@@ -1,0 +1,80 @@
+{% extends "layout_app.html" %}
+{% from "_paginacion.html" import controles %}
+{% from "_informe_header.html" import header %}
+{% block title %}Ítems de reserva — AeroTrack Travel{% endblock %}
+{% block content %}
+{{ header(
+    "bi-boxes",
+    "Ítems de reserva por tipo de producto",
+    "Cada producto individual reservado (vuelo, hotel, auto, actividad, crucero), con el código y estado de su reserva.",
+    request,
+    cu_ref="CU-O21",
+    export_path="/backoffice/reservas/items/exportar"
+) }}
+
+<form method="get" action="/backoffice/reservas/items" data-auto-filtros class="at-card d-flex flex-wrap gap-3 align-items-end mb-3">
+    <div>
+        <label class="form-label-at" for="f-tipo">Tipo de producto</label>
+        <select class="form-control-at" id="f-tipo" name="tipo_producto" style="min-width:150px">
+            <option value="">Todos</option>
+            {% for t in tipos_producto %}
+            <option value="{{ t }}" {% if filtros.tipo_producto == t %}selected{% endif %}>{{ t | capitalize }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div>
+        <label class="form-label-at" for="f-estado">Estado de la reserva</label>
+        <select class="form-control-at" id="f-estado" name="estado" style="min-width:170px">
+            <option value="">Todos</option>
+            {% for e in estados %}
+            <option value="{{ e }}" {% if filtros.estado == e %}selected{% endif %}>{{ e.replace('_', ' ') | capitalize }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div>
+        <label class="form-label-at" for="f-desde">Desde</label>
+        <input type="date" class="form-control-at" id="f-desde" name="desde" value="{{ filtros.desde }}">
+    </div>
+    <div>
+        <label class="form-label-at" for="f-hasta">Hasta</label>
+        <input type="date" class="form-control-at" id="f-hasta" name="hasta" value="{{ filtros.hasta }}">
+    </div>
+    {% if filtros.tipo_producto or filtros.estado or filtros.desde or filtros.hasta %}
+    <a href="/backoffice/reservas/items" class="btn-at-ghost">Limpiar</a>
+    {% endif %}
+</form>
+
+<div class="at-table-wrapper">
+    <div class="at-table-header"><span class="at-table-title">{{ pagina.total_items }} ítem(s)</span></div>
+    {% if pagina.items %}
+    <div class="at-table-scroll">
+        <table class="at-table">
+            <thead>
+                <tr>
+                    <th>Tipo</th><th>Reserva</th><th>Descripción</th>
+                    <th>Precio</th><th>Fecha</th><th>Estado de la reserva</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for i in pagina.items %}
+                <tr>
+                    <td><span class="badge-sistema" style="text-transform:capitalize">{{ i.tipo_producto }}</span></td>
+                    <td class="at-mono" style="font-weight:600">{{ i.codigo_reserva }}</td>
+                    <td>{{ i.descripcion }}</td>
+                    <td class="at-mono">${{ "%.2f"|format(i.precio_final or 0) }}</td>
+                    <td class="at-mono" style="font-size:12px;color:var(--at-muted)">{{ i.created[:10] if i.created else "" }}</td>
+                    <td><span class="badge-sistema">{{ i.estado_reserva.replace('_', ' ') if i.estado_reserva != '—' else '—' }}</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {{ controles(pagina, request) }}
+    {% else %}
+    <div class="at-empty">
+        <i class="bi bi-box-seam at-empty-icon" aria-hidden="true"></i>
+        <strong>Sin ítems para el filtro actual</strong>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

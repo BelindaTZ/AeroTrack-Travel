@@ -1,5 +1,7 @@
 """RF-RES-001,005 — checkout, confirmación y consulta de reserva propia."""
 
+from urllib.parse import urlsplit
+
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 
@@ -14,9 +16,12 @@ from app.reservas.services.cancelar_reserva_service import (
 )
 from app.reservas.services.cancelar_reserva_service import VueloYaCompletado, cancelar_reserva
 from app.reservas.services.crear_reserva_service import (
+    AsientoNoDisponible,
+    AsientoNoValido,
     CupoNoDisponible,
     PasajeroNoEncontrado,
     PrecioDesactualizado,
+    SeleccionNoPermitidaAun,
     TarifaNoEncontrada,
     crear_reserva,
 )
@@ -33,22 +38,54 @@ from app.reservas.services.modificar_reserva_service import (
 from app.reservas.services.modificar_reserva_service import (
     SinPermiso as SinPermisoModificar,
 )
+from app.shared.flash import redirect_con_mensaje
 from app.reservas.services.modificar_reserva_service import (
     TarifaNoEncontrada as TarifaNoEncontradaModificar,
 )
+import datetime
+
 from app.seguridad.services.audit_service import AuditService
+from app.seguridad.services.rbac_service import tiene_permiso
 from app.seguridad.services.session_service import verificar_sesion
+from app.shared.nav import nav_context
 from app.shared.templating import templates
 from app.vuelos.repositories.dims_reader import resolver_aeropuerto
 from app.vuelos.repositories.vuelos_repo import VuelosRepository
+from app.vuelos.services.asientos_service import ventana_checkin_abierta
+
+# WP-04 (auditoría de WorkPanels, 2026-07-31) — etiqueta del link de "volver"
+# cuando se llega desde el panel de backoffice, ver detalle().
+ETIQUETAS_VOLVER = {
+    "/backoffice/reservas/reporte": "Reporte de reservas",
+    "/backoffice/reservas/mi-cartera": "Mi cartera",
+}
 
 router = APIRouter(prefix="/reservas")
 
-EXTRAS_DISPONIBLES = [
-    {"tipo": "equipaje", "descripcion": "Equipaje facturado adicional", "precio": 35.0},
-    {"tipo": "asiento", "descripcion": "Selección de asiento preferente", "precio": 15.0},
-    {"tipo": "seguro", "descripcion": "Seguro de viaje", "precio": 20.0},
-]
+# "asiento" (cargo plano de $15) se retiró — reemplazado por selección real
+# de un asiento concreto del mapa (RF-VUE-011/012, ver checkout.html), que
+# ya cobra su propio recargo solo si el asiento elegido es premium.
+_PRECIO_DEFAULT_EQUIPAJE = 35.0
+_PRECIO_DEFAULT_SEGURO = 20.0
+
+
+async def _extras_disponibles(repo: ReservasRepository) -> list[dict]:
+    """WP-08 (ampliación de sesión 2026-08-01) — precio editable desde
+    Configuración del sistema (`reservas.precio_extra_equipaje`/`_seguro`);
+    tipo/descripción quedan fijos porque el checkout los usa como
+    identificador, no como texto libre."""
+    config_equipaje = await repo.config("reservas.precio_extra_equipaje")
+    config_seguro = await repo.config("reservas.precio_extra_seguro")
+    return [
+        {
+            "tipo": "equipaje", "descripcion": "Equipaje facturado adicional",
+            "precio": float(config_equipaje["valor"]) if config_equipaje else _PRECIO_DEFAULT_EQUIPAJE,
+        },
+        {
+            "tipo": "seguro", "descripcion": "Seguro de viaje",
+            "precio": float(config_seguro["valor"]) if config_seguro else _PRECIO_DEFAULT_SEGURO,
+        },
+    ]
 
 
 async def construir_detalle(reserva: dict) -> ReservaDetalleOut:
@@ -87,6 +124,8 @@ async def construir_detalle(reserva: dict) -> ReservaDetalleOut:
             extras=extras_out,
             es_multiproducto=True,
             items=items_out,
+            es_paquete=bool(reserva.get("es_paquete")),
+            descuento_paquete_pct=reserva.get("descuento_paquete_pct"),
         )
 
     vuelo = await vuelos_repo.obtener_vuelo(reserva["vuelo_id"])
@@ -111,6 +150,8 @@ async def construir_detalle(reserva: dict) -> ReservaDetalleOut:
         nivel_tarifa=nivel["nombre"],
         precio_tarifa=tarifa["precio_final"],
         extras=extras_out,
+        es_paquete=bool(reserva.get("es_paquete")),
+        descuento_paquete_pct=reserva.get("descuento_paquete_pct"),
     )
 
 
@@ -122,6 +163,15 @@ async def _contexto_checkout(usuario: dict, tarifa_id: str, **extra) -> dict | N
     vuelo = await vuelos_repo.obtener_vuelo(tarifa["vuelo_id"])
     aerolinea = await vuelos_repo.obtener_aerolinea(vuelo["aerolinea_id"])
     nivel = await vuelos_repo.nivel_tarifa(tarifa["nivel_tarifa_id"])
+    # RF-VUE-012: en tarifa Light, un asiento estándar (no premium) solo se
+    # puede elegir cuando abre la ventana de check-in gratis — el picker del
+    # checkout usa esto para deshabilitar los estándar mientras tanto (los
+    # premium siempre están habilitados, se pagan de inmediato).
+    seleccion_estandar_habilitada = bool(
+        nivel.get("seleccion_asiento_temprana")
+    ) or await ventana_checkin_abierta(
+        vuelos_repo, vuelo, datetime.datetime.now(datetime.timezone.utc)
+    )
     contexto = {
         "usuario": usuario,
         "tarifa": tarifa,
@@ -130,7 +180,8 @@ async def _contexto_checkout(usuario: dict, tarifa_id: str, **extra) -> dict | N
         "nivel": nivel,
         "origen_legible": await resolver_aeropuerto(vuelo["origen_codigo"]),
         "destino_legible": await resolver_aeropuerto(vuelo["destino_codigo"]),
-        "extras_disponibles": EXTRAS_DISPONIBLES,
+        "extras_disponibles": await _extras_disponibles(ReservasRepository()),
+        "seleccion_estandar_habilitada": seleccion_estandar_habilitada,
     }
     contexto.update(extra)
     return contexto
@@ -150,12 +201,16 @@ async def crear(
     tarifa_id: str = Form(...),
     precio_esperado: float = Form(...),
     extras: list[str] = Form([]),
+    asiento_id: str | None = Form(None),
     usuario: dict = Depends(verificar_sesion),
 ):
-    extras_data = [e for e in EXTRAS_DISPONIBLES if e["tipo"] in extras]
+    extras_disponibles = await _extras_disponibles(ReservasRepository())
+    extras_data = [e for e in extras_disponibles if e["tipo"] in extras]
 
     try:
-        reserva = await crear_reserva(usuario, tarifa_id, precio_esperado, extras_data)
+        reserva = await crear_reserva(
+            usuario, tarifa_id, precio_esperado, extras_data, asiento_id=asiento_id or None
+        )
     except PasajeroNoEncontrado:
         contexto = await _contexto_checkout(
             usuario, tarifa_id, error="Solo cuentas de pasajero pueden reservar por autoservicio."
@@ -173,6 +228,18 @@ async def crear(
     except CupoNoDisponible:
         contexto = await _contexto_checkout(
             usuario, tarifa_id, error="Ese vuelo ya no tiene cupo disponible en este nivel de tarifa."
+        )
+        return templates.TemplateResponse(request, "checkout.html", contexto, status_code=409)
+    except (AsientoNoValido, AsientoNoDisponible):
+        contexto = await _contexto_checkout(
+            usuario, tarifa_id, error="Ese asiento ya no está disponible. Elige otro."
+        )
+        return templates.TemplateResponse(request, "checkout.html", contexto, status_code=409)
+    except SeleccionNoPermitidaAun:
+        contexto = await _contexto_checkout(
+            usuario,
+            tarifa_id,
+            error="Ese asiento estándar todavía no se puede elegir en esta tarifa — se habilita cerca del check-in, o puedes elegir uno premium ahora.",
         )
         return templates.TemplateResponse(request, "checkout.html", contexto, status_code=409)
 
@@ -200,42 +267,75 @@ async def mis_reservas(request: Request, usuario: dict = Depends(verificar_sesio
 
 
 @router.get("/{reserva_id}")
-async def detalle(request: Request, reserva_id: str, usuario: dict = Depends(verificar_sesion)):
+async def detalle(
+    request: Request,
+    reserva_id: str,
+    volver_a: str | None = None,
+    usuario: dict = Depends(verificar_sesion),
+):
+    """`volver_a` (WP-04, auditoría de WorkPanels, 2026-07-31) — presente
+    solo cuando se llega desde el panel de backoffice (nunca desde
+    "Mis reservas" del portal, que no lo manda): decide el shell (topbar de
+    backoffice en vez del portal) y el link de "volver" (J10 de la
+    constitución — toda pantalla de navegación normal necesita uno que
+    funcione, esta no lo tenía para el personal)."""
+    es_backoffice = bool(volver_a)
+    ruta_volver = urlsplit(volver_a).path if volver_a else ""
+    contexto_extra = {
+        "layout_base": "layout_app.html" if es_backoffice else "layout_portal.html",
+        "volver_a": volver_a if es_backoffice else "/mis-reservas",
+        "volver_texto": ETIQUETAS_VOLVER.get(ruta_volver, "Volver") if es_backoffice else "Mis reservas",
+    }
+    base_contexto = await nav_context(usuario) if es_backoffice else {"usuario": usuario}
+
     repo = ReservasRepository()
     reserva = await repo.obtener_reserva(reserva_id)
     if reserva is None:
         return templates.TemplateResponse(
-            request, "detalle_reserva.html", {"usuario": usuario, "reserva": None}, status_code=404
+            request, "detalle_reserva.html", {**base_contexto, **contexto_extra, "reserva": None}, status_code=404
         )
 
     pasajero = await repo.pasajero_de_usuario(usuario["id"])
     es_titular = pasajero is not None and reserva["pasajero_titular_id"] == pasajero["id"]
     es_agente_de_la_reserva = reserva.get("agente_id") == usuario["id"]
-    if not (es_titular or es_agente_de_la_reserva or usuario.get("tipo_actor") == "administrador"):
+    autorizado = (
+        es_titular
+        or es_agente_de_la_reserva
+        or await tiene_permiso(usuario, "reservas", "eliminar")
+    )
+    if not autorizado:
         return templates.TemplateResponse(
-            request, "detalle_reserva.html", {"usuario": usuario, "reserva": None}, status_code=404
+            request, "detalle_reserva.html", {**base_contexto, **contexto_extra, "reserva": None}, status_code=404
         )
 
     detalle_reserva = await construir_detalle(reserva)
     return templates.TemplateResponse(
-        request, "detalle_reserva.html", {"usuario": usuario, "reserva": detalle_reserva}
+        request, "detalle_reserva.html", {**base_contexto, **contexto_extra, "reserva": detalle_reserva}
     )
 
 
 @router.post("/{reserva_id}/cancelar")
-async def cancelar(reserva_id: str, usuario: dict = Depends(verificar_sesion)):
+async def cancelar(
+    reserva_id: str,
+    volver_a: str | None = Form(None),
+    usuario: dict = Depends(verificar_sesion),
+):
+    """`volver_a` (opcional, WP-01/04 — auditoría de WorkPanels) — permite
+    que el panel de backoffice (`/backoffice/reservas/reporte`) redirija de
+    vuelta a la lista en vez de a esta misma reserva (comportamiento del
+    portal, sin cambios cuando no se manda el campo)."""
+    destino_base = volver_a or f"/reservas/{reserva_id}"
     try:
         await cancelar_reserva(usuario, reserva_id)
     except ReservaNoEncontradaCancelar:
-        return RedirectResponse("/reservas?mensaje=Reserva no encontrada", status_code=303)
+        return redirect_con_mensaje(volver_a or "/reservas", "Reserva no encontrada", tipo="error")
     except SinPermisoCancelar:
-        return RedirectResponse("/reservas?mensaje=Sin permiso sobre esa reserva", status_code=303)
+        return redirect_con_mensaje(volver_a or "/reservas", "Sin permiso sobre esa reserva", tipo="error")
     except VueloYaCompletado:
-        return RedirectResponse(
-            f"/reservas/{reserva_id}?mensaje=No es posible cancelar un vuelo ya realizado.",
-            status_code=303,
+        return redirect_con_mensaje(
+            destino_base, "No es posible cancelar un vuelo ya realizado", tipo="error"
         )
-    return RedirectResponse(f"/reservas/{reserva_id}?mensaje=Reserva cancelada", status_code=303)
+    return redirect_con_mensaje(destino_base, "Reserva cancelada")
 
 
 @router.put("/{reserva_id}")

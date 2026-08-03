@@ -7,7 +7,7 @@ Se amplía fase a fase conforme cada servicio lo necesita.
 
 from typing import Any
 
-from app.shared.pocketbase_client import PocketBaseClient, get_pocketbase_client
+from app.shared.pocketbase_client import PocketBaseClient, PocketBaseError, get_pocketbase_client
 
 COL_USUARIOS = "usuarios"
 COL_ROLES = "roles"
@@ -47,6 +47,16 @@ class SeguridadRepository:
     ) -> dict[str, Any]:
         return await self._client.list_records(COL_USUARIOS, params, token)
 
+    async def actualizar_foto(
+        self, usuario_id: str, filename: str, contenido: bytes, content_type: str
+    ) -> dict[str, Any]:
+        return await self._client.update_record_con_archivo(
+            COL_USUARIOS, usuario_id, {}, {"foto_perfil": (filename, contenido, content_type)}
+        )
+
+    async def descargar_foto(self, usuario_id: str, filename: str) -> bytes:
+        return await self._client.descargar_archivo(COL_USUARIOS, usuario_id, filename)
+
     async def get_usuario_by_token_hash(self, token_hash: str) -> dict[str, Any] | None:
         return await self._client.get_first(COL_USUARIOS, f'reset_token_hash="{token_hash}"')
 
@@ -59,6 +69,48 @@ class SeguridadRepository:
         safe_clave = clave.replace('"', '\\"')
         return await self._client.get_first(
             COL_CONFIGURACION_SISTEMA, f'clave="{safe_clave}"', token
+        )
+
+    async def actualizar_config(self, clave: str, valor: str, usuario_id: str) -> dict[str, Any] | None:
+        """CU-T03 — igual que `CarritoRepository.actualizar_config`: solo
+        actualiza una clave ya sembrada (`scripts/seed_seguridad.py`), no
+        la crea — evita config "fantasma" nunca vista por ningún seed."""
+        registro = await self.get_config(clave)
+        if registro is None:
+            return None
+        return await self._client.update_record(
+            COL_CONFIGURACION_SISTEMA, registro["id"], {"valor": valor, "modificado_por": usuario_id}
+        )
+
+    async def get_config_por_id(self, config_id: str) -> dict[str, Any] | None:
+        try:
+            return await self._client.get_record(COL_CONFIGURACION_SISTEMA, config_id)
+        except PocketBaseError:
+            return None
+
+    async def listar_config_por_categoria(self, categoria: str) -> list[dict[str, Any]]:
+        """WP-08 (ampliación de sesión 2026-08-01) — plantillas de
+        notificación / feature flags / parámetros de negocio son todos
+        filas de `configuracion_sistema` agrupadas por `categoria`."""
+        resultado = await self._client.list_records(
+            COL_CONFIGURACION_SISTEMA, {"filter": f'categoria="{categoria}"', "sort": "clave", "perPage": 200}
+        )
+        return resultado["items"]
+
+    async def actualizar_config_por_id(
+        self, config_id: str, valor: str, usuario_id: str
+    ) -> dict[str, Any]:
+        return await self._client.update_record(
+            COL_CONFIGURACION_SISTEMA, config_id, {"valor": valor, "modificado_por": usuario_id}
+        )
+
+    async def crear_config(
+        self, clave: str, valor: str, categoria: str, descripcion: str, usuario_id: str
+    ) -> dict[str, Any]:
+        return await self._client.create_record(
+            COL_CONFIGURACION_SISTEMA,
+            {"clave": clave, "valor": valor, "categoria": categoria, "descripcion": descripcion,
+             "modificado_por": usuario_id},
         )
 
     # ── auditoría ────────────────────────────────────────────────────────

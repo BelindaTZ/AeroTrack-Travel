@@ -1,0 +1,115 @@
+{% extends "layout_app.html" %}
+{% block title %}Catálogo y Rutas — AeroTrack Travel{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <h1><span class="heading-icon"><i class="bi bi-signpost-split"></i></span>Catálogo y Rutas de Vuelos</h1>
+    <p>Relevancia de rutas buscadas y frescura del catálogo publicado.</p>
+</div>
+
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <div id="selector-periodo" class="filter-bar mb-0"></div>
+    <button type="button" class="btn-at-ghost" onclick="window.print()"><i class="bi bi-file-earmark-pdf"></i> Exportar PDF</button>
+</div>
+
+<div id="db-catalogo-cargando" style="text-align:center;padding:50px 0;color:var(--at-muted)">
+    <div class="spinner-border" style="color:var(--at-primary)" role="status"></div>
+</div>
+
+<div id="db-catalogo-contenido" style="display:none">
+    <div class="row g-3 mb-3">
+        <div class="col-12 col-md-4">
+            <div class="at-card" style="height:100%">
+                <div style="font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--at-sub)">Ruta más buscada</div>
+                <div class="at-mono" id="kpi-ruta-top" style="font-size:26px;font-weight:700;color:var(--at-primary)">—</div>
+            </div>
+        </div>
+        <div class="col-12 col-md-4">
+            <div class="at-card" style="height:100%">
+                <div style="font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--at-sub);margin-bottom:4px">Conversión búsqueda → reserva</div>
+                <div id="chart-gauge-conversion" style="height:110px"></div>
+            </div>
+        </div>
+        <div class="col-12 col-md-4">
+            <div class="at-card" style="height:100%">
+                <div style="font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--at-sub)">Última actualización del catálogo</div>
+                <div class="at-mono" id="kpi-catalogo-fecha" style="font-size:16px;font-weight:700;color:var(--at-text);margin-top:4px">—</div>
+                <span class="badge-status" id="kpi-catalogo-estado" style="margin-top:6px"></span>
+            </div>
+        </div>
+    </div>
+
+    <div class="at-table-wrapper mb-3">
+        <div class="at-table-header"><span class="at-table-title">Top 10 rutas más buscadas</span></div>
+        <table class="table" style="font-size:12.5px;margin-bottom:0">
+            <thead><tr><th>Ruta</th><th class="text-end">Búsquedas</th></tr></thead>
+            <tbody id="tabla-top-rutas"></tbody>
+        </table>
+    </div>
+    <div class="at-card mb-3">
+        <div style="font-size:12.5px;font-weight:700;margin-bottom:6px">Búsquedas por tipo de producto</div>
+        <div id="chart-busquedas-tipo" style="height:200px"></div>
+    </div>
+    <div class="at-card">
+        <div style="font-size:12.5px;font-weight:700;margin-bottom:6px">Búsquedas por día de la semana y hora</div>
+        <div id="chart-mapa-calor-busquedas" style="height:320px"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+var chartsCatalogo = [];
+var DIAS_ES = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+function cargarDatosCatalogo(desde, hasta) {
+    document.getElementById('db-catalogo-cargando').style.display = '';
+    document.getElementById('db-catalogo-contenido').style.display = 'none';
+    fetch('/backoffice/dashboards/catalogo-rutas/datos?desde=' + desde + '&hasta=' + hasta).then(function (r) { return r.json(); }).then(renderCatalogo);
+}
+function renderCatalogo(d) {
+    document.getElementById('db-catalogo-cargando').style.display = 'none';
+    document.getElementById('db-catalogo-contenido').style.display = '';
+    chartsCatalogo.forEach(function (c) { c && c.dispose(); });
+    chartsCatalogo = [];
+
+    document.getElementById('kpi-ruta-top').textContent = d.ruta_mas_buscada || 'Sin datos';
+    document.getElementById('kpi-catalogo-fecha').textContent = d.catalogo_ultima_actualizacion ? d.catalogo_ultima_actualizacion.slice(0, 16).replace('T', ' ') : 'Sin publicar';
+    var estadoEl = document.getElementById('kpi-catalogo-estado');
+    var claseEstado = d.catalogo_estado === 'success' ? 'success' : (d.catalogo_estado === 'failed' ? 'failed' : 'pending');
+    estadoEl.className = 'badge-status ' + claseEstado;
+    estadoEl.textContent = d.catalogo_estado;
+
+    chartsCatalogo.push(initChart('chart-gauge-conversion', {
+        series: [{
+            type: 'gauge', min: 0, max: 20, startAngle: 180, endAngle: 0, radius: '100%', center: ['50%', '85%'],
+            axisLine: { lineStyle: { width: 10, color: [[1, AEROTRACK_SEMANTIC.primary + '33']] } },
+            pointer: { length: '55%', itemStyle: { color: AEROTRACK_SEMANTIC.primary } },
+            progress: { show: true, width: 10, itemStyle: { color: AEROTRACK_SEMANTIC.primary } },
+            splitLine: { show: false }, axisTick: { show: false }, axisLabel: { show: false }, anchor: { show: false }, title: { show: false },
+            detail: { fontSize: 20, fontWeight: 700, offsetCenter: [0, '-15%'], formatter: '{value}%', color: AEROTRACK_SEMANTIC.primary },
+            data: [{ value: d.tasa_conversion_promedio }],
+        }],
+    }));
+
+    document.getElementById('tabla-top-rutas').innerHTML = d.top_10_rutas.map(function (r) {
+        return '<tr><td>' + r.ruta + '</td><td class="text-end">' + r.busquedas + '</td></tr>';
+    }).join('') || '<tr><td colspan="2" class="text-center" style="color:var(--at-muted)">Sin búsquedas de vuelo registradas en el período</td></tr>';
+
+    chartsCatalogo.push(initChart('chart-busquedas-tipo', {
+        xAxis: { type: 'category', data: d.busquedas_por_tipo.map(function (b) { return b.tipo_producto; }) },
+        yAxis: { type: 'value' },
+        series: [{ type: 'bar', data: d.busquedas_por_tipo.map(function (b) { return b.total; }) }],
+    }));
+
+    var maxVal = Math.max.apply(null, d.mapa_calor_dia_hora.map(function (c) { return c.total; }).concat([1]));
+    chartsCatalogo.push(initChart('chart-mapa-calor-busquedas', {
+        tooltip: { position: 'top' },
+        grid: { top: 20, bottom: 60 },
+        xAxis: { type: 'category', data: Array.from({ length: 24 }, function (_, i) { return i; }), splitArea: { show: true } },
+        yAxis: { type: 'category', data: DIAS_ES, splitArea: { show: true } },
+        visualMap: { min: 0, max: maxVal, calculable: true, orient: 'horizontal', left: 'center', bottom: 0, inRange: { color: ['#dceefb', '#0072ce'] } },
+        series: [{ type: 'heatmap', data: d.mapa_calor_dia_hora.map(function (c) { return [c.hora, c.dia, c.total]; }), label: { show: false } }],
+    }));
+}
+initSelectorPeriodo('selector-periodo', function (periodo) { cargarDatosCatalogo(periodo.desde, periodo.hasta); });
+</script>
+{% endblock %}

@@ -1,0 +1,163 @@
+{% extends "layout_app.html" %}
+{% from "_paginacion.html" import controles %}
+{% from "_informe_header.html" import header %}
+{% block title %}{{ titulo }} — AeroTrack Travel{% endblock %}
+{% block content %}
+{# WP-04 — se manda como volver_a=<esta URL completa, con filtros y página>
+   para que "Ver detalle"/el modal de cancelar puedan volver exactamente
+   acá (J10 de la constitución: regreso predecible, sin perder el estado). #}
+{% set url_actual = request.url.path ~ ('?' ~ request.url.query if request.url.query else '') %}
+{{ header(
+    "bi-calendar-check",
+    titulo,
+    ("Ventas — tus reservas asistidas; las de pago pendiente aparecen primero, con horas para vencer." if solo_mi_cartera
+     else "Ventas — todas las reservas por estado/período/canal; las de pago pendiente muestran horas para vencer."),
+    request,
+    cu_ref=cu_ref,
+    export_path=export_path
+) }}
+
+<form method="get" id="form-filtros" data-auto-filtros class="at-card d-flex flex-wrap gap-3 align-items-end mb-3">
+    <div>
+        <label class="form-label-at" for="f-estado">Estado</label>
+        <select class="form-control-at" id="f-estado" name="estado" style="min-width:150px">
+            <option value="">Todos</option>
+            {% for e in estados %}
+            <option value="{{ e }}" {% if filtros.estado == e %}selected{% endif %}>{{ e.replace('_', ' ') | capitalize }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div>
+        <label class="form-label-at" for="f-canal">Canal</label>
+        <select class="form-control-at" id="f-canal" name="canal" style="min-width:130px">
+            <option value="">Todos</option>
+            {% for c in canales %}
+            <option value="{{ c }}" {% if filtros.canal == c %}selected{% endif %}>{{ c | capitalize }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div>
+        <label class="form-label-at" for="f-desde">Desde</label>
+        <input type="date" class="form-control-at" id="f-desde" name="desde" value="{{ filtros.desde }}">
+    </div>
+    <div>
+        <label class="form-label-at" for="f-hasta">Hasta</label>
+        <input type="date" class="form-control-at" id="f-hasta" name="hasta" value="{{ filtros.hasta }}">
+    </div>
+    <div>
+        <label class="form-label-at" for="f-codigo">Código de reserva</label>
+        <input type="text" class="form-control-at" id="f-codigo" name="codigo_reserva" value="{{ filtros.codigo_reserva }}"
+               placeholder="PNR..." style="min-width:130px">
+    </div>
+    <div>
+        <label class="form-label-at" for="f-pasajero">Nombre del pasajero</label>
+        <input type="text" class="form-control-at" id="f-pasajero" name="nombre_pasajero" value="{{ filtros.nombre_pasajero }}"
+               placeholder="Nombre completo" style="min-width:170px">
+    </div>
+    <div class="d-flex align-items-center gap-2" style="height:38px">
+        <input type="checkbox" id="f-urgentes" name="urgentes_24h" value="1" {% if filtros.urgentes_24h %}checked{% endif %}>
+        <label class="form-label-at m-0" for="f-urgentes" style="cursor:pointer">Solo próximas a vencer (&lt;24h)</label>
+    </div>
+    {% if filtros.estado or filtros.canal or filtros.desde or filtros.hasta or filtros.codigo_reserva or filtros.nombre_pasajero or filtros.urgentes_24h %}
+    <a href="{{ volver_a }}" class="btn-at-ghost">Limpiar</a>
+    {% endif %}
+</form>
+
+<div class="at-table-wrapper">
+    <div class="at-table-header">
+        <span class="at-table-title">{{ pagina.total_items }} reserva(s)</span>
+    </div>
+    {% if not pagina.items %}
+    <div class="at-empty">
+        <i class="bi bi-calendar-x at-empty-icon" aria-hidden="true"></i>
+        <strong>No hay reservas con estos filtros</strong>
+    </div>
+    {% else %}
+    <div class="at-table-scroll">
+        <table class="at-table">
+            <thead>
+                <tr>
+                    <th>Código</th><th>Pasajero</th><th>Estado</th><th>Canal</th><th>Total</th>
+                    <th>Fecha reserva</th><th>Vence en</th><th class="actions-col">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in pagina.items %}
+                <tr>
+                    <td class="at-mono" style="font-weight:600">{{ r.codigo_reserva }}</td>
+                    <td>{{ r.pasajero_nombre or '—' }}</td>
+                    <td><span class="badge-sistema">{{ r.estado.replace('_', ' ') }}</span></td>
+                    <td style="text-transform:capitalize">{{ r.canal }}</td>
+                    <td class="at-mono">${{ "%.2f"|format(r.total_pagar or 0) }}</td>
+                    <td class="at-mono" style="font-size:12px;color:var(--at-muted)">{{ r.fecha_reserva[:10] if r.fecha_reserva else "" }}</td>
+                    <td>
+                        {% if r.horas_para_vencer is not none %}
+                        <span style="font-weight:600;color:{% if r.horas_para_vencer < 6 %}var(--at-danger){% elif r.horas_para_vencer < 24 %}var(--amber-600){% else %}var(--at-text){% endif %}">
+                            {{ r.horas_para_vencer }}h
+                        </span>
+                        {% else %}
+                        <span style="color:var(--at-sub)">—</span>
+                        {% endif %}
+                    </td>
+                    <td class="actions-col">
+                        <a href="/reservas/{{ r.id }}?volver_a={{ url_actual | urlencode }}" class="btn-icon" title="Ver detalle"><i class="bi bi-eye" aria-hidden="true"></i></a>
+                        {% if r.tiene_voucher %}
+                        <a href="/reservas/{{ r.id }}/voucher-pdf" class="btn-icon" title="Ver voucher"><i class="bi bi-file-earmark-pdf" aria-hidden="true"></i></a>
+                        {% endif %}
+                        {% if r.puede_cancelar %}
+                        <button type="button" class="btn-icon danger" data-bs-toggle="modal" data-bs-target="#modal-cancelar-{{ r.id }}"
+                                title="{{ 'Iniciar reembolso' if r.es_reembolso else 'Cancelar' }}">
+                            <i class="bi {{ 'bi-arrow-counterclockwise' if r.es_reembolso else 'bi-x-circle' }}" aria-hidden="true"></i>
+                        </button>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {{ controles(pagina, request) }}
+    {% endif %}
+</div>
+
+{% for r in pagina.items %}
+{% if r.puede_cancelar %}
+<div class="modal fade" id="modal-cancelar-{{ r.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width:440px">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title d-flex align-items-center gap-2" style="font-size:16px;font-weight:700">
+                    <span class="modal-icon-title" style="background:var(--at-failed-bg);color:var(--at-danger)">
+                        <i class="bi {{ 'bi-arrow-counterclockwise' if r.es_reembolso else 'bi-x-circle' }}" aria-hidden="true"></i>
+                    </span>{{ 'Iniciar reembolso' if r.es_reembolso else 'Cancelar reserva' }}
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body" style="font-size:13.5px">
+                {% if r.es_reembolso %}
+                ¿Confirmás cancelar la reserva <strong class="at-mono">{{ r.codigo_reserva }}</strong>? Se procesará el
+                reembolso según la política de la tarifa. Esta acción no se puede deshacer.
+                {% else %}
+                ¿Confirmás cancelar la reserva <strong class="at-mono">{{ r.codigo_reserva }}</strong>? Esta acción no se puede deshacer.
+                {% endif %}
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-at-ghost" data-bs-dismiss="modal">Volver</button>
+                <form method="post" action="/reservas/{{ r.id }}/cancelar" class="m-0">
+                    <input type="hidden" name="volver_a" value="{{ url_actual }}">
+                    <button type="submit" class="btn-at-danger">
+                        <i class="bi {{ 'bi-arrow-counterclockwise' if r.es_reembolso else 'bi-x-circle' }}" aria-hidden="true"></i>
+                        {{ 'Iniciar reembolso' if r.es_reembolso else 'Cancelar reserva' }}
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endfor %}
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+{% endblock %}

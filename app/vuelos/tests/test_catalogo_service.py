@@ -57,6 +57,20 @@ async def test_cada_vuelo_tiene_tres_tarifas_independientes(pb):
     assert len(set(cupos)) >= 2  # cada nivel tiene su propio cupo, no comparten un único valor
 
 
+# ── Diversidad de rutas curadas (fix 2026-07-21) ──────────────────────────
+
+def test_rutas_curadas_tiene_diversidad_de_origenes():
+    """Antes del fix, `_rutas_curadas()` ordenaba alfabéticamente y
+    truncaba a MAX_RUTAS — en la práctica solo ATL y CLT aparecían como
+    origen, nunca los otros 13 hubs curados (bug confirmado, ver
+    docs/aerotrack-travel-propuesta-tablas-v3.dbml:147-156)."""
+    import catalogo_vuelos_tasks  # noqa: E402  (requiere el sys.path de arriba)
+
+    rutas = catalogo_vuelos_tasks._rutas_curadas()
+    origenes = {r["OriginCode"] for r in rutas}
+    assert len(origenes) >= 5, f"poca diversidad de orígenes: {origenes}"
+
+
 # ── RNF-VUE-002 / RN-VUE-003 (CHK011, CHK016) ─────────────────────────────
 
 def test_generacion_no_tiene_ninguna_llamada_de_escritura_a_minio():

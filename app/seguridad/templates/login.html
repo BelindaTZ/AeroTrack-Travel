@@ -14,7 +14,18 @@
         <i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i>{{ error }}
     </div>
 </div>
+{% elif next %}
+<div class="flash-bar" role="status">
+    <div class="flash-success">
+        <i class="bi bi-info-circle-fill" aria-hidden="true"></i>Inicia sesión para continuar. ¿No tienes cuenta? <a href="/registro">Regístrate aquí</a>.
+    </div>
+</div>
 {% endif %}
+
+<a href="/login/google{% if next %}?next={{ next | urlencode }}{% endif %}" class="btn-google">
+    <i class="bi bi-google" aria-hidden="true"></i>Continuar con Google
+</a>
+<div class="login-divider">o con tu correo</div>
 
 <form method="post" action="/login" novalidate>
     {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}

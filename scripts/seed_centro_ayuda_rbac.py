@@ -110,19 +110,26 @@ def main() -> None:
     for accion in ("ver", "editar"):
         otorgar(headers, rol_agente, {**permisos_existentes[accion], "accion": accion}, rp_agente)
 
+    # Una fila por accion (RN-SEG-009 extendida a nivel de tabla, 2026-07-30):
+    # Nivel 2 ahora restringe por (tabla, accion), no solo por tabla — hay que
+    # sembrar "ver" y "editar" (las dos acciones Nivel 1 de Agente en este
+    # módulo) para que la restricción a casos_escalados cubra todo lo que
+    # antes cubría una sola fila sin accion.
     restricciones_agente = get_all(headers, "roles_permisos_tablas")
-    ya_restringido = any(
-        r["rol_id"] == rol_agente["id"] and r["modulo_id"] == modulo["id"] and r["tabla"] == "casos_escalados"
-        for r in restricciones_agente
-    )
-    if not ya_restringido:
-        create(
-            headers, "roles_permisos_tablas",
-            {"rol_id": rol_agente["id"], "modulo_id": modulo["id"], "tabla": "casos_escalados"},
+    for accion in ("ver", "editar"):
+        ya_restringido = any(
+            r["rol_id"] == rol_agente["id"] and r["modulo_id"] == modulo["id"]
+            and r["tabla"] == "casos_escalados" and r.get("accion") == accion
+            for r in restricciones_agente
         )
-        print(f"+ roles_permisos_tablas Agente -> {MODULO_CLAVE}.casos_escalados (Nivel 2, restringe a solo esta tabla)")
-    else:
-        print("= restricción Nivel 2 de Agente ya existe")
+        if not ya_restringido:
+            create(
+                headers, "roles_permisos_tablas",
+                {"rol_id": rol_agente["id"], "modulo_id": modulo["id"], "tabla": "casos_escalados", "accion": accion},
+            )
+            print(f"+ roles_permisos_tablas Agente -> {MODULO_CLAVE}.casos_escalados.{accion} (Nivel 2)")
+        else:
+            print(f"= restricción Nivel 2 de Agente ({accion}) ya existe")
 
     modulo_tablas_existentes = {
         mt["tabla"] for mt in get_all(headers, "modulo_tablas") if mt["modulo_id"] == modulo["id"]

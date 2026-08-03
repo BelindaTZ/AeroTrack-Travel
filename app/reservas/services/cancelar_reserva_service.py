@@ -18,9 +18,10 @@ from app.facturacion.services.reembolso_service import (
 )
 from app.reservas.repositories.reservas_repo import ReservasRepository
 from app.seguridad.services.audit_service import AuditService
-from app.shared.catalogo_producto import CATALOGO_POR_TIPO
-from app.shared.cupo_service import liberar_cupo
+from app.seguridad.services.rbac_service import tiene_permiso
+from app.shared import cupo_rango_service
 from app.vuelos.repositories.vuelos_repo import VuelosRepository
+from app.vuelos.services.asientos_service import liberar_asientos_de_reserva
 
 
 async def _cancelar_items_y_liberar_cupo(repo: ReservasRepository, reserva_id: str) -> None:
@@ -29,16 +30,9 @@ async def _cancelar_items_y_liberar_cupo(repo: ReservasRepository, reserva_id: s
         if item["estado_item"] != "cancelado":
             await repo.actualizar_item(item["id"], {"estado_item": "cancelado"})
 
-        info = CATALOGO_POR_TIPO.get(item["tipo_producto"])
-        if info is None:
-            continue
-        coleccion, _, campo_id, campo_cupo = info
-        if campo_cupo is None:
-            continue
-        registro_id = item.get(campo_id)
-        if not registro_id:
-            continue
-        await liberar_cupo(coleccion, registro_id, campo_cupo, int(item.get("cantidad") or 1))
+        await cupo_rango_service.liberar_cupo_item(
+            item["tipo_producto"], item, int(item.get("cantidad") or 1)
+        )
 
 
 class ReservaNoEncontrada(Exception):
@@ -53,11 +47,12 @@ class VueloYaCompletado(Exception):
     pass
 
 
-def _autorizado(usuario: dict, reserva: dict, pasajero: dict | None) -> bool:
+async def _autorizado(usuario: dict, reserva: dict, pasajero: dict | None) -> bool:
     es_titular = pasajero is not None and reserva["pasajero_titular_id"] == pasajero["id"]
     es_agente_de_la_reserva = reserva.get("agente_id") == usuario["id"]
-    es_administrador = usuario.get("tipo_actor") == "administrador"
-    return es_titular or es_agente_de_la_reserva or es_administrador
+    if es_titular or es_agente_de_la_reserva:
+        return True
+    return await tiene_permiso(usuario, "reservas", "eliminar")
 
 
 async def cancelar_reserva(usuario: dict, reserva_id: str) -> dict:
@@ -69,7 +64,7 @@ async def cancelar_reserva(usuario: dict, reserva_id: str) -> dict:
         raise ReservaNoEncontrada()
 
     pasajero = await repo.pasajero_de_usuario(usuario["id"])
-    if not _autorizado(usuario, reserva, pasajero):
+    if not await _autorizado(usuario, reserva, pasajero):
         raise SinPermiso()
 
     vuelo = await vuelos_repo.obtener_vuelo(reserva["vuelo_id"])
@@ -79,6 +74,7 @@ async def cancelar_reserva(usuario: dict, reserva_id: str) -> dict:
 
     actualizada = await repo.actualizar_reserva(reserva_id, {"estado": "cancelada"})
     await _cancelar_items_y_liberar_cupo(repo, reserva_id)
+    await liberar_asientos_de_reserva(reserva_id)
 
     detalle = {"estado_anterior": reserva["estado"]}
     tarifa = await vuelos_repo.obtener_tarifa(reserva["tarifa_id"])

@@ -1,0 +1,121 @@
+{% extends "layout_app.html" %}
+{% from "_paginacion.html" import controles %}
+{% block title %}Suscriptores al newsletter — AeroTrack Travel{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <h1><span class="heading-icon"><i class="bi bi-envelope"></i></span>Suscriptores al newsletter</h1>
+    <p>Comercial — la suscripción se origina desde el portal (CU-O104); aquí solo se consulta y se activa/desactiva.</p>
+</div>
+
+<div class="at-table-wrapper">
+    <div class="at-table-header">
+        <form method="get" data-auto-filtros class="d-flex flex-wrap gap-2 align-items-end">
+            <div>
+                <label class="form-label-at" for="f-email">Email</label>
+                <input type="text" id="f-email" name="email" class="form-control-at" value="{{ filtros.email }}"
+                       placeholder="Email..." style="min-width:220px">
+            </div>
+            <div>
+                <label class="form-label-at" for="f-estado">Estado</label>
+                <select class="form-control-at" id="f-estado" name="estado" style="min-width:120px">
+                    <option value="">Todos</option>
+                    <option value="activo" {% if filtros.estado == 'activo' %}selected{% endif %}>Activo</option>
+                    <option value="inactivo" {% if filtros.estado == 'inactivo' %}selected{% endif %}>Inactivo</option>
+                </select>
+            </div>
+            {% if filtros.email or filtros.estado %}
+            <a href="/backoffice/ofertas/suscriptores" class="btn-at-ghost">Limpiar</a>
+            {% endif %}
+        </form>
+    </div>
+
+    {% if not pagina.items %}
+    <div class="at-empty">
+        <i class="bi bi-envelope at-empty-icon" aria-hidden="true"></i>
+        <strong>Sin suscriptores con estos filtros</strong>
+    </div>
+    {% else %}
+    <div class="at-table-scroll">
+        <table class="at-table">
+            <thead><tr><th>Email</th><th>Suscrito desde</th><th>Origen</th><th>Estado</th><th class="actions-col">Acciones</th></tr></thead>
+            <tbody>
+            {% for s in pagina.items %}
+            <tr>
+                <td class="at-mono" style="font-weight:600">{{ s.email }}</td>
+                <td class="at-mono" style="font-size:12px">{{ s.fecha_suscripcion[:10] if s.fecha_suscripcion else "—" }}</td>
+                <td>{{ "Pasajero registrado" if s.pasajero_id else "Anónimo" }}</td>
+                <td>{% if s.activo %}<span class="badge-sistema">activo</span>{% else %}<span class="badge-sistema" style="opacity:.6">inactivo</span>{% endif %}</td>
+                <td class="actions-col">
+                    <button type="button" class="btn-icon" data-bs-toggle="modal" data-bs-target="#modal-ver-{{ s.id }}" title="Ver">
+                        <i class="bi bi-eye" aria-hidden="true"></i>
+                    </button>
+                    <button type="button" class="btn-icon {% if s.activo %}danger{% endif %}" data-bs-toggle="modal"
+                            data-bs-target="#modal-alternar-{{ s.id }}" title="{{ 'Desactivar' if s.activo else 'Reactivar' }}">
+                        <i class="bi {{ 'bi-slash-circle' if s.activo else 'bi-arrow-counterclockwise' }}" aria-hidden="true"></i>
+                    </button>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {{ controles(pagina, request) }}
+    {% endif %}
+</div>
+
+{% for s in pagina.items %}
+<!-- Modal: ver (solo lectura) -->
+<div class="modal fade" id="modal-ver-{{ s.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title d-flex align-items-center gap-2" style="font-size:16px;font-weight:700">
+                    <span class="modal-icon-title"><i class="bi bi-envelope" aria-hidden="true"></i></span><span class="at-mono">{{ s.email }}</span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body d-flex flex-column gap-2" style="font-size:13.5px">
+                <div class="d-flex justify-content-between"><span style="color:var(--at-muted)">Suscrito desde</span><span class="at-mono">{{ s.fecha_suscripcion[:10] if s.fecha_suscripcion else "—" }}</span></div>
+                <div class="d-flex justify-content-between"><span style="color:var(--at-muted)">Origen</span><span>{{ "Pasajero registrado" if s.pasajero_id else "Anónimo (solo email)" }}</span></div>
+                <div class="d-flex justify-content-between"><span style="color:var(--at-muted)">Estado</span><span>{% if s.activo %}<span class="badge-sistema">activo</span>{% else %}<span class="badge-sistema" style="opacity:.6">inactivo</span>{% endif %}</span></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-at-ghost" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: desactivar / reactivar -->
+<div class="modal fade" id="modal-alternar-{{ s.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width:420px">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title d-flex align-items-center gap-2" style="font-size:16px;font-weight:700">
+                    <span class="modal-icon-title" style="{% if s.activo %}background:var(--at-failed-bg);color:var(--at-danger){% endif %}">
+                        <i class="bi {{ 'bi-slash-circle' if s.activo else 'bi-arrow-counterclockwise' }}" aria-hidden="true"></i>
+                    </span>{{ 'Desactivar suscripción' if s.activo else 'Reactivar suscripción' }}
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body" style="font-size:13.5px">
+                {% if s.activo %}
+                ¿Desactivar la suscripción de <strong class="at-mono">{{ s.email }}</strong>? Deja de recibir campañas de inmediato — se puede reactivar cuando quieras.
+                {% else %}
+                ¿Reactivar la suscripción de <strong class="at-mono">{{ s.email }}</strong>? Vuelve a recibir campañas.
+                {% endif %}
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-at-ghost" data-bs-dismiss="modal">Cancelar</button>
+                <form method="post" action="/backoffice/ofertas/suscriptores/{{ s.id }}/alternar-activo" class="m-0">
+                    <button type="submit" class="{{ 'btn-at-danger' if s.activo else 'btn-at-primary' }}">
+                        <i class="bi {{ 'bi-slash-circle' if s.activo else 'bi-arrow-counterclockwise' }}" aria-hidden="true"></i>
+                        {{ 'Desactivar' if s.activo else 'Reactivar' }}
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% endblock %}

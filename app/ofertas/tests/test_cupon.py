@@ -2,6 +2,8 @@
 descuento sobre una reserva propia en `pendiente_pago`."""
 
 from app.ofertas.services.ofertas_service import CuponInvalido, aplicar_cupon
+from app.reservas.repositories.reservas_repo import ReservasRepository
+from app.shared import minio_operational_client as moc
 
 
 async def _crear_cupon(pb, **extra) -> dict:
@@ -11,6 +13,11 @@ async def _crear_cupon(pb, **extra) -> dict:
     }
     data.update(extra)
     return await pb.create_record("cupones_descuento", data)
+
+
+async def _usos_de_cupon(cupon_id: str) -> list[dict]:
+    usos = await moc.listar_todos("cupones_uso")
+    return [u for u in usos if u.get("cupon_id") == cupon_id]
 
 
 async def test_aplicar_cupon_porcentaje(pb, pasajero_factory, vuelo_factory, tarifa_factory, reserva_factory):
@@ -24,15 +31,15 @@ async def test_aplicar_cupon_porcentaje(pb, pasajero_factory, vuelo_factory, tar
     assert resultado["monto_descontado"] == 20.0
     assert resultado["nuevo_total"] == 180.0
 
-    reserva_actualizada = await pb.get_record("reservas", reserva["id"])
+    reserva_actualizada = await ReservasRepository().obtener_reserva(reserva["id"])
     assert reserva_actualizada["total_pagar"] == 180.0
     cupon_actualizado = await pb.get_record("cupones_descuento", cupon["id"])
     assert cupon_actualizado["usos_actuales"] == 1
 
-    usos = await pb.list_records("cupones_uso", {"filter": f'cupon_id="{cupon["id"]}"'})
-    assert usos["totalItems"] == 1
-    for u in usos["items"]:
-        await pb.delete_record("cupones_uso", u["id"])
+    usos = await _usos_de_cupon(cupon["id"])
+    assert len(usos) == 1
+    for u in usos:
+        await moc.eliminar("cupones_uso", u["id"])
     await pb.delete_record("cupones_descuento", cupon["id"])
 
 
@@ -47,9 +54,8 @@ async def test_aplicar_cupon_monto_fijo(pb, pasajero_factory, vuelo_factory, tar
     assert resultado["monto_descontado"] == 15.0
     assert resultado["nuevo_total"] == 85.0
 
-    usos = await pb.list_records("cupones_uso", {"filter": f'cupon_id="{cupon["id"]}"'})
-    for u in usos["items"]:
-        await pb.delete_record("cupones_uso", u["id"])
+    for u in await _usos_de_cupon(cupon["id"]):
+        await moc.eliminar("cupones_uso", u["id"])
     await pb.delete_record("cupones_descuento", cupon["id"])
 
 
@@ -64,9 +70,8 @@ async def test_monto_fijo_nunca_deja_total_negativo(pb, pasajero_factory, vuelo_
     assert resultado["monto_descontado"] == 10.0
     assert resultado["nuevo_total"] == 0.0
 
-    usos = await pb.list_records("cupones_uso", {"filter": f'cupon_id="{cupon["id"]}"'})
-    for u in usos["items"]:
-        await pb.delete_record("cupones_uso", u["id"])
+    for u in await _usos_de_cupon(cupon["id"]):
+        await moc.eliminar("cupones_uso", u["id"])
     await pb.delete_record("cupones_descuento", cupon["id"])
 
 
@@ -118,10 +123,10 @@ async def test_cupon_no_se_aplica_dos_veces_a_la_misma_reserva(
     except CuponInvalido as exc:
         assert "ya se aplicó" in str(exc).lower()
 
-    usos = await pb.list_records("cupones_uso", {"filter": f'cupon_id="{cupon["id"]}"'})
-    assert usos["totalItems"] == 1
-    for u in usos["items"]:
-        await pb.delete_record("cupones_uso", u["id"])
+    usos = await _usos_de_cupon(cupon["id"])
+    assert len(usos) == 1
+    for u in usos:
+        await moc.eliminar("cupones_uso", u["id"])
     await pb.delete_record("cupones_descuento", cupon["id"])
 
 
@@ -175,9 +180,8 @@ async def test_excepcion_de_cupon_gana_sobre_default_global(
     resultado = await aplicar_cupon(usuario, pasajero["id"], reserva["id"], cupon["codigo"])
     assert resultado["monto_descontado"] == 10.0
 
-    usos = await pb.list_records("cupones_uso", {"filter": f'cupon_id="{cupon["id"]}"'})
-    for u in usos["items"]:
-        await pb.delete_record("cupones_uso", u["id"])
+    for u in await _usos_de_cupon(cupon["id"]):
+        await moc.eliminar("cupones_uso", u["id"])
     await pb.delete_record("cupones_descuento", cupon["id"])
 
 
@@ -199,10 +203,9 @@ async def test_endpoint_aplicar_cupon_via_http(
     assert resp.status_code == 303
     assert "Cup" in resp.headers["location"]
 
-    reserva_actualizada = await pb.get_record("reservas", reserva["id"])
+    reserva_actualizada = await ReservasRepository().obtener_reserva(reserva["id"])
     assert reserva_actualizada["total_pagar"] == 180.0
 
-    usos = await pb.list_records("cupones_uso", {"filter": f'cupon_id="{cupon["id"]}"'})
-    for u in usos["items"]:
-        await pb.delete_record("cupones_uso", u["id"])
+    for u in await _usos_de_cupon(cupon["id"]):
+        await moc.eliminar("cupones_uso", u["id"])
     await pb.delete_record("cupones_descuento", cupon["id"])

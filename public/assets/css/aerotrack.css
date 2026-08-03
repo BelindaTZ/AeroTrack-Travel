@@ -477,6 +477,7 @@ a { color: var(--at-primary); }
   display: none; background: transparent; border: none; cursor: pointer;
   color: rgba(255,255,255,.8); padding: 6px;
 }
+.portal-nav-mobile { display: none; }
 
 /* ─────────────────────── HERO SEARCH ───────────────────────────── */
 .at-hero-search {
@@ -520,6 +521,40 @@ a { color: var(--at-primary); }
 @keyframes hero-plane-drift {
   0%, 100% { transform: translate(0, 0); }
   50%      { transform: translate(6px, -4px); }
+}
+
+/* Fotos reales en el hero de cada buscador (Unsplash, con licencia —
+   scripts/fetch_hero_images.py) — mismo trato visual que login_hero.jpg:
+   foto + scrim de color + grayscale parcial (ver .login-dark-panel::before) */
+.at-hero-search.hero-vuelos::before,
+.at-hero-search.hero-hoteles::before,
+.at-hero-search.hero-autos::before,
+.at-hero-search.hero-actividades::before,
+.at-hero-search.hero-cruceros::before,
+.at-hero-search.hero-home::before {
+  background-size: cover, cover;
+  background-position: center, center;
+  background-repeat: no-repeat;
+  filter: grayscale(.4);
+  animation: none; /* la foto ya da textura, no hace falta el shift animado sobre ella */
+}
+.at-hero-search.hero-vuelos::before {
+  background-image: linear-gradient(160deg, rgba(6,14,28,.88) 0%, rgba(10,22,40,.80) 50%, rgba(14,30,52,.72) 100%), url('/static/assets/images/hero_vuelos.jpg');
+}
+.at-hero-search.hero-hoteles::before {
+  background-image: linear-gradient(160deg, rgba(6,14,28,.88) 0%, rgba(10,22,40,.80) 50%, rgba(14,30,52,.72) 100%), url('/static/assets/images/hero_hoteles.jpg');
+}
+.at-hero-search.hero-autos::before {
+  background-image: linear-gradient(160deg, rgba(6,14,28,.88) 0%, rgba(10,22,40,.80) 50%, rgba(14,30,52,.72) 100%), url('/static/assets/images/hero_autos.jpg');
+}
+.at-hero-search.hero-actividades::before {
+  background-image: linear-gradient(160deg, rgba(6,14,28,.88) 0%, rgba(10,22,40,.80) 50%, rgba(14,30,52,.72) 100%), url('/static/assets/images/hero_actividades.jpg');
+}
+.at-hero-search.hero-cruceros::before {
+  background-image: linear-gradient(160deg, rgba(6,14,28,.88) 0%, rgba(10,22,40,.80) 50%, rgba(14,30,52,.72) 100%), url('/static/assets/images/hero_cruceros.jpg');
+}
+.at-hero-search.hero-home::before {
+  background-image: linear-gradient(160deg, rgba(6,14,28,.88) 0%, rgba(10,22,40,.80) 50%, rgba(14,30,52,.72) 100%), url('/static/assets/images/hero_home.jpg');
 }
 
 .hero-eyebrow {
@@ -658,6 +693,49 @@ a { color: var(--at-primary); }
 }
 .categoria-card strong { font-size: 14.5px; }
 .categoria-card span { font-size: 12px; color: var(--at-muted); }
+
+/* Tarjetas con foto real (Inicio) — reemplazan la duplicación de navegación
+   que ya cubren las tabs del hero, con las mismas fotos de
+   scripts/fetch_hero_images.py usadas en cada buscador */
+.categoria-foto-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px; margin: 18px 0 36px;
+}
+.categoria-foto-card {
+  position: relative; border-radius: var(--at-r-lg); overflow: hidden;
+  height: 160px; display: flex; align-items: flex-end;
+  text-decoration: none; color: #fff;
+  box-shadow: var(--at-shadow-sm);
+  transition: transform var(--at-dur-base), box-shadow var(--at-dur-base);
+}
+.categoria-foto-card:hover, .categoria-foto-card:focus-visible {
+  transform: translateY(-3px); box-shadow: var(--at-shadow-md);
+}
+.categoria-foto-card img {
+  position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
+  filter: grayscale(.3);
+}
+.categoria-foto-card::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(0deg, rgba(6,14,28,.85) 0%, rgba(6,14,28,.15) 60%, transparent 100%);
+}
+.categoria-foto-card .categoria-foto-texto { position: relative; z-index: 1; padding: 14px; }
+.categoria-foto-card strong { display: block; font-size: 15px; font-weight: 800; }
+.categoria-foto-card span { font-size: 11.5px; color: rgba(255,255,255,.75); }
+
+/* Carrusel de hoteles destacados (Inicio) — reemplaza a .categoria-foto-*
+   (era una 3ra forma redundante de elegir "Vuelos/Hoteles/...", ya cubierta
+   por el nav superior); foto/calificación reales de hoteles_catalogo,
+   Bootstrap Carousel nativo (auto-avanza con data-bs-ride) */
+.destacados-carrusel { border-radius: var(--at-r-lg); overflow: hidden; margin: 18px 0 36px; box-shadow: var(--at-shadow-sm); }
+.destacado-slide {
+  display: flex; align-items: flex-end;
+  height: 260px; background-size: cover; background-position: center;
+  color: #fff; text-decoration: none;
+}
+.destacado-slide-texto { padding: 20px; display: flex; flex-direction: column; gap: 2px; }
+.destacado-slide-texto strong { font-size: 18px; font-weight: 800; }
+.destacado-slide-texto span { font-size: 12.5px; color: rgba(255,255,255,.85); }
 
 /* Grid de destinos populares (Inicio) — datos reales de vuelos_catalogo */
 .destinos-grid {
@@ -899,6 +977,64 @@ a { color: var(--at-primary); }
   transform: rotate(45deg);
 }
 .perm-toggle:hover:not(:checked) { border-color: var(--at-primary); }
+.perm-toggle:disabled { cursor: not-allowed; opacity: .4; }
+.perm-toggle:disabled:checked { background: var(--at-sub); border-color: var(--at-sub); }
+
+/* ─────────── MATRIZ DE PERMISOS (rol_editar — Nivel 1 / Nivel 2) ──
+   Nivel 1: una fila por módulo, columnas = acciones (ver/crear/editar/
+   eliminar/exportar/ejecutar). Nivel 2: agrupada por módulo (<details>),
+   una fila por tabla, columnas = solo las 4 acciones con sentido sobre
+   registros puntuales. Ambas comparten `.perm-matrix` para que las
+   columnas se lean como la misma grilla "vista de módulo" / "vista de
+   tabla" — ver specs/operativo/seguridad/seguridad-spec.md RN-SEG-009. */
+.perm-matrix-scroll { overflow-x: auto; }
+table.perm-matrix {
+  width: 100%; border-collapse: collapse; font-size: 13.5px;
+}
+table.perm-matrix thead th {
+  background: var(--at-bg); padding: 10px 14px; text-align: center;
+  font-size: 10px; font-weight: 700; color: var(--at-sub);
+  letter-spacing: .6px; text-transform: uppercase;
+  border-bottom: 1px solid var(--at-border); white-space: nowrap;
+}
+table.perm-matrix thead th.perm-matrix-col-nombre { text-align: left; }
+table.perm-matrix tbody td {
+  padding: 9px 14px; text-align: center; border-bottom: 1px solid var(--at-border);
+  vertical-align: middle;
+}
+table.perm-matrix tbody tr:last-child td { border-bottom: none; }
+table.perm-matrix tbody tr:hover td { background: var(--at-bg); }
+table.perm-matrix td.perm-matrix-col-nombre {
+  text-align: left; font-weight: 600; color: var(--at-text); white-space: nowrap;
+  position: sticky; left: 0; background: var(--at-surface);
+}
+table.perm-matrix tbody tr:hover td.perm-matrix-col-nombre { background: var(--at-bg); }
+.perm-na { color: var(--at-sub); opacity: .45; font-size: 13px; }
+
+table.perm-matrix.perm-matrix-inner { min-width: 0; font-size: 12.5px; }
+table.perm-matrix.perm-matrix-inner thead th { background: transparent; padding: 8px 10px 6px; font-size: 9px; }
+table.perm-matrix.perm-matrix-inner thead th.perm-matrix-col-nombre { padding-left: 0; }
+table.perm-matrix.perm-matrix-inner tbody td { padding: 6px 10px; }
+table.perm-matrix.perm-matrix-inner td.perm-matrix-col-nombre {
+  font-family: var(--font-mono); font-weight: 500; font-size: 12px; padding-left: 0;
+  position: static; background: transparent;
+}
+table.perm-matrix.perm-matrix-inner tbody tr:hover td { background: var(--at-bg); }
+
+.perm-grupo { border-bottom: 1px solid var(--at-border); }
+.perm-grupo:last-child { border-bottom: none; }
+.perm-grupo summary {
+  list-style: none; cursor: pointer; padding: 12px 18px;
+  display: flex; align-items: center; gap: 10px;
+  transition: background var(--at-dur-fast);
+}
+.perm-grupo summary::-webkit-details-marker { display: none; }
+.perm-grupo summary:hover { background: var(--at-bg); }
+.perm-chev { width: 14px; height: 14px; flex-shrink: 0; color: var(--at-sub); transition: transform var(--at-dur-fast); }
+.perm-grupo[open] > summary .perm-chev { transform: rotate(90deg); }
+.perm-grupo-nombre { font-weight: 700; font-size: 13.5px; color: var(--at-text); }
+.perm-grupo-count { font-size: 12px; color: var(--at-sub); margin-left: auto; margin-right: 2px; }
+.perm-grupo-body { padding: 2px 18px 14px 40px; border-top: 1px dashed var(--at-border); }
 
 /* ─────────────────────── BOTONES ───────────────────────────────── */
 .btn-at-primary {
@@ -983,21 +1119,108 @@ a { color: var(--at-primary); }
   background: var(--at-surface);
 }
 
+/* ─────────────────────── SELECTOR DE LUGAR (combobox) ──────────────── */
+.selector-lugar { position: relative; }
+.selector-lugar-input-wrap { position: relative; }
+.selector-lugar-input-wrap > .selector-lugar-icon {
+  position: absolute; left: 11px; top: 50%; transform: translateY(-50%);
+  font-size: 13px; pointer-events: none; z-index: 1;
+  color: var(--at-muted);
+}
+.search-card .selector-lugar-icon,
+.search-card-compact .selector-lugar-icon { color: rgba(255,255,255,.55); }
+.selector-lugar-input { padding-left: 32px; }
+
+.selector-lugar-panel {
+  /* position:fixed + reubicado a <body> por JS (ver selector-lugar.js) —
+     así escapa el overflow:hidden de .at-hero-search y el containing block
+     que crea el backdrop-filter de .search-card; top/left/width se fijan
+     inline según la posición real del input. */
+  position: fixed; z-index: 1000;
+  background: var(--at-surface); border: 1px solid var(--at-border);
+  border-radius: var(--at-r-md); box-shadow: var(--at-shadow-md);
+  max-height: 280px; overflow-y: auto; margin: 0; padding: 6px; list-style: none;
+}
+.selector-lugar-item {
+  display: flex; align-items: flex-start; gap: 9px;
+  padding: 8px 9px; border-radius: var(--at-r-sm); cursor: pointer;
+  transition: background var(--at-dur-fast);
+}
+.selector-lugar-item:hover, .selector-lugar-item.resaltado { background: var(--at-bg); }
+.selector-lugar-item-icon { color: var(--at-muted); font-size: 13px; margin-top: 2px; flex-shrink: 0; }
+.selector-lugar-item-texto { display: flex; flex-direction: column; min-width: 0; }
+.selector-lugar-item-principal { font-size: 13px; font-weight: 600; color: var(--at-text); }
+.selector-lugar-item-principal strong { color: var(--at-primary); font-weight: 800; }
+.selector-lugar-item-sub { font-size: 11px; color: var(--at-sub); }
+.selector-lugar-vacio { padding: 12px 9px; font-size: 12.5px; color: var(--at-sub); text-align: center; }
+
+/* ─────────────────────── MAPA DE ASIENTOS (checkout) ─────────────── */
+#mapa-asientos { max-height: 320px; overflow-y: auto; padding: 4px 2px; }
+.mapa-asientos-fila { display: flex; align-items: center; gap: 5px; margin-bottom: 5px; }
+.mapa-asientos-fila-num {
+  width: 20px; font-size: 10.5px; color: var(--at-sub); text-align: right;
+  flex-shrink: 0; font-family: var(--font-mono, monospace);
+}
+.mapa-asientos-pasillo { width: 12px; flex-shrink: 0; }
+.asiento-btn {
+  width: 26px; height: 26px; flex-shrink: 0;
+  border-radius: 6px; border: 1.5px solid var(--at-border);
+  background: var(--at-surface); cursor: pointer;
+  font-size: 9px; color: var(--at-muted); font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  transition: transform var(--at-dur-fast), border-color var(--at-dur-fast);
+  padding: 0;
+}
+.asiento-btn:hover:not(:disabled) { transform: scale(1.12); border-color: var(--at-primary); }
+.asiento-btn.premium { border-color: var(--amber-400); background: rgba(245,158,11,.08); color: var(--amber-700); }
+.asiento-btn.ocupado { background: var(--slate-100); border-color: var(--slate-100); color: var(--at-sub); cursor: not-allowed; opacity: .6; }
+.asiento-btn.bloqueado { background: var(--slate-50); border-color: var(--slate-100); color: var(--at-sub); cursor: not-allowed; opacity: .45; }
+.asiento-btn.elegido { background: var(--at-primary); border-color: var(--at-primary); color: #fff; transform: scale(1.12); }
+.asiento-leyenda {
+  display: inline-block; width: 11px; height: 11px; border-radius: 3px;
+  border: 1.5px solid var(--at-border); vertical-align: middle; margin-right: 3px;
+}
+.asiento-leyenda-libre { background: var(--at-surface); }
+.asiento-leyenda-premium { border-color: var(--amber-400); background: rgba(245,158,11,.12); }
+.asiento-leyenda-ocupado { background: var(--slate-100); border-color: var(--slate-100); }
+.asiento-leyenda-elegido { background: var(--at-primary); border-color: var(--at-primary); }
+
 /* ─────────────────────── FLASH MESSAGES ────────────────────────── */
 .flash-bar { margin-bottom: 18px; }
-.flash-success, .flash-error {
+.flash-success, .flash-error, .flash-warning {
   border-radius: var(--at-r-md); padding: 10px 16px;
   font-size: 13.5px; display: flex; align-items: center; gap: 9px;
   animation: at-slide-down var(--at-dur-base) var(--at-ease);
 }
 .flash-success { background: var(--at-success-bg); border: 1px solid #b9e3cb; color: #0a5233; }
 .flash-error { background: var(--at-failed-bg); border: 1px solid #f3c9c9; color: #7f1d1d; }
+/* Advertencia — mismos tokens que .badge-status.warning, ver sección BADGES */
+.flash-warning { background: var(--at-warning-bg); border: 1px solid #f3d9b8; color: #7a3e0a; }
 @keyframes at-slide-down {
   from { opacity: 0; transform: translateY(-8px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-.toast-autodismiss { animation: at-fadeout .3s ease-in 4.5s forwards; }
+/* Fix global 2 (auditoría de WorkPanels) — 4s visibles + .3s de fundido */
+.toast-autodismiss { animation: at-fadeout .3s ease-in 4s forwards; }
 @keyframes at-fadeout { to { opacity: 0; visibility: hidden; } }
+
+/* ─────────────────────── PAGINACIÓN (WorkPanels) ────────────────── */
+.at-paginacion {
+  display: flex; align-items: center; gap: 4px; flex-wrap: wrap;
+  padding: 14px 18px; border-top: 1px solid var(--at-border);
+}
+.at-paginacion .pag-btn, .at-paginacion .pag-num {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 30px; height: 30px; padding: 0 8px;
+  border-radius: var(--at-r-sm); font-size: 13px; font-weight: 600;
+  color: var(--at-muted); text-decoration: none;
+  transition: background var(--at-dur-fast), color var(--at-dur-fast);
+}
+.at-paginacion .pag-btn:hover, .at-paginacion .pag-num:hover { background: var(--at-bg); color: var(--at-text); }
+.at-paginacion .pag-num.active { background: var(--at-primary); color: #fff; }
+.at-paginacion .pag-btn.disabled { opacity: .35; pointer-events: none; }
+.at-paginacion .pag-ellipsis { color: var(--at-sub); padding: 0 2px; }
+.at-paginacion .pag-total { margin-left: auto; font-size: 12px; color: var(--at-sub); white-space: nowrap; }
 
 /* ─────────────────────── MODALES ───────────────────────────────── */
 .modal-content { border-radius: var(--at-r-xl); border: none; box-shadow: var(--at-shadow-lift); }
@@ -1088,8 +1311,39 @@ a { color: var(--at-primary); }
 .login-form-title { font-size: 22px; font-weight: 800; margin-bottom: 5px; letter-spacing: -.03em; }
 .login-form-sub { font-size: 13.5px; color: var(--at-muted); margin-bottom: 26px; }
 
+.btn-google {
+  display: flex; align-items: center; justify-content: center; gap: 9px;
+  width: 100%; padding: 11px 16px;
+  border: 1px solid var(--at-border); border-radius: var(--at-r-md);
+  background: var(--at-surface); color: var(--at-text);
+  font-size: 13.5px; font-weight: 600; text-decoration: none;
+  transition: background var(--at-dur-fast), border-color var(--at-dur-fast);
+}
+.btn-google:hover { background: var(--slate-50); border-color: var(--at-sub); color: var(--at-text); }
+.btn-google i { font-size: 16px; color: #4285F4; }
+.login-divider {
+  display: flex; align-items: center; gap: 12px;
+  margin: 20px 0; font-size: 11.5px; font-weight: 600;
+  color: var(--at-sub); text-transform: uppercase; letter-spacing: .4px;
+}
+.login-divider::before, .login-divider::after {
+  content: ""; flex: 1; height: 1px; background: var(--at-border);
+}
+
 @media (max-width: 900px) {
   .login-dark-panel { display: none; }
+}
+
+/* Topbar portal — nivel compacto (laptops comunes: 1280-1650px aprox.) */
+@media (max-width: 1650px) and (min-width: 901px) {
+  #portal-topbar { padding: 0 18px; gap: 8px; }
+  #portal-topbar .portal-nav { gap: 0; }
+  #portal-topbar .portal-nav-link { padding: 6px 8px; font-size: 12px; gap: 4px; }
+  #portal-topbar .portal-nav-link i { font-size: 13px; }
+  #portal-topbar .portal-brand .suite { display: none; }
+  #portal-topbar .portal-actions { gap: 6px; }
+  #portal-topbar .btn-at-ghost-dark { padding: 7px 10px; font-size: 12.5px; white-space: nowrap; }
+  #portal-topbar .btn-search-hero { padding: 7px 12px !important; font-size: 12.5px !important; white-space: nowrap; }
 }
 
 /* ─────────────────────── RESPONSIVE SHELL ──────────────────────── */
@@ -1119,9 +1373,14 @@ a { color: var(--at-primary); }
   }
   .portal-nav-mobile.open { display: block; }
   .portal-nav-mobile .portal-nav-link {
-    display: flex; padding: 10px 14px;
-    border-radius: var(--at-r-md); margin-bottom: 2px;
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px; border-radius: var(--at-r-md); margin-bottom: 2px;
+    color: rgba(255,255,255,.78); text-decoration: none;
+    font-size: 14px; font-weight: 500;
   }
+  .portal-nav-mobile .portal-nav-link:hover { background: rgba(255,255,255,.10); color: #fff; }
+  .portal-nav-mobile .portal-nav-link.active { background: rgba(255,255,255,.14); color: #fff; font-weight: 600; }
+  .portal-nav-mobile .portal-nav-link i { font-size: 15px; width: 18px; text-align: center; }
 
   /* Hero search mobile */
   .at-hero-search { padding: 32px 18px 40px; }

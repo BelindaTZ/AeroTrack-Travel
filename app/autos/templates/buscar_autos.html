@@ -2,8 +2,9 @@
 {% block title %}Buscar autos de renta — AeroTrack Travel{% endblock %}
 {% block description %}Compara autos de renta por ciudad y fechas, precio final por día.{% endblock %}
 
+{% import "_selector_lugar.html" as sel %}
 {% block hero %}
-<section class="at-hero-search {% if resultados is not none %}compact{% endif %}" aria-label="Buscador de autos">
+<section class="at-hero-search hero-autos {% if resultados is not none %}compact{% endif %}" aria-label="Buscador de autos">
     <div style="max-width:960px;margin:0 auto;position:relative;z-index:2">
         {% if not resultados %}
         <div class="hero-eyebrow">
@@ -14,18 +15,11 @@
         <p class="hero-sub">Compara marcas, categorías y precios por día. Precio final sin sorpresas.</p>
         {% endif %}
 
-        <datalist id="lista-ciudades-autos">
-            {% for c in ciudades %}<option value="{{ c }}">{% endfor %}
-        </datalist>
-
         <form method="get" action="/autos/buscar" id="form-busqueda-autos"
               class="{% if resultados %}search-card-compact{% else %}search-card{% endif %}">
             <div class="row g-3 align-items-end">
                 <div class="col-12 col-md-4">
-                    <label class="form-label-at" for="ciudad">Ciudad de recogida</label>
-                    <input type="text" class="form-control-at" id="ciudad" name="ciudad"
-                           list="lista-ciudades-autos" placeholder="Paris"
-                           value="{{ filtros.ciudad }}" required autocomplete="off">
+                    {{ sel.campo('ciudad', 'ciudad', filtros.ciudad, ciudades, 'Ciudad de recogida', 'Ciudad', 'car-front') }}
                 </div>
                 <div class="col-6 col-md-3">
                     <label class="form-label-at" for="recogida">Recogida</label>
@@ -147,7 +141,10 @@
                         <div class="at-mono" style="font-size:20px;font-weight:800;color:var(--at-primary)">
                             ${{ "%.0f"|format(a.precio_dia) }}<span style="font-size:11px;font-weight:500;color:var(--at-muted)"> /día</span>
                         </div>
-                        <a href="/autos/{{ a.id }}" class="btn-at-ghost w-100 justify-content-center mt-2">
+                        {% if a.dias %}
+                        <div style="font-size:11px;color:var(--at-sub)">${{ "%.0f"|format(a.precio_total) }} total · {{ a.dias }} día{{ 's' if a.dias != 1 else '' }}</div>
+                        {% endif %}
+                        <a href="/autos/{{ a.id }}?recogida={{ filtros.recogida }}&devolucion={{ filtros.devolucion }}{% if request.query_params.get('paquete_id') %}&paquete_id={{ request.query_params.get('paquete_id') }}{% endif %}" class="btn-at-ghost w-100 justify-content-center mt-2">
                             Ver detalle <i class="bi bi-chevron-right"></i>
                         </a>
                     </div>

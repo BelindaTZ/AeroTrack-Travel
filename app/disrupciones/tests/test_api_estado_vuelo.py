@@ -1,7 +1,9 @@
 import datetime
 
 from app.disrupciones.integrations.flight_status_client import AviationStackClient
+from app.disrupciones.repositories.disrupciones_repo import DisrupcionesRepository
 from app.disrupciones.services.api_estado_vuelo_service import consultar_estados_cercanos
+from app.shared import minio_operational_client as moc
 
 
 def _fecha_cercana(horas: int = 24) -> str:
@@ -25,7 +27,11 @@ async def test_disrupcion_creada_por_api_real_cuando_estado_difiere(
     assert resumen["disrupciones_creadas"] >= 1
     assert resumen["degradado"] is False
 
-    disrupcion = await pb.get_first("disrupciones", f'vuelo_id="{vuelo["id"]}" && fuente_deteccion="api_real"')
+    disrupciones = await moc.listar_todos("disrupciones")
+    disrupcion = next(
+        (d for d in disrupciones if d.get("vuelo_id") == vuelo["id"] and d.get("fuente_deteccion") == "api_real"),
+        None,
+    )
     assert disrupcion is not None
     assert disrupcion["tipo_cambio"] == "retraso"
     assert disrupcion["estado"] == "activa"
@@ -33,7 +39,7 @@ async def test_disrupcion_creada_por_api_real_cuando_estado_difiere(
     vuelo_actualizado = await pb.get_record("vuelos_catalogo", vuelo["id"])
     assert vuelo_actualizado["estado"] == "retrasado"
 
-    await pb.delete_record("disrupciones", disrupcion["id"])
+    await moc.eliminar("disrupciones", disrupcion["id"])
 
 
 # ── CHK012, CHK014, RNF-DIS-001 ────────────────────────────────────────
@@ -68,10 +74,11 @@ async def test_falla_puntual_en_un_vuelo_no_interrumpe_el_resto(
     assert resumen["degradado"] is True
     assert resumen["disrupciones_creadas"] >= 1
 
-    disrupcion = await pb.get_first("disrupciones", f'vuelo_id="{vuelo_ok["id"]}"')
+    disrupcion = await DisrupcionesRepository().disrupciones_de_vuelo_y_tipo(vuelo_ok["id"], "cancelacion")
+    disrupcion = disrupcion[0] if disrupcion else None
     assert disrupcion is not None
     assert disrupcion["tipo_cambio"] == "cancelacion"
-    await pb.delete_record("disrupciones", disrupcion["id"])
+    await moc.eliminar("disrupciones", disrupcion["id"])
 
 
 # ── CHK015, RNF-DIS-002 ─────────────────────────────────────────────────
@@ -97,5 +104,6 @@ async def test_mismo_estado_no_genera_disrupcion(pb, vuelo_factory, flight_statu
     resumen = await consultar_estados_cercanos(cliente, notification_sender_falso)
     assert resumen["disrupciones_creadas"] == 0
 
-    disrupcion = await pb.get_first("disrupciones", f'vuelo_id="{vuelo["id"]}"')
+    disrupciones = await moc.listar_todos("disrupciones")
+    disrupcion = next((d for d in disrupciones if d.get("vuelo_id") == vuelo["id"]), None)
     assert disrupcion is None

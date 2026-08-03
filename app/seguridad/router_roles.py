@@ -1,17 +1,21 @@
 """RF-SEG-010,011,012 — crear/editar/eliminar rol."""
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import JSONResponse
 
 from app.seguridad.services.audit_service import AuditService
 from app.seguridad.services.rbac_service import requiere_permiso
 from app.seguridad.services.roles_service import (
+    ACCIONES_NIVEL1,
+    ACCIONES_NIVEL2,
     NivelDosExcedeNivelUno,
     RolConUsuariosAsignados,
     RolesService,
     RolProtegido,
 )
+from app.shared.flash import redirect_con_mensaje
 from app.shared.nav import nav_context
+from app.shared.paginacion import paginar
 from app.shared.pocketbase_client import get_pocketbase_client
 from app.shared.templating import templates
 
@@ -27,6 +31,12 @@ async def _contexto_matriz(usuario: dict, rol_id: str):
     permisos = (await client.list_records("permisos", {"perPage": 500}))["items"]
     modulo_tablas = (await client.list_records("modulo_tablas", {"perPage": 500}))["items"]
     contexto = await nav_context(usuario)
+    # (modulo_id, accion) con al menos una fila explícita de Nivel 2 — el resto
+    # de las columnas están "sin restricción" (heredan Nivel 1 completo) y la
+    # plantilla las muestra tildadas por defecto sin persistir nada hasta que
+    # se toquen (ver perm-heredado en rol_editar.html).
+    columnas_restringidas_nivel2 = {(m, a) for (m, _t, a) in matriz["tablas"]}
+
     contexto.update({
         "rol": rol,
         "modulos": modulos,
@@ -34,33 +44,38 @@ async def _contexto_matriz(usuario: dict, rol_id: str):
         "modulo_tablas": modulo_tablas,
         "permiso_ids_actuales": matriz["permiso_ids"],
         "tablas_actuales": matriz["tablas"],
+        "columnas_restringidas_nivel2": columnas_restringidas_nivel2,
+        "acciones_nivel1": ACCIONES_NIVEL1,
+        "acciones_nivel2": ACCIONES_NIVEL2,
     })
     return contexto
 
 
 @router.get("")
 async def listar(
-    request: Request, usuario: dict = Depends(requiere_permiso("seguridad", "ver", "roles"))
+    request: Request,
+    nombre: str = Query(""),
+    tipo_panel: str = Query(""),
+    page: int = Query(1, ge=1),
+    usuario: dict = Depends(requiere_permiso("seguridad", "ver", "roles")),
 ):
-    roles = await RolesService().listar_roles()
+    roles = await RolesService().listar_roles(nombre=nombre or None, tipo_panel=tipo_panel or None)
+    pagina = paginar(roles, page)
     contexto = await nav_context(usuario)
-    contexto["roles"] = roles
+    contexto.update({"pagina": pagina, "filtros": {"nombre": nombre, "tipo_panel": tipo_panel}})
     return templates.TemplateResponse(request, "admin/roles.html", contexto)
 
 
 @router.post("")
 async def crear(
-    request: Request,
     nombre: str = Form(...),
     descripcion: str = Form(""),
+    tipo_panel: str = Form(...),
     usuario: dict = Depends(requiere_permiso("seguridad", "crear", "roles")),
 ):
-    creado = await RolesService().crear_rol(nombre, descripcion)
+    creado = await RolesService().crear_rol(nombre, descripcion, tipo_panel)
     await AuditService().insertar("crear", "roles", usuario_id=usuario["id"], registro_id=creado["id"])
-    roles = await RolesService().listar_roles()
-    contexto = await nav_context(usuario)
-    contexto.update({"roles": roles, "mensaje": "Rol creado"})
-    return templates.TemplateResponse(request, "admin/roles.html", contexto)
+    return redirect_con_mensaje("/admin/roles", "Rol creado")
 
 
 @router.get("/{rol_id}/editar")
@@ -83,7 +98,7 @@ async def editar(
     tabla_nivel2: list[str] = Form([]),
     usuario: dict = Depends(requiere_permiso("seguridad", "editar", "roles")),
 ):
-    tablas_nivel2 = [tuple(t.split("::", 1)) for t in tabla_nivel2 if "::" in t]
+    tablas_nivel2 = [tuple(t.split("::", 2)) for t in tabla_nivel2 if t.count("::") == 2]
     try:
         actualizado = await RolesService().editar_rol(rol_id, nombre, descripcion, permiso_id, tablas_nivel2)
     except NivelDosExcedeNivelUno:

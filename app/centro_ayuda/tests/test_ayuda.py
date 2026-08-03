@@ -1,5 +1,8 @@
 """RF-AYU-001,002,003 (CU-O97,O98,O99) — buscar/ver artículos, calificar."""
 
+from app.centro_ayuda.repositories.centro_ayuda_repo import CentroAyudaRepository
+from app.shared import minio_operational_client as moc
+
 
 async def _crear_articulo(pb, autor_id: str, **extra) -> dict:
     data = {
@@ -63,13 +66,13 @@ async def test_calificar_anonimo(client, pb, admin_client):
     resp = await client.post(f"/ayuda/{articulo['id']}/calificar", data={"util": "arriba"}, follow_redirects=True)
     assert resp.status_code == 200
 
-    calificaciones = await pb.list_records("articulo_calificaciones", {"filter": f'articulo_id="{articulo["id"]}"'})
-    assert calificaciones["totalItems"] == 1
-    assert calificaciones["items"][0]["util"] == "arriba"
-    assert calificaciones["items"][0].get("pasajero_id") == ""
+    calificaciones = await CentroAyudaRepository().calificaciones_de_articulo(articulo["id"])
+    assert len(calificaciones) == 1
+    assert calificaciones[0]["util"] == "arriba"
+    assert not calificaciones[0].get("pasajero_id")
 
-    for c in calificaciones["items"]:
-        await pb.delete_record("articulo_calificaciones", c["id"])
+    for c in calificaciones:
+        await moc.eliminar("articulo_calificaciones", c["id"])
     await pb.delete_record("articulos_ayuda", articulo["id"])
 
 
@@ -83,12 +86,12 @@ async def test_calificar_logueado_asocia_pasajero(client, pb, admin_client, pasa
     resp = await client.post(f"/ayuda/{articulo['id']}/calificar", data={"util": "abajo"}, follow_redirects=True)
     assert resp.status_code == 200
 
-    calificaciones = await pb.list_records("articulo_calificaciones", {"filter": f'articulo_id="{articulo["id"]}"'})
-    assert calificaciones["totalItems"] == 1
-    assert calificaciones["items"][0]["pasajero_id"] == pasajero["id"]
+    calificaciones = await CentroAyudaRepository().calificaciones_de_articulo(articulo["id"])
+    assert len(calificaciones) == 1
+    assert calificaciones[0]["pasajero_id"] == pasajero["id"]
 
-    for c in calificaciones["items"]:
-        await pb.delete_record("articulo_calificaciones", c["id"])
+    for c in calificaciones:
+        await moc.eliminar("articulo_calificaciones", c["id"])
     await pb.delete_record("articulos_ayuda", articulo["id"])
 
 
@@ -98,7 +101,7 @@ async def test_calificar_valor_invalido_no_crea_registro(client, pb, admin_clien
     resp = await client.post(f"/ayuda/{articulo['id']}/calificar", data={"util": "regular"}, follow_redirects=True)
     assert resp.status_code == 200
 
-    calificaciones = await pb.list_records("articulo_calificaciones", {"filter": f'articulo_id="{articulo["id"]}"'})
-    assert calificaciones["totalItems"] == 0
+    calificaciones = await CentroAyudaRepository().calificaciones_de_articulo(articulo["id"])
+    assert calificaciones == []
 
     await pb.delete_record("articulos_ayuda", articulo["id"])

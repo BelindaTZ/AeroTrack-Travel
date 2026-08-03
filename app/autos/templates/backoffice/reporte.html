@@ -1,0 +1,40 @@
+{% extends "layout_app.html" %}
+{% block title %}Reporte de Autos — AeroTrack Travel{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <h1><span class="heading-icon"><i class="bi bi-car-front"></i></span>Reporte de reservas — Autos</h1>
+    <p>Volumen e ingresos por proveedor y categoría de vehículo, sobre reservas reales (CU-T11).</p>
+</div>
+
+<div class="filter-bar mb-3">
+    <a href="?dias=30" class="btn-at-ghost {% if dias == 30 %}active{% endif %}">Últimos 30 días</a>
+    <a href="?dias=90" class="btn-at-ghost {% if dias == 90 %}active{% endif %}">Últimos 90 días</a>
+    <a href="?dias=365" class="btn-at-ghost {% if dias == 365 %}active{% endif %}">Último año</a>
+</div>
+
+{% if reporte %}
+<div class="at-table-wrapper">
+    <div class="at-table-scroll">
+        <table class="at-table">
+            <thead><tr><th>Proveedor</th><th>Categoría</th><th>Reservas</th><th>Confirmadas</th><th>Ingresos</th></tr></thead>
+            <tbody>
+            {% for f in reporte %}
+            <tr>
+                <td style="text-transform:capitalize">{{ f.proveedor }}</td>
+                <td style="text-transform:capitalize">{{ f.categoria }}</td>
+                <td class="at-mono">{{ f.reservas }}</td>
+                <td class="at-mono">{{ f.confirmadas }}</td>
+                <td class="at-mono" style="color:var(--at-primary)">${{ "%.2f"|format(f.ingresos) }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="at-empty">
+    <i class="bi bi-car-front at-empty-icon" aria-hidden="true"></i>
+    <strong>Sin reservas de autos en este período</strong>
+</div>
+{% endif %}
+{% endblock %}

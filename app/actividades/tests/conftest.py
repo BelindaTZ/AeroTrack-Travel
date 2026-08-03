@@ -4,6 +4,7 @@
 import pytest
 
 from app.actividades.services.traveladvisor_client import TravelAdvisorClient
+from app.shared import minio_catalog_reader
 
 
 class TravelAdvisorClientFalso(TravelAdvisorClient):
@@ -68,6 +69,7 @@ async def actividad_factory(pb):
         data.update(extra)
         actividad = await pb.create_record("actividades_catalogo", data)
         creadas.append(actividad["id"])
+        await minio_catalog_reader.publicar_y_refrescar("actividades_catalogo")
         return actividad
 
     yield _crear
@@ -77,6 +79,8 @@ async def actividad_factory(pb):
             await pb.delete_record("actividades_catalogo", actividad_id)
         except Exception:
             pass
+    if creadas:
+        await minio_catalog_reader.publicar_y_refrescar("actividades_catalogo")
 
 
 @pytest.fixture
@@ -94,6 +98,7 @@ async def horario_factory(pb):
             },
         )
         creados.append(horario["id"])
+        await minio_catalog_reader.publicar_y_refrescar("actividades_horarios")
         return horario
 
     yield _crear
@@ -103,6 +108,8 @@ async def horario_factory(pb):
             await pb.delete_record("actividades_horarios", horario_id)
         except Exception:
             pass
+    if creados:
+        await minio_catalog_reader.publicar_y_refrescar("actividades_horarios")
 
 
 @pytest.fixture
@@ -120,6 +127,7 @@ async def resena_factory(pb):
             },
         )
         creadas.append(resena["id"])
+        await minio_catalog_reader.publicar_y_refrescar("actividades_resenas")
         return resena
 
     yield _crear
@@ -129,3 +137,5 @@ async def resena_factory(pb):
             await pb.delete_record("actividades_resenas", resena_id)
         except Exception:
             pass
+    if creadas:
+        await minio_catalog_reader.publicar_y_refrescar("actividades_resenas")

@@ -31,6 +31,50 @@ async def ofertas_destacadas_con_descripcion(tipo_producto: str | None = None) -
     return salida
 
 
+class OfertaInvalida(Exception):
+    def __init__(self, motivo: str):
+        self.motivo = motivo
+        super().__init__(motivo)
+
+
+async def crear_oferta_destacada(usuario: dict, data: dict) -> dict:
+    """WP-17 (auditoría de WorkPanels, 2026-08-01) — antes `ofertas_destacadas`
+    no tenía ningún panel de gestión, solo se leía para el home público."""
+    repo = OfertasRepository()
+    oferta = await repo.crear_oferta(data)
+    await AuditService().insertar(
+        "crear_oferta_destacada", "ofertas_destacadas", usuario_id=usuario["id"], registro_id=oferta["id"]
+    )
+    return oferta
+
+
+async def actualizar_oferta_destacada(usuario: dict, oferta_id: str, data: dict) -> dict:
+    repo = OfertasRepository()
+    oferta = await repo.obtener_oferta(oferta_id)
+    if oferta is None:
+        raise OfertaInvalida("Oferta no encontrada")
+    actualizada = await repo.actualizar_oferta(oferta_id, data)
+    await AuditService().insertar(
+        "actualizar_oferta_destacada", "ofertas_destacadas", usuario_id=usuario["id"], registro_id=oferta_id
+    )
+    return actualizada
+
+
+async def alternar_activa_oferta(usuario: dict, oferta_id: str) -> dict:
+    repo = OfertasRepository()
+    oferta = await repo.obtener_oferta(oferta_id)
+    if oferta is None:
+        raise OfertaInvalida("Oferta no encontrada")
+    nueva_activa = not oferta.get("activa", True)
+    actualizada = await repo.actualizar_oferta(oferta_id, {"activa": nueva_activa})
+    await AuditService().insertar(
+        "reactivar_oferta_destacada" if nueva_activa else "desactivar_oferta_destacada",
+        "ofertas_destacadas", usuario_id=usuario["id"], registro_id=oferta_id,
+        detalle={"activa": nueva_activa},
+    )
+    return actualizada
+
+
 async def destinos_populares(pasajero_id: str | None, origen_declarado: str | None, limite: int = 6) -> tuple[str | None, list[dict]]:
     """RF-OFE-002/RN-OFE-001 — estadística real de uso (búsquedas +
     reservas de vuelo), nunca curación editorial. El origen se infiere de
@@ -83,7 +127,7 @@ async def suscribirse_newsletter(email: str, pasajero_id: str | None) -> dict:
     existente = await repo.suscripcion_existente(email)
     if existente:
         if not existente.get("activo", True):
-            await repo._client.update_record("newsletter_suscripciones", existente["id"], {"activo": True})
+            await repo.reactivar_suscripcion(existente["id"])
         return existente
 
     data = {"email": email, "fecha_suscripcion": _ahora_iso(), "activo": True}
@@ -177,6 +221,52 @@ async def actualizar_cupon(usuario: dict, cupon_id: str, data: dict) -> dict:
 
     actualizado = await repo.actualizar_cupon(cupon_id, data)
     await AuditService().insertar("editar_cupon", "cupones_descuento", usuario_id=usuario["id"], registro_id=cupon_id)
+    return actualizado
+
+
+async def alternar_activo_cupon(usuario: dict, cupon_id: str) -> dict:
+    """WP-06 (auditoría de WorkPanels, 2026-07-31) — Desactivar/Reactivar
+    como acción propia (antes era un checkbox dentro del form de Editar,
+    sin confirmación ni acción independiente)."""
+    repo = OfertasRepository()
+    cupon = await repo.obtener_cupon(cupon_id)
+    if cupon is None:
+        raise CuponInvalido("Cupón no encontrado")
+
+    nuevo_activo = not cupon.get("activo", True)
+    actualizado = await repo.actualizar_cupon(cupon_id, {"activo": nuevo_activo})
+    await AuditService().insertar(
+        "reactivar_cupon" if nuevo_activo else "desactivar_cupon",
+        "cupones_descuento", usuario_id=usuario["id"], registro_id=cupon_id,
+        detalle={"activo": nuevo_activo},
+    )
+    return actualizado
+
+
+class SuscripcionInvalida(Exception):
+    def __init__(self, motivo: str):
+        self.motivo = motivo
+        super().__init__(motivo)
+
+
+async def alternar_activo_suscripcion(usuario: dict, suscripcion_id: str) -> dict:
+    """WP-07 (auditoría de WorkPanels, 2026-07-31) — panel de gestión de
+    suscriptores al newsletter, antes inexistente en el backoffice."""
+    repo = OfertasRepository()
+    suscripcion = await repo.obtener_suscripcion(suscripcion_id)
+    if suscripcion is None:
+        raise SuscripcionInvalida("Suscripción no encontrada")
+
+    if suscripcion.get("activo"):
+        actualizado = await repo.desactivar_suscripcion(suscripcion_id)
+        accion = "desactivar_suscripcion"
+    else:
+        actualizado = await repo.reactivar_suscripcion(suscripcion_id)
+        accion = "reactivar_suscripcion"
+    await AuditService().insertar(
+        accion, "newsletter_suscripciones", usuario_id=usuario["id"], registro_id=suscripcion_id,
+        detalle={"activo": actualizado.get("activo")},
+    )
     return actualizado
 
 

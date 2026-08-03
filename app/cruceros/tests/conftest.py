@@ -4,6 +4,7 @@ demás módulos de catálogo nuevos esta sesión."""
 import pytest
 
 from app.cruceros.services.cruisepricing_client import CruisePricingClient
+from app.shared import minio_catalog_reader
 
 
 class CruisePricingClientFalso(CruisePricingClient):
@@ -49,6 +50,7 @@ async def naviera_factory(pb):
             },
         )
         creadas.append(naviera["id"])
+        await minio_catalog_reader.publicar_y_refrescar("navieras")
         return naviera
 
     yield _crear
@@ -58,6 +60,8 @@ async def naviera_factory(pb):
             await pb.delete_record("navieras", naviera_id)
         except Exception:
             pass
+    if creadas:
+        await minio_catalog_reader.publicar_y_refrescar("navieras")
 
 
 @pytest.fixture
@@ -69,6 +73,7 @@ async def barco_factory(pb):
             "barcos", {"naviera_id": naviera_id, "nombre": nombre, "fecha_actualizacion": "2027-01-01 00:00:00.000Z"}
         )
         creados.append(barco["id"])
+        await minio_catalog_reader.publicar_y_refrescar("barcos")
         return barco
 
     yield _crear
@@ -78,6 +83,8 @@ async def barco_factory(pb):
             await pb.delete_record("barcos", barco_id)
         except Exception:
             pass
+    if creados:
+        await minio_catalog_reader.publicar_y_refrescar("barcos")
 
 
 @pytest.fixture
@@ -102,6 +109,7 @@ async def crucero_factory(pb):
         data.update(extra)
         crucero = await pb.create_record("cruceros_catalogo", data)
         creados.append(crucero["id"])
+        await minio_catalog_reader.publicar_y_refrescar("cruceros_catalogo")
         return crucero
 
     yield _crear
@@ -111,6 +119,8 @@ async def crucero_factory(pb):
             await pb.delete_record("cruceros_catalogo", crucero_id)
         except Exception:
             pass
+    if creados:
+        await minio_catalog_reader.publicar_y_refrescar("cruceros_catalogo")
 
 
 @pytest.fixture
@@ -127,6 +137,7 @@ async def camarote_factory(pb):
             },
         )
         creados.append(camarote["id"])
+        await minio_catalog_reader.publicar_y_refrescar("cruceros_camarotes_tarifa")
         return camarote
 
     yield _crear
@@ -136,3 +147,5 @@ async def camarote_factory(pb):
             await pb.delete_record("cruceros_camarotes_tarifa", camarote_id)
         except Exception:
             pass
+    if creados:
+        await minio_catalog_reader.publicar_y_refrescar("cruceros_camarotes_tarifa")

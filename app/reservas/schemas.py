@@ -44,3 +44,8 @@ class ReservaDetalleOut(BaseModel):
     # de vuelo de arriba.
     es_multiproducto: bool = False
     items: list[ItemReservaOut] = []
+    # Paquete (2026-07-27) — `descuento_paquete_pct` solo tiene sentido si
+    # `es_paquete` es true; se copia una sola vez al confirmar (RN-PAQ-002),
+    # no se recalcula después aunque `tipos_paquete_descuento` cambie.
+    es_paquete: bool = False
+    descuento_paquete_pct: float | None = None

@@ -145,7 +145,7 @@ Ningún proceso del sistema, incluyendo tareas de mantenimiento, puede editar o 
 - **RN-SEG-006** — El correo electrónico es único en todo el sistema; no puede haber dos cuentas (`usuarios`) con el mismo correo.
 - **RN-SEG-007** — Un rol marcado como protegido (`roles.es_sistema = true`) no puede eliminarse ni perder su permiso base, sin importar quién lo solicite.
 - **RN-SEG-008** — *(Nueva, resuelve QP-10)* No se puede eliminar un rol que tenga usuarios activos asignados actualmente; el sistema exige reasignar esos usuarios a otro rol antes de permitir la eliminación.
-- **RN-SEG-009** — El RBAC de Nivel 2 (restricción por tabla) nunca amplía el acceso otorgado en Nivel 1; solo puede restringirlo.
+- **RN-SEG-009** — *(Ampliada 2026-07-30)* El RBAC de Nivel 2 (restricción por tabla y acción) nunca amplía el acceso otorgado en Nivel 1; solo puede restringirlo. La restricción es por (módulo, tabla, acción): una fila de Nivel 2 en "ver" no afecta lo que Nivel 1 otorgó para "editar" sobre la misma tabla, y solo ver/crear/editar/eliminar admiten Nivel 2 — ejecutar/exportar quedan exclusivas de Nivel 1.
 - **RN-SEG-010** — El registro de auditoría es de solo inserción: ningún flujo del sistema, en ningún módulo, puede editarlo ni eliminarlo (REG-B4).
 - **RN-SEG-011** — *(Nueva, resuelve QP-13)* Toda solicitud de eliminación de datos personales se resuelve respetando la retención mínima necesaria mientras existan reservas activas, pendientes de pago, o pagos/reembolsos en curso asociados al usuario; el sistema informa explícitamente al usuario qué datos no pueden eliminarse todavía y por qué (REG-C2, REG-C3).
 
@@ -253,7 +253,7 @@ Proveer la base de identidad, control de acceso y trazabilidad de todo el sistem
 - **CU-O42:** Dado que llega una solicitud a una ruta que requiere sesión, cuando el token es inválido o expiró, entonces la solicitud se rechaza y el usuario es redirigido a iniciar sesión sin perder el progreso de un flujo multi-paso.
 - **CU-O43:** Dado que un Agente/Administrador solicita una acción sobre un módulo/tabla, cuando su rol no tiene el permiso correspondiente en la matriz RBAC, entonces la acción se bloquea antes de tocar datos.
 - **CU-O112:** Dado que un Administrador edita los permisos Nivel 1 de un rol, cuando asigna o revoca el acceso a un módulo, entonces `roles_permisos` queda actualizado en consecuencia — mismo criterio que CU-O10, probado en CHK015/CHK031.
-- **CU-O113:** Dado que un Administrador edita los permisos Nivel 2 de un rol, cuando asigna o revoca el acceso a una tabla dentro de un módulo ya autorizado, entonces `roles_permisos_tablas` queda actualizado sin ampliar lo no autorizado en Nivel 1 — mismo criterio que CU-O10, probado en CHK015/CHK031.
+- **CU-O113:** Dado que un Administrador edita los permisos Nivel 2 de un rol, cuando asigna o revoca el acceso a una acción puntual (ver/crear/editar/eliminar) sobre una tabla dentro de un módulo ya autorizado para esa misma acción, entonces `roles_permisos_tablas` queda actualizado sin ampliar lo no autorizado en Nivel 1 — mismo criterio que CU-O10, probado en CHK015/CHK031.
 
 ---
 

@@ -5,7 +5,6 @@ import uuid
 
 from app.facturacion.repositories.facturacion_repo import FacturacionRepository
 from app.facturacion.services.documentos_service import generar_pdf_factura
-from app.shared.pocketbase_client import get_pocketbase_client
 
 
 async def emitir_factura(reserva: dict, pago: dict) -> dict:
@@ -24,11 +23,5 @@ async def emitir_factura(reserva: dict, pago: dict) -> dict:
     )
 
     pdf_bytes = await generar_pdf_factura(numero_factura, reserva, pago)
-    client = get_pocketbase_client()
-    factura = await client.update_record_con_archivo(
-        "facturas",
-        factura["id"],
-        {},
-        {"archivo_pdf": (f"{numero_factura}.pdf", pdf_bytes, "application/pdf")},
-    )
+    factura = await repo.guardar_pdf_factura(factura["id"], f"{numero_factura}.pdf", pdf_bytes)
     return factura

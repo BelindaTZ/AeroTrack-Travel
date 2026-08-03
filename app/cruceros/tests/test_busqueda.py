@@ -43,6 +43,23 @@ async def test_filtro_duracion_excluye_cruceros_fuera_de_rango(client, naviera_f
     assert "$2000" not in resp.text
 
 
+async def test_filtro_desde_hasta_excluye_crucero_fuera_de_rango(client, naviera_factory, barco_factory, crucero_factory):
+    naviera = await naviera_factory()
+    barco = await barco_factory(naviera["id"])
+    await crucero_factory(
+        naviera["id"], barco["id"], itinerario_puertos=[{"day": 1, "port": "Cozumel"}],
+        fecha_zarpe="2027-06-15", precio_base=300.0,
+    )
+    await crucero_factory(
+        naviera["id"], barco["id"], itinerario_puertos=[{"day": 1, "port": "Cozumel"}],
+        fecha_zarpe="2027-09-01", precio_base=2000.0,
+    )
+
+    resp = await client.get("/cruceros/buscar", params={"destino": "Cozumel", "desde": "2027-06-01", "hasta": "2027-06-30"})
+    assert "$300" in resp.text
+    assert "$2000" not in resp.text
+
+
 async def test_detalle_muestra_itinerario_y_camarotes(client, naviera_factory, barco_factory, crucero_factory, camarote_factory):
     naviera = await naviera_factory()
     barco = await barco_factory(naviera["id"], nombre="Carnival Valor")

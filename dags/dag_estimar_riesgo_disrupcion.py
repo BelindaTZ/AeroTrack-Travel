@@ -1,11 +1,13 @@
 """
 AeroTrack Travel — DAG: Estimar riesgo de disrupción (simulador estadístico, CU-O39)
 =======================================================================================
-Qué hace: para vuelos programados fuera de la ventana de la API de estado
-real (umbral configurable, configuracion_sistema.disrupciones.umbral_api_real_horas),
-calcula un riesgo de disrupción a partir del histórico OTP/causas de retraso
-(agg_otp_aerolinea_mes, agg_causas_retraso_mes en aerotrack-travel-dims) y
-crea/actualiza la fila correspondiente en disrupciones.
+Qué hace: dispara `POST /internal/disrupciones/estimar-riesgo` en
+`app-travel`. Toda la lógica vive en
+`app/disrupciones/services/riesgo_service.py` — este DAG es un disparador
+delgado (paso 6 del plan de migración: `disrupciones` ya vive en MinIO, y
+solo la app tiene acceso a `DisrupcionesRepository`/
+`minio_operational_client`; el DAG ya no puede escribir la colección
+directo vía `dags/pocketbase_client.py` como antes).
 
 Corre después del DAG de catálogo (depende de que existan vuelos_catalogo
 para evaluar), pero no lo dispara directamente — se agenda con un pequeño
@@ -22,10 +24,11 @@ from __future__ import annotations
 
 from datetime import timedelta
 
+import requests
 from airflow.decorators import dag, task
 from airflow.utils.dates import days_ago
 
-from disrupciones_tasks import estimar_riesgo_disrupcion
+import config
 
 
 def _on_failure(context: dict) -> None:
@@ -42,19 +45,23 @@ def _on_failure(context: dict) -> None:
     start_date=days_ago(1),
     catchup=False,
     max_active_runs=1,
-    dagrun_timeout=timedelta(minutes=20),
+    dagrun_timeout=timedelta(minutes=10),
     default_args={
         "owner": "aerotrack-travel",
         "retries": 2,
         "retry_delay": timedelta(minutes=5),
         "on_failure_callback": _on_failure,
     },
-    tags=["aerotrack-travel", "disrupciones", "pocketbase-travel"],
+    tags=["aerotrack-travel", "disrupciones", "app-travel"],
 )
 def aerotrack_travel_riesgo_disrupcion():
-    @task(task_id="estimar_riesgo", execution_timeout=timedelta(minutes=15))
+    @task(task_id="estimar_riesgo", execution_timeout=timedelta(minutes=5))
     def estimar_riesgo() -> dict:
-        return estimar_riesgo_disrupcion()
+        resp = requests.post(f"{config.APP_TRAVEL_URL}/internal/disrupciones/estimar-riesgo", timeout=180)
+        resp.raise_for_status()
+        resumen = resp.json()
+        print(f"[DISRUPCION-SIM] {resumen}")
+        return resumen
 
     estimar_riesgo()
 

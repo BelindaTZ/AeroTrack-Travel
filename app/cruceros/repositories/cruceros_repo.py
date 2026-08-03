@@ -67,6 +67,19 @@ class CrucerosRepository:
         resultado = await self._client.list_records("cruceros_catalogo", {"perPage": 200})
         return resultado["items"]
 
+    async def puertos_disponibles(self) -> list[str]:
+        """Nombres únicos de puerto de todo el catálogo — para el selector
+        de destino/puerto (hoy `itinerario_puertos` solo se usa para
+        filtrar texto libre, sin ninguna lista real que ofrecer)."""
+        cruceros = await self.listar_cruceros()
+        puertos: set[str] = set()
+        for crucero in cruceros:
+            for parada in crucero.get("itinerario_puertos") or []:
+                nombre = parada.get("port") if isinstance(parada, dict) else parada
+                if nombre:
+                    puertos.add(str(nombre))
+        return sorted(puertos)
+
     async def cruceros_de_barco(self, barco_id: str) -> list[dict]:
         resultado = await self._client.list_records(
             "cruceros_catalogo", {"filter": f'barco_id="{barco_id}"', "perPage": 50, "sort": "fecha_zarpe"}

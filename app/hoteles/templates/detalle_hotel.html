@@ -139,9 +139,27 @@
     <div class="col-12 col-md-5">
         <div class="at-card" style="position:sticky;top:16px">
             <strong style="font-size:15px;font-weight:700;display:block;margin-bottom:4px">Habitaciones disponibles</strong>
-            <p style="font-size:11.5px;color:var(--at-sub);margin-bottom:14px">Cupo real del proveedor — se revalida al confirmar.</p>
+            <p style="font-size:11.5px;color:var(--at-sub);margin-bottom:14px">Cupo real por noche — se revalida al confirmar.</p>
 
-            {% if tarifas %}
+            <form method="get" id="form-fechas-hotel" class="d-flex flex-wrap gap-2 align-items-end mb-3" style="border:1px solid var(--at-border);border-radius:var(--at-r-md);padding:10px">
+                <div>
+                    <label class="form-label-at" for="f-checkin" style="font-size:10.5px">Check-in</label>
+                    <input type="date" class="form-control-at" id="f-checkin" name="checkin" value="{{ filtros.checkin }}" style="font-size:12.5px">
+                </div>
+                <div>
+                    <label class="form-label-at" for="f-checkout" style="font-size:10.5px">Check-out</label>
+                    <input type="date" class="form-control-at" id="f-checkout" name="checkout" value="{{ filtros.checkout }}" style="font-size:12.5px">
+                </div>
+                <button type="submit" class="btn-at-ghost" style="padding:6px 12px;font-size:12px"><i class="bi bi-calendar-check"></i></button>
+            </form>
+
+            {% if not filtros.checkin or not filtros.checkout %}
+            <div class="at-empty" style="padding:20px 12px">
+                <i class="bi bi-calendar-week at-empty-icon" style="font-size:26px"></i>
+                <strong style="font-size:13px">Elige check-in y check-out</strong>
+                <p style="font-size:11.5px;color:var(--at-sub);margin:4px 0 0">El precio y la disponibilidad son reales por noche — sin fechas no se puede agregar al carrito.</p>
+            </div>
+            {% elif tarifas %}
             <div class="d-flex flex-column gap-2" style="max-height:440px;overflow-y:auto">
                 {% for t in tarifas %}
                 <div style="border:1px solid var(--at-border);border-radius:var(--at-r-md);padding:12px">
@@ -161,20 +179,55 @@
                         <br>Cancela gratis hasta {{ t.cancelacion_hasta[:10] }}
                         {% endif %}
                     </div>
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div class="at-mono" style="font-size:17px;font-weight:800;color:var(--at-primary)">
-                            ${{ "%.2f"|format(t.precio_final) }}
+                    <div class="d-flex justify-content-between align-items-end">
+                        <div>
+                            <div class="at-mono" style="font-size:17px;font-weight:800;color:var(--at-primary)">
+                                ${{ "%.2f"|format(t.precio_total) }}
+                            </div>
+                            <div style="font-size:10.5px;color:var(--at-sub)">${{ "%.2f"|format(t.precio_final) }}/noche × {{ filtros.noches }} noche{{ 's' if filtros.noches != 1 else '' }}</div>
                         </div>
                         {% if t.cupos_disponibles and t.cupos_disponibles > 0 %}
-                        <form method="post" action="/carrito/agregar">
-                            <input type="hidden" name="tipo_producto" value="hotel">
-                            <input type="hidden" name="hotel_id" value="{{ hotel.id }}">
-                            <input type="hidden" name="hotel_tarifa_id" value="{{ t.id }}">
-                            <input type="hidden" name="precio_snapshot" value="{{ t.precio_final }}">
-                            <button type="submit" class="btn-at-accent" style="padding:6px 12px;font-size:12px;font-weight:700">
-                                <i class="bi bi-cart-plus"></i> Agregar
-                            </button>
-                        </form>
+                        <div class="d-flex flex-column align-items-end gap-1">
+                            <form method="post" action="/carrito/agregar" class="d-flex align-items-center gap-1">
+                                <input type="hidden" name="tipo_producto" value="hotel">
+                                <input type="hidden" name="hotel_id" value="{{ hotel.id }}">
+                                <input type="hidden" name="hotel_tarifa_id" value="{{ t.id }}">
+                                <input type="hidden" name="precio_snapshot" value="{{ t.precio_final }}">
+                                <input type="hidden" name="modalidad_pago" value="pagar_ahora">
+                                <input type="hidden" name="fecha_inicio" value="{{ filtros.checkin }}">
+                                <input type="hidden" name="fecha_fin" value="{{ filtros.checkout }}">
+                                <input type="number" name="unidades" value="1" min="1" max="{{ t.cupos_disponibles | int }}"
+                                       class="form-control-at" style="width:52px;padding:5px 6px;font-size:12px" title="Habitaciones">
+                                <button type="submit" class="btn-at-accent" style="padding:6px 12px;font-size:12px;font-weight:700">
+                                    <i class="bi bi-cart-plus"></i> Agregar
+                                </button>
+                            </form>
+                            {% if t.pago_diferido_disponible %}
+                            <form method="post" action="/carrito/agregar">
+                                <input type="hidden" name="tipo_producto" value="hotel">
+                                <input type="hidden" name="hotel_id" value="{{ hotel.id }}">
+                                <input type="hidden" name="hotel_tarifa_id" value="{{ t.id }}">
+                                <input type="hidden" name="precio_snapshot" value="{{ t.precio_final }}">
+                                <input type="hidden" name="modalidad_pago" value="pago_diferido">
+                                <input type="hidden" name="fecha_inicio" value="{{ filtros.checkin }}">
+                                <input type="hidden" name="fecha_fin" value="{{ filtros.checkout }}">
+                                <button type="submit" class="btn-at-ghost" style="padding:4px 10px;font-size:11px" title="RF-HOT-009 — la reserva se confirma sin cobrar; el cobro se completa cuando el hotel confirma la disponibilidad">
+                                    <i class="bi bi-hourglass-split"></i> Reservar sin pagar ahora
+                                </button>
+                            </form>
+                            {% endif %}
+                            {% if request.query_params.get('paquete_id') %}
+                            <form method="post" action="/paquetes/{{ request.query_params.get('paquete_id') }}/agregar">
+                                <input type="hidden" name="tipo_producto" value="hotel">
+                                <input type="hidden" name="hotel_id" value="{{ hotel.id }}">
+                                <input type="hidden" name="hotel_tarifa_id" value="{{ t.id }}">
+                                <input type="hidden" name="precio_final" value="{{ t.precio_final }}">
+                                <button type="submit" class="btn-at-ghost" style="padding:4px 10px;font-size:11px">
+                                    <i class="bi bi-box-seam"></i> Agregar a mi paquete
+                                </button>
+                            </form>
+                            {% endif %}
+                        </div>
                         {% else %}
                         <button class="btn-at-ghost" disabled style="padding:6px 12px;font-size:12px;cursor:not-allowed;opacity:.5">Sin cupo</button>
                         {% endif %}
@@ -185,7 +238,7 @@
             {% else %}
             <div class="at-empty" style="padding:24px 12px">
                 <i class="bi bi-door-closed at-empty-icon" style="font-size:28px"></i>
-                <strong style="font-size:13px">Sin habitaciones disponibles</strong>
+                <strong style="font-size:13px">Sin habitaciones disponibles para esas fechas</strong>
             </div>
             {% endif %}
         </div>

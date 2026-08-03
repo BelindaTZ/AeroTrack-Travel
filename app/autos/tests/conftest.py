@@ -6,6 +6,7 @@ en cada corrida."""
 import pytest
 
 from app.autos.services.rentalcars_client import RentalCarsClient
+from app.shared import minio_catalog_reader
 
 
 @pytest.fixture
@@ -40,6 +41,7 @@ async def auto_factory(pb):
         data.update(extra)
         auto = await pb.create_record("autos_catalogo", data)
         creados.append(auto["id"])
+        await minio_catalog_reader.publicar_y_refrescar("autos_catalogo")
         return auto
 
     yield _crear
@@ -49,6 +51,37 @@ async def auto_factory(pb):
             await pb.delete_record("autos_catalogo", auto_id)
         except Exception:
             pass
+    if creados:
+        await minio_catalog_reader.publicar_y_refrescar("autos_catalogo")
+
+
+@pytest.fixture
+async def disponibilidad_auto_factory(pb):
+    """Crea filas de `autos_disponibilidad` (un día) desechables para
+    pruebas de RF-AUT-004 (disponibilidad real por fecha); las borra al
+    finalizar."""
+    creadas: list[str] = []
+
+    async def _crear(auto_id: str, fecha: str, cupos_disponibles: int = 3, **extra) -> dict:
+        data = {
+            "auto_id": auto_id, "fecha": fecha,
+            "cupos_disponibles": cupos_disponibles, "fecha_actualizacion": "2027-01-01 00:00:00.000Z",
+        }
+        data.update(extra)
+        fila = await pb.create_record("autos_disponibilidad", data)
+        creadas.append(fila["id"])
+        await minio_catalog_reader.publicar_y_refrescar("autos_disponibilidad")
+        return fila
+
+    yield _crear
+
+    for fila_id in creadas:
+        try:
+            await pb.delete_record("autos_disponibilidad", fila_id)
+        except Exception:
+            pass
+    if creadas:
+        await minio_catalog_reader.publicar_y_refrescar("autos_disponibilidad")
 
 
 class RentalCarsClientFalso(RentalCarsClient):

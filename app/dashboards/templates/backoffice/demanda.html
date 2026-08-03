@@ -1,0 +1,105 @@
+{% extends "layout_app.html" %}
+{% block title %}Demanda por Producto — AeroTrack Travel{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <h1><span class="heading-icon"><i class="bi bi-bar-chart"></i></span>Demanda por Tipo de Producto</h1>
+    <p>Qué producto vende más, genera más ingreso y convierte mejor.</p>
+</div>
+
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <div id="selector-periodo" class="filter-bar mb-0"></div>
+    <button type="button" class="btn-at-ghost" onclick="window.print()"><i class="bi bi-file-earmark-pdf"></i> Exportar PDF</button>
+</div>
+
+<div id="db-demanda-cargando" style="text-align:center;padding:50px 0;color:var(--at-muted)">
+    <div class="spinner-border" style="color:var(--at-primary)" role="status"></div>
+</div>
+
+<div id="db-demanda-contenido" style="display:none">
+    <div class="row g-3 mb-3">
+        <div class="col-12 col-md-4">
+            <div class="at-card" style="height:100%">
+                <div style="font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--at-sub)">Producto más vendido</div>
+                <div class="at-mono" id="kpi-mas-vendido" style="font-size:24px;font-weight:700;color:var(--at-primary);text-transform:capitalize">—</div>
+            </div>
+        </div>
+        <div class="col-12 col-md-4">
+            <div class="at-card" style="height:100%">
+                <div style="font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--at-sub)">Mayor ingreso generado</div>
+                <div class="at-mono" id="kpi-mayor-ingreso" style="font-size:24px;font-weight:700;color:var(--at-text);text-transform:capitalize">—</div>
+            </div>
+        </div>
+        <div class="col-12 col-md-4">
+            <div class="at-card" style="height:100%">
+                <div style="font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--at-sub)">Mayor tasa de conversión</div>
+                <div class="at-mono" id="kpi-mayor-conversion" style="font-size:24px;font-weight:700;color:var(--at-text);text-transform:capitalize">—</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="at-card mb-3">
+        <div style="font-size:12.5px;font-weight:700;margin-bottom:6px">Reservas por producto — últimas 8 semanas</div>
+        <div id="chart-reservas-semana" style="height:260px"></div>
+    </div>
+    <div class="at-card mb-3">
+        <div style="font-size:12.5px;font-weight:700;margin-bottom:6px">Ingresos por producto</div>
+        <div id="chart-ingresos-producto" style="height:220px"></div>
+    </div>
+    <div class="at-table-wrapper">
+        <div class="at-table-header">
+            <span class="at-table-title">Métricas por producto</span>
+            <span style="font-size:11px;color:var(--at-sub)" title="Solo se registran búsquedas de usuarios autenticados con filtros explícitos — subestima el volumen real, por eso la conversión puede superar el 100%.">
+                <i class="bi bi-info-circle"></i> Conversión sobre búsquedas registradas (subestimadas, ver DB-01)
+            </span>
+        </div>
+        <table class="table" style="font-size:12.5px;margin-bottom:0">
+            <thead><tr><th>Producto</th><th class="text-end">Reservas</th><th class="text-end">Ingresos</th><th class="text-end">Conversión</th><th class="text-end">Abandono</th></tr></thead>
+            <tbody id="tabla-metricas"></tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+var chartsDemanda = [];
+function cargarDatosDemanda(desde, hasta) {
+    document.getElementById('db-demanda-cargando').style.display = '';
+    document.getElementById('db-demanda-contenido').style.display = 'none';
+    fetch('/backoffice/dashboards/demanda/datos?desde=' + desde + '&hasta=' + hasta).then(function (r) { return r.json(); }).then(renderDemanda);
+}
+function renderDemanda(d) {
+    document.getElementById('db-demanda-cargando').style.display = 'none';
+    document.getElementById('db-demanda-contenido').style.display = '';
+    chartsDemanda.forEach(function (c) { c && c.dispose(); });
+    chartsDemanda = [];
+
+    document.getElementById('kpi-mas-vendido').textContent = d.producto_mas_vendido || '—';
+    document.getElementById('kpi-mayor-ingreso').textContent = d.producto_mayor_ingreso || '—';
+    document.getElementById('kpi-mayor-conversion').textContent = d.producto_mayor_conversion || '—';
+
+    var series = Object.keys(d.reservas_por_semana_producto).map(function (tipo) {
+        return { name: tipo, type: 'bar', data: d.reservas_por_semana_producto[tipo] };
+    });
+    chartsDemanda.push(initChart('chart-reservas-semana', {
+        legend: { bottom: 0 },
+        xAxis: { type: 'category', data: d.semanas },
+        yAxis: { type: 'value' },
+        series: series,
+    }));
+
+    chartsDemanda.push(initChart('chart-ingresos-producto', {
+        xAxis: { type: 'value' },
+        yAxis: { type: 'category', data: d.ingresos_por_producto.map(function (p) { return p.tipo_producto; }) },
+        series: [{ type: 'bar', data: d.ingresos_por_producto.map(function (p) { return Math.round(p.ingresos_brutos); }), label: { show: true, position: 'right' } }],
+    }));
+
+    document.getElementById('tabla-metricas').innerHTML = d.metricas_por_producto.map(function (m) {
+        return '<tr><td style="text-transform:capitalize">' + m.tipo_producto + '</td><td class="text-end">' + m.total_reservas + '</td>' +
+               '<td class="text-end">$' + m.ingresos_brutos.toLocaleString('es', { maximumFractionDigits: 0 }) + '</td>' +
+               '<td class="text-end">' + m.tasa_conversion + '%</td><td class="text-end">' + m.tasa_abandono + '%</td></tr>';
+    }).join('') || '<tr><td colspan="5" class="text-center" style="color:var(--at-muted)">Sin datos en el período</td></tr>';
+}
+initSelectorPeriodo('selector-periodo', function (periodo) { cargarDatosDemanda(periodo.desde, periodo.hasta); });
+</script>
+{% endblock %}

@@ -1,81 +1,214 @@
 {% extends "layout_app.html" %}
+{% from "_paginacion.html" import controles %}
 {% block title %}Artículos de ayuda — AeroTrack Travel{% endblock %}
 {% block content %}
 <div class="page-heading">
     <h1><span class="heading-icon"><i class="bi bi-journal-text"></i></span>Artículos de ayuda</h1>
-    <p>Base de conocimiento del Centro de Ayuda ({{ articulos | length }} en total, activos e archivados). Un artículo nunca se elimina — se archiva.</p>
+    <p>Operaciones — base de conocimiento del Centro de Ayuda ({{ pagina.total_items }} en total). Un artículo nunca se elimina, se archiva.</p>
 </div>
 
-<details class="at-card mb-3">
-    <summary style="cursor:pointer;font-weight:700;font-size:13.5px"><i class="bi bi-plus-lg"></i> Nuevo artículo</summary>
-    <form method="post" action="/backoffice/ayuda/articulos" class="mt-3">
-        <div class="row g-3">
-            <div class="col-12 col-md-3">
-                <label class="form-label-at" for="art-categoria">Categoría</label>
-                <input type="text" class="form-control-at" id="art-categoria" name="categoria" required>
-            </div>
-            <div class="col-12 col-md-9">
-                <label class="form-label-at" for="art-titulo">Título</label>
-                <input type="text" class="form-control-at" id="art-titulo" name="titulo" required>
-            </div>
-            <div class="col-12">
-                <label class="form-label-at" for="art-contenido">Contenido</label>
-                <textarea class="form-control-at" id="art-contenido" name="contenido" rows="4" required></textarea>
-            </div>
-            <div class="col-12">
-                <button type="submit" class="btn-at-primary"><i class="bi bi-plus-lg"></i> Crear artículo</button>
-            </div>
-        </div>
-    </form>
-</details>
-
-{% if articulos %}
 <div class="at-table-wrapper">
+    <div class="at-table-header">
+        <form method="get" data-auto-filtros class="d-flex flex-wrap gap-2 align-items-end">
+            <div>
+                <label class="form-label-at" for="f-categoria">Categoría</label>
+                <select class="form-control-at" id="f-categoria" name="categoria" style="min-width:150px">
+                    <option value="">Todas</option>
+                    {% for c in categorias %}
+                    <option value="{{ c }}" {% if filtros.categoria == c %}selected{% endif %}>{{ c }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="form-label-at" for="f-estado">Estado</label>
+                <select class="form-control-at" id="f-estado" name="estado" style="min-width:130px">
+                    <option value="">Todos</option>
+                    <option value="activo" {% if filtros.estado == 'activo' %}selected{% endif %}>Activo</option>
+                    <option value="archivado" {% if filtros.estado == 'archivado' %}selected{% endif %}>Archivado</option>
+                </select>
+            </div>
+            <div>
+                <label class="form-label-at" for="f-texto">Título</label>
+                <input type="text" class="form-control-at" id="f-texto" name="texto" value="{{ filtros.texto }}"
+                       placeholder="Buscar en el título..." style="min-width:200px">
+            </div>
+            {% if filtros.categoria or filtros.estado or filtros.texto %}
+            <a href="/backoffice/ayuda/articulos" class="btn-at-ghost">Limpiar</a>
+            {% endif %}
+        </form>
+        <button class="btn-at-primary" data-bs-toggle="modal" data-bs-target="#modal-crear">
+            <i class="bi bi-plus-lg" aria-hidden="true"></i>Nuevo artículo
+        </button>
+    </div>
+
+    {% if not pagina.items %}
+    <div class="at-empty">
+        <i class="bi bi-journal-text at-empty-icon" aria-hidden="true"></i>
+        <strong>Sin artículos con estos filtros</strong>
+    </div>
+    {% else %}
     <div class="at-table-scroll">
         <table class="at-table">
             <thead><tr><th>Título</th><th>Categoría</th><th>Estado</th><th>Publicado</th><th class="actions-col">Acciones</th></tr></thead>
             <tbody>
-            {% for a in articulos %}
-            <tr>
-                <td style="min-width:220px">{{ a.titulo }}</td>
-                <td>{{ a.categoria }}</td>
-                <td>{% if a.activo %}<span class="badge-sistema">activo</span>{% else %}<span class="badge-sistema" style="opacity:.6">archivado</span>{% endif %}</td>
-                <td class="at-mono" style="font-size:12px">{{ a.fecha_publicacion[:10] }}</td>
-                <td class="actions-col">
-                    <details>
-                        <summary class="btn-icon" style="display:inline-flex;cursor:pointer" title="Editar"><i class="bi bi-pencil"></i></summary>
-                        <form method="post" action="/backoffice/ayuda/articulos/{{ a.id }}" class="at-card mt-2" style="min-width:320px">
-                            <div class="row g-2">
-                                <div class="col-12">
-                                    <input type="text" class="form-control-at" name="categoria" value="{{ a.categoria }}" required>
-                                </div>
-                                <div class="col-12">
-                                    <input type="text" class="form-control-at" name="titulo" value="{{ a.titulo }}" required>
-                                </div>
-                                <div class="col-12">
-                                    <textarea class="form-control-at" name="contenido" rows="3" required>{{ a.contenido }}</textarea>
-                                </div>
-                                <div class="col-12 d-flex align-items-center gap-2">
-                                    <input type="checkbox" name="activo" value="true" {% if a.activo %}checked{% endif %} id="activo-{{ a.id }}">
-                                    <label for="activo-{{ a.id }}" style="font-size:12.5px">Activo (visible en búsqueda)</label>
-                                </div>
-                                <div class="col-12">
-                                    <button type="submit" class="btn-at-primary btn-sm"><i class="bi bi-check-lg"></i> Guardar</button>
-                                </div>
-                            </div>
-                        </form>
-                    </details>
-                </td>
-            </tr>
-            {% endfor %}
+                {% for a in pagina.items %}
+                <tr>
+                    <td style="min-width:220px;font-weight:600">{{ a.titulo }}</td>
+                    <td>{{ a.categoria }}</td>
+                    <td>{% if a.activo %}<span class="badge-sistema">activo</span>{% else %}<span class="badge-sistema" style="opacity:.6">archivado</span>{% endif %}</td>
+                    <td class="at-mono" style="font-size:12px;color:var(--at-muted)">{{ a.fecha_publicacion[:10] }}</td>
+                    <td class="actions-col">
+                        <button type="button" class="btn-icon" data-bs-toggle="modal" data-bs-target="#modal-ver-{{ a.id }}" title="Ver">
+                            <i class="bi bi-eye" aria-hidden="true"></i>
+                        </button>
+                        <button type="button" class="btn-icon" data-bs-toggle="modal" data-bs-target="#modal-editar-{{ a.id }}" title="Editar">
+                            <i class="bi bi-pencil" aria-hidden="true"></i>
+                        </button>
+                        <button type="button" class="btn-icon {% if a.activo %}danger{% endif %}" data-bs-toggle="modal"
+                                data-bs-target="#modal-archivar-{{ a.id }}" title="{{ 'Archivar' if a.activo else 'Reactivar' }}">
+                            <i class="bi {{ 'bi-archive' if a.activo else 'bi-arrow-counterclockwise' }}" aria-hidden="true"></i>
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
             </tbody>
         </table>
     </div>
+    {{ controles(pagina, request) }}
+    {% endif %}
 </div>
-{% else %}
-<div class="at-empty">
-    <i class="bi bi-journal-text at-empty-icon" aria-hidden="true"></i>
-    <strong>Sin artículos todavía</strong>
+
+<!-- ═══════ MODAL: nuevo artículo ═══════ -->
+<div class="modal fade" id="modal-crear" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title d-flex align-items-center gap-2" style="font-size:16px;font-weight:700">
+                    <span class="modal-icon-title"><i class="bi bi-journal-plus" aria-hidden="true"></i></span>Nuevo artículo
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <form method="post" action="/backoffice/ayuda/articulos">
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-12 col-md-4">
+                            <label class="form-label-at" for="c-categoria">Categoría</label>
+                            <input type="text" class="form-control-at" id="c-categoria" name="categoria" list="lista-categorias" required>
+                            <datalist id="lista-categorias">
+                                {% for c in categorias %}<option value="{{ c }}">{% endfor %}
+                            </datalist>
+                        </div>
+                        <div class="col-12 col-md-8">
+                            <label class="form-label-at" for="c-titulo">Título</label>
+                            <input type="text" class="form-control-at" id="c-titulo" name="titulo" required>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label-at" for="c-contenido">Contenido</label>
+                            <textarea class="form-control-at" id="c-contenido" name="contenido" rows="6" required></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-at-ghost" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn-at-primary"><i class="bi bi-check2"></i>Crear artículo</button>
+                </div>
+            </form>
+        </div>
+    </div>
 </div>
-{% endif %}
+
+{% for a in pagina.items %}
+<!-- ═══════ MODAL: ver (solo lectura) ═══════ -->
+<div class="modal fade" id="modal-ver-{{ a.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title d-flex align-items-center gap-2" style="font-size:16px;font-weight:700">
+                    <span class="modal-icon-title"><i class="bi bi-journal-text" aria-hidden="true"></i></span>{{ a.titulo }}
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body" style="font-size:13.5px">
+                <div class="d-flex gap-2 mb-3">
+                    <span class="badge-sistema">{{ a.categoria }}</span>
+                    {% if a.activo %}<span class="badge-sistema">activo</span>{% else %}<span class="badge-sistema" style="opacity:.6">archivado</span>{% endif %}
+                    <span style="color:var(--at-sub);font-size:12px;margin-left:auto">Publicado {{ a.fecha_publicacion[:10] }}</span>
+                </div>
+                <p style="white-space:pre-wrap;margin:0">{{ a.contenido }}</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-at-ghost" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════ MODAL: editar ═══════ -->
+<div class="modal fade" id="modal-editar-{{ a.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title d-flex align-items-center gap-2" style="font-size:16px;font-weight:700">
+                    <span class="modal-icon-title"><i class="bi bi-pencil" aria-hidden="true"></i></span>Editar artículo
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <form method="post" action="/backoffice/ayuda/articulos/{{ a.id }}">
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-12 col-md-4">
+                            <label class="form-label-at">Categoría</label>
+                            <input type="text" class="form-control-at" name="categoria" value="{{ a.categoria }}" list="lista-categorias" required>
+                        </div>
+                        <div class="col-12 col-md-8">
+                            <label class="form-label-at">Título</label>
+                            <input type="text" class="form-control-at" name="titulo" value="{{ a.titulo }}" required>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label-at">Contenido</label>
+                            <textarea class="form-control-at" name="contenido" rows="6" required>{{ a.contenido }}</textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-at-ghost" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn-at-primary"><i class="bi bi-check2"></i>Guardar cambios</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════ MODAL: archivar / reactivar ═══════ -->
+<div class="modal fade" id="modal-archivar-{{ a.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width:420px">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title d-flex align-items-center gap-2" style="font-size:16px;font-weight:700">
+                    <span class="modal-icon-title" style="{% if a.activo %}background:var(--at-failed-bg);color:var(--at-danger){% endif %}">
+                        <i class="bi {{ 'bi-archive' if a.activo else 'bi-arrow-counterclockwise' }}" aria-hidden="true"></i>
+                    </span>{{ 'Archivar artículo' if a.activo else 'Reactivar artículo' }}
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body" style="font-size:13.5px">
+                {% if a.activo %}
+                ¿Archivar <strong>{{ a.titulo }}</strong>? Deja de aparecer en las búsquedas del portal — se puede reactivar cuando quieras.
+                {% else %}
+                ¿Reactivar <strong>{{ a.titulo }}</strong>? Vuelve a aparecer en las búsquedas del portal.
+                {% endif %}
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-at-ghost" data-bs-dismiss="modal">Cancelar</button>
+                <form method="post" action="/backoffice/ayuda/articulos/{{ a.id }}/archivar" class="m-0">
+                    <button type="submit" class="{{ 'btn-at-danger' if a.activo else 'btn-at-primary' }}">
+                        <i class="bi {{ 'bi-archive' if a.activo else 'bi-arrow-counterclockwise' }}" aria-hidden="true"></i>
+                        {{ 'Archivar' if a.activo else 'Reactivar' }}
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
 {% endblock %}

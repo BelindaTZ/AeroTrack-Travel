@@ -105,7 +105,15 @@ async def resincronizar_fuente(fuente_id: str, usuario_id: str) -> dict:
     )
 
 
-async def listar_bitacora(fuente_id: str | None = None, desde: str | None = None, hasta: str | None = None) -> list[dict]:
+async def listar_bitacora(
+    fuente_id: str | None = None,
+    desde: str | None = None,
+    hasta: str | None = None,
+    estado: str | None = None,
+) -> list[dict]:
+    """IS-03 (auditoría de informes simples, sesión 2026-08-01) — se agregó
+    `estado` (éxito/parcial/fallido de la corrida) sobre los filtros que ya
+    existían, para encontrar fallos rápido sin leer toda la bitácora."""
     repo = IntegracionesRepository()
     condiciones = []
     if fuente_id:
@@ -114,5 +122,7 @@ async def listar_bitacora(fuente_id: str | None = None, desde: str | None = None
         condiciones.append(f'fecha_inicio>="{desde} 00:00:00.000Z"')
     if hasta:
         condiciones.append(f'fecha_inicio<="{hasta} 23:59:59.999Z"')
+    if estado:
+        condiciones.append(f'estado="{estado}"')
     filtro = " && ".join(condiciones) if condiciones else None
     return await repo.listar_bitacora(filtro)

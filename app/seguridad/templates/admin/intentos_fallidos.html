@@ -1,0 +1,85 @@
+{% extends "layout_app.html" %}
+{% block title %}Intentos de login fallidos — AeroTrack Travel{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <h1><span class="heading-icon" style="background:var(--at-warning-bg);color:var(--at-warning-fg)"><i class="bi bi-shield-exclamation"></i></span>Intentos de login fallidos</h1>
+    <p>Agrupado por cuenta (o IP, cuando el fallo no llegó a identificar cuenta) — últimas {{ horas }}h. Umbral de sospecha: {{ umbral_sospechoso }}+ intentos.</p>
+</div>
+
+<div class="d-flex align-items-center gap-3 mb-3">
+    <form method="get" action="/admin/seguridad/intentos-fallidos" id="form-ventana" class="d-flex align-items-center gap-2">
+        <label class="form-label-at" for="horas" style="margin:0">Ventana</label>
+        <select class="form-control-at" id="horas" name="horas" style="width:140px">
+            <option value="1" {% if horas == 1 %}selected{% endif %}>Última hora</option>
+            <option value="24" {% if horas == 24 %}selected{% endif %}>Últimas 24h</option>
+            <option value="168" {% if horas == 168 %}selected{% endif %}>Últimos 7 días</option>
+            <option value="720" {% if horas == 720 %}selected{% endif %}>Últimos 30 días</option>
+        </select>
+    </form>
+    {% if total_sospechosos > 0 %}
+    <span class="badge-status failed">
+        <i class="bi bi-exclamation-triangle-fill"></i> {{ total_sospechosos }} cuenta(s)/IP sospechosa(s)
+    </span>
+    {% else %}
+    <span class="badge-status success"><i class="bi bi-check-circle-fill"></i> Nada por encima del umbral</span>
+    {% endif %}
+</div>
+
+<div class="at-table-wrapper">
+    {% if filas %}
+    <div class="at-table-scroll">
+        <table class="at-table">
+            <thead><tr><th>Cuenta / IP</th><th>Intentos</th><th>IPs de origen</th><th>Motivos</th><th>Último intento</th><th></th></tr></thead>
+            <tbody>
+                {% for f in filas %}
+                <tr {% if f.sospechoso %}style="background:var(--at-failed-bg)"{% endif %}>
+                    <td style="font-size:12.5px">
+                        {% if f.sospechoso %}<i class="bi bi-exclamation-triangle-fill me-1" style="color:var(--at-danger)"></i>{% endif %}
+                        {{ f.identificador }}
+                    </td>
+                    <td class="at-mono" style="font-weight:700">{{ f.intentos }}</td>
+                    <td style="font-size:12px;color:var(--at-muted)">{{ f.ips | join(', ') or '—' }}</td>
+                    <td style="font-size:12px;color:var(--at-muted)">{{ f.motivos | join(', ') or 'credenciales' }}</td>
+                    <td class="at-mono" style="font-size:12px;white-space:nowrap">{{ f.ultimo_intento }}</td>
+                    <td class="d-flex gap-1">
+                        {% if '@' in f.identificador %}
+                        <a href="/backoffice/pasajeros?q={{ f.identificador | urlencode }}" class="btn-at-ghost" style="padding:5px 12px;font-size:12px">
+                            Buscar cuenta
+                        </a>
+                        <form method="post" action="/admin/seguridad/desactivar-cuenta"
+                              onsubmit="return confirm('¿Desactivar {{ f.identificador }}? Cierra su sesión de inmediato y no podrá volver a iniciar sesión hasta reactivarla.');">
+                            <input type="hidden" name="email" value="{{ f.identificador }}">
+                            <input type="hidden" name="horas" value="{{ horas }}">
+                            <button type="submit" class="btn-at-danger" style="padding:5px 12px;font-size:12px">
+                                <i class="bi bi-lock-fill"></i>Desactivar
+                            </button>
+                        </form>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="at-empty">
+        <i class="bi bi-shield-check at-empty-icon" aria-hidden="true"></i>
+        <strong>Sin intentos fallidos en esta ventana</strong>
+    </div>
+    {% endif %}
+</div>
+
+<p style="font-size:11.5px;color:var(--at-sub);margin-top:14px">
+    "Desactivar" fuerza el cierre de sesión de inmediato — <code>verificar_sesion</code> revalida
+    <code>usuarios.activo</code> en cada request, así que no hace falta esperar a que expire el token.
+    Para cuentas de agente/administrador, el mismo toggle también vive en <a href="/admin/usuarios">Usuarios</a>.
+</p>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('horas').addEventListener('change', function () {
+    document.getElementById('form-ventana').requestSubmit();
+});
+</script>
+{% endblock %}

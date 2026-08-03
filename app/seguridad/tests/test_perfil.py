@@ -28,6 +28,51 @@ async def test_editar_perfil_actualiza_nombre(client, usuario_factory, pb):
     assert actualizado["nombre_completo"] == "Nombre Editado"
 
 
+# ── RF-SEG-006 ampliación — foto de perfil ─────────────────────────────────
+
+_PNG_1X1 = bytes.fromhex(
+    "89504e470d0a1a0a0000000d494844520000000100000001080600000"
+    "01f15c4890000000a4944415478da6360000002000155a3e9600000000049454e44ae426082"
+)
+
+
+async def test_subir_foto_de_perfil_la_deja_disponible(client, usuario_factory, pb):
+    usuario = await usuario_factory()
+    await _login(client, usuario)
+
+    resp = await client.post(
+        "/mi-perfil/foto", files={"foto": ("avatar.png", _PNG_1X1, "image/png")}
+    )
+    assert resp.status_code == 200
+    assert "actualizada" in resp.text
+
+    actualizado = await pb.get_record("usuarios", usuario["id"])
+    assert actualizado["foto_perfil"]
+
+    foto_resp = await client.get("/mi-perfil/foto")
+    assert foto_resp.status_code == 200
+    assert foto_resp.headers["content-type"] == "image/png"
+    assert foto_resp.content == _PNG_1X1
+
+
+async def test_subir_foto_rechaza_tipo_no_admitido(client, usuario_factory):
+    usuario = await usuario_factory()
+    await _login(client, usuario)
+
+    resp = await client.post(
+        "/mi-perfil/foto", files={"foto": ("nota.txt", b"no es una imagen", "text/plain")}
+    )
+    assert resp.status_code == 400
+    assert "no admitido" in resp.text.lower()
+
+
+async def test_ver_foto_sin_haber_subido_ninguna_da_404(client, usuario_factory):
+    usuario = await usuario_factory()
+    await _login(client, usuario)
+    resp = await client.get("/mi-perfil/foto")
+    assert resp.status_code == 404
+
+
 # ── RF-SEG-007 (CHK010, RN-SEG-005/CHK027) ────────────────────────────────
 
 async def test_cambiar_password_exige_actual_correcta(client, usuario_factory):

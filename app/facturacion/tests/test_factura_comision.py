@@ -1,3 +1,7 @@
+from app.facturacion.repositories.facturacion_repo import FacturacionRepository
+from app.shared import minio_operational_client as moc
+
+
 async def _login(client, usuario):
     resp = await client.post(
         "/login", data={"email": usuario["email"], "password": usuario["_password"]}
@@ -15,14 +19,16 @@ async def test_pago_exitoso_genera_factura_con_pdf_y_comision_correcta(
         pasajero["id"], vuelo["id"], tarifa["id"], estado="pendiente_pago", total_pagar=300.0
     )
 
+    repo = FacturacionRepository()
+
     await _login(client, usuario)
     resp = await client.post(f"/reservas/{reserva['id']}/pagar", data={"escenario": "exitoso"})
     assert resp.status_code == 303
 
-    pago = await pb.get_first("pagos", f'reserva_id="{reserva["id"]}" && estado="exitoso"')
+    pago = await repo.pago_exitoso_de_reserva(reserva["id"])
     assert pago is not None
 
-    factura = await pb.get_first("facturas", f'pago_id="{pago["id"]}"')
+    factura = await repo.factura_de_pago(pago["id"])
     assert factura is not None
     assert factura["reserva_id"] == reserva["id"]
     assert factura["total"] == 300.0
@@ -30,12 +36,13 @@ async def test_pago_exitoso_genera_factura_con_pdf_y_comision_correcta(
     assert factura["archivo_pdf"]  # nombre de archivo subido, no vacío
 
     aerolinea = await pb.get_record("aerolineas", vuelo["aerolinea_id"])
-    comision = await pb.get_first("comisiones", f'reserva_id="{reserva["id"]}"')
+    comisiones = await repo.listar_comisiones()
+    comision = next((c for c in comisiones if c.get("reserva_id") == reserva["id"]), None)
     assert comision is not None
     assert comision["estado"] == "pendiente_cobro"
     esperado = round(300.0 * aerolinea["comision_pactada_pct"] / 100, 2)
     assert comision["monto"] == esperado
 
-    await pb.delete_record("comisiones", comision["id"])
-    await pb.delete_record("facturas", factura["id"])
-    await pb.delete_record("pagos", pago["id"])
+    await moc.eliminar("comisiones", comision["id"])
+    await moc.eliminar("facturas", factura["id"])
+    await moc.eliminar("pagos", pago["id"])

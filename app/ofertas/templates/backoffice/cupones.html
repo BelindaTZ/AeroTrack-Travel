@@ -1,73 +1,58 @@
 {% extends "layout_app.html" %}
+{% from "_paginacion.html" import controles %}
 {% block title %}Cupones de descuento — AeroTrack Travel{% endblock %}
 {% block content %}
 <div class="page-heading">
     <h1><span class="heading-icon"><i class="bi bi-ticket-perforated"></i></span>Cupones de descuento</h1>
-    <p>Un cupón con usos registrados no puede cambiar su código (RN-OFE-T01) — el resto de sus campos sigue editable.</p>
+    <p>Comercial — un cupón con usos registrados no puede cambiar su código (RN-OFE-T01), el resto sigue editable.</p>
 </div>
 
-<details class="at-card mb-3">
-    <summary style="cursor:pointer;font-weight:700;font-size:13.5px"><i class="bi bi-plus-lg"></i> Nuevo cupón</summary>
-    <form method="post" action="/backoffice/ofertas/cupones" class="mt-3">
-        <div class="row g-3">
-            <div class="col-6 col-md-3">
-                <label class="form-label-at" for="c-codigo">Código</label>
-                <input type="text" class="form-control-at text-uppercase" id="c-codigo" name="codigo" required>
-            </div>
-            <div class="col-6 col-md-2">
-                <label class="form-label-at" for="c-tipo">Tipo</label>
-                <select class="form-control-at" id="c-tipo" name="tipo">
-                    <option value="porcentaje">% porcentaje</option>
-                    <option value="monto_fijo">Monto fijo</option>
-                </select>
-            </div>
-            <div class="col-6 col-md-2">
-                <label class="form-label-at" for="c-valor">Valor</label>
-                <input type="number" step="0.01" class="form-control-at" id="c-valor" name="valor" required>
-            </div>
-            <div class="col-6 col-md-2">
-                <label class="form-label-at" for="c-producto">Producto aplicable</label>
-                <select class="form-control-at" id="c-producto" name="producto_aplicable">
-                    <option value="">Cualquiera</option>
-                    <option value="vuelo">Vuelo</option>
-                    <option value="hotel">Hotel</option>
-                    <option value="auto">Auto</option>
-                    <option value="actividad">Actividad</option>
-                    <option value="crucero">Crucero</option>
-                </select>
-            </div>
-            <div class="col-6 col-md-3">
-                <label class="form-label-at" for="c-expira">Expira</label>
-                <input type="date" class="form-control-at" id="c-expira" name="fecha_expiracion" required>
-            </div>
-            <div class="col-6 col-md-2">
-                <label class="form-label-at" for="c-usos">Usos máximos</label>
-                <input type="number" class="form-control-at" id="c-usos" name="usos_maximos" placeholder="Sin límite">
-            </div>
-            <div class="col-6 col-md-3">
-                <label class="form-label-at" for="c-acum">Acumulable con paquete</label>
-                <select class="form-control-at" id="c-acum" name="acumulable_con_paquete">
-                    <option value="">Usar default global</option>
-                    <option value="true">Sí, excepción</option>
-                    <option value="false">No, excepción</option>
-                </select>
-            </div>
-            <div class="col-12">
-                <button type="submit" class="btn-at-primary"><i class="bi bi-plus-lg"></i> Crear cupón</button>
-            </div>
-        </div>
-    </form>
-</details>
-
-{% if cupones %}
 <div class="at-table-wrapper">
+    <div class="at-table-header">
+        <form method="get" data-auto-filtros class="d-flex flex-wrap gap-2 align-items-end">
+            <div>
+                <label class="form-label-at" for="f-codigo">Código</label>
+                <input type="text" id="f-codigo" name="codigo" class="form-control-at" value="{{ filtros.codigo }}"
+                       placeholder="Código..." style="min-width:150px">
+            </div>
+            <div>
+                <label class="form-label-at" for="f-tipo">Tipo</label>
+                <select class="form-control-at" id="f-tipo" name="tipo_cupon" style="min-width:140px">
+                    <option value="">Todos</option>
+                    <option value="porcentaje" {% if filtros.tipo_cupon == 'porcentaje' %}selected{% endif %}>% Porcentaje</option>
+                    <option value="monto_fijo" {% if filtros.tipo_cupon == 'monto_fijo' %}selected{% endif %}>Monto fijo</option>
+                </select>
+            </div>
+            <div>
+                <label class="form-label-at" for="f-estado">Estado</label>
+                <select class="form-control-at" id="f-estado" name="estado" style="min-width:120px">
+                    <option value="">Todos</option>
+                    <option value="activo" {% if filtros.estado == 'activo' %}selected{% endif %}>Activo</option>
+                    <option value="inactivo" {% if filtros.estado == 'inactivo' %}selected{% endif %}>Inactivo</option>
+                </select>
+            </div>
+            {% if filtros.codigo or filtros.tipo_cupon or filtros.estado %}
+            <a href="/backoffice/ofertas/cupones" class="btn-at-ghost">Limpiar</a>
+            {% endif %}
+        </form>
+        <button class="btn-at-primary" data-bs-toggle="modal" data-bs-target="#modal-crear">
+            <i class="bi bi-plus-lg" aria-hidden="true"></i>Nuevo cupón
+        </button>
+    </div>
+
+    {% if not pagina.items %}
+    <div class="at-empty">
+        <i class="bi bi-ticket-perforated at-empty-icon" aria-hidden="true"></i>
+        <strong>Sin cupones con estos filtros</strong>
+    </div>
+    {% else %}
     <div class="at-table-scroll">
         <table class="at-table">
             <thead><tr><th>Código</th><th>Tipo</th><th>Valor</th><th>Producto</th><th>Expira</th><th>Usos</th><th>Estado</th><th class="actions-col">Acciones</th></tr></thead>
             <tbody>
-            {% for c in cupones %}
+            {% for c in pagina.items %}
             <tr>
-                <td class="at-mono">{{ c.codigo }}</td>
+                <td class="at-mono" style="font-weight:600">{{ c.codigo }}</td>
                 <td>{{ "%" if c.tipo == "porcentaje" else "$" }}</td>
                 <td class="at-mono">{{ c.valor }}</td>
                 <td>{{ c.producto_aplicable or "Cualquiera" }}</td>
@@ -75,61 +60,209 @@
                 <td class="at-mono">{{ c.usos_actuales or 0 }}{% if c.usos_maximos %} / {{ c.usos_maximos }}{% endif %}</td>
                 <td>{% if c.activo %}<span class="badge-sistema">activo</span>{% else %}<span class="badge-sistema" style="opacity:.6">inactivo</span>{% endif %}</td>
                 <td class="actions-col">
-                    <details>
-                        <summary class="btn-icon" style="display:inline-flex;cursor:pointer" title="Editar"><i class="bi bi-pencil"></i></summary>
-                        <form method="post" action="/backoffice/ofertas/cupones/{{ c.id }}" class="at-card mt-2" style="min-width:280px">
-                            <div class="row g-2">
-                                <div class="col-6">
-                                    <select class="form-control-at" name="tipo">
-                                        <option value="porcentaje" {% if c.tipo == "porcentaje" %}selected{% endif %}>% porcentaje</option>
-                                        <option value="monto_fijo" {% if c.tipo == "monto_fijo" %}selected{% endif %}>Monto fijo</option>
-                                    </select>
-                                </div>
-                                <div class="col-6">
-                                    <input type="number" step="0.01" class="form-control-at" name="valor" value="{{ c.valor }}" required>
-                                </div>
-                                <div class="col-6">
-                                    <input type="date" class="form-control-at" name="fecha_expiracion" value="{{ c.fecha_expiracion[:10] }}" required>
-                                </div>
-                                <div class="col-6">
-                                    <input type="number" class="form-control-at" name="usos_maximos" value="{{ c.usos_maximos or '' }}">
-                                </div>
-                                <div class="col-12">
-                                    <select class="form-control-at" name="producto_aplicable">
-                                        <option value="" {% if not c.producto_aplicable %}selected{% endif %}>Cualquiera</option>
-                                        {% for p in ["vuelo","hotel","auto","actividad","crucero"] %}
-                                        <option value="{{ p }}" {% if c.producto_aplicable == p %}selected{% endif %}>{{ p }}</option>
-                                        {% endfor %}
-                                    </select>
-                                </div>
-                                <div class="col-12">
-                                    <select class="form-control-at" name="acumulable_con_paquete">
-                                        <option value="" {% if c.acumulable_con_paquete is none %}selected{% endif %}>Usar default global</option>
-                                        <option value="true" {% if c.acumulable_con_paquete == true %}selected{% endif %}>Sí, excepción</option>
-                                        <option value="false" {% if c.acumulable_con_paquete == false %}selected{% endif %}>No, excepción</option>
-                                    </select>
-                                </div>
-                                <div class="col-12 d-flex align-items-center gap-2">
-                                    <input type="checkbox" name="activo" value="true" {% if c.activo %}checked{% endif %} id="activo-{{ c.id }}">
-                                    <label for="activo-{{ c.id }}" style="font-size:12.5px">Activo</label>
-                                </div>
-                                <div class="col-12">
-                                    <button type="submit" class="btn-at-primary btn-sm"><i class="bi bi-check-lg"></i> Guardar</button>
-                                </div>
-                            </div>
-                        </form>
-                    </details>
+                    <button type="button" class="btn-icon" data-bs-toggle="modal" data-bs-target="#modal-ver-{{ c.id }}" title="Ver">
+                        <i class="bi bi-eye" aria-hidden="true"></i>
+                    </button>
+                    <button type="button" class="btn-icon" data-bs-toggle="modal" data-bs-target="#modal-editar-{{ c.id }}" title="Editar">
+                        <i class="bi bi-pencil" aria-hidden="true"></i>
+                    </button>
+                    <button type="button" class="btn-icon {% if c.activo %}danger{% endif %}" data-bs-toggle="modal"
+                            data-bs-target="#modal-alternar-{{ c.id }}" title="{{ 'Desactivar' if c.activo else 'Reactivar' }}">
+                        <i class="bi {{ 'bi-slash-circle' if c.activo else 'bi-arrow-counterclockwise' }}" aria-hidden="true"></i>
+                    </button>
                 </td>
             </tr>
             {% endfor %}
             </tbody>
         </table>
     </div>
+    {{ controles(pagina, request) }}
+    {% endif %}
 </div>
-{% else %}
-<div class="at-empty">
-    <i class="bi bi-ticket-perforated at-empty-icon" aria-hidden="true"></i>
-    <strong>Sin cupones todavía</strong>
+
+<!-- Modal: nuevo cupón -->
+<div class="modal fade" id="modal-crear" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title d-flex align-items-center gap-2" style="font-size:16px;font-weight:700">
+                    <span class="modal-icon-title"><i class="bi bi-ticket-perforated" aria-hidden="true"></i></span>Nuevo cupón
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <form method="post" action="/backoffice/ofertas/cupones">
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-6 col-md-3">
+                            <label class="form-label-at" for="c-codigo">Código</label>
+                            <input type="text" class="form-control-at text-uppercase" id="c-codigo" name="codigo" required>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label class="form-label-at" for="c-tipo">Tipo</label>
+                            <select class="form-control-at" id="c-tipo" name="tipo">
+                                <option value="porcentaje">% porcentaje</option>
+                                <option value="monto_fijo">Monto fijo</option>
+                            </select>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label class="form-label-at" for="c-valor">Valor</label>
+                            <input type="number" step="0.01" class="form-control-at" id="c-valor" name="valor" required>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label class="form-label-at" for="c-producto">Producto aplicable</label>
+                            <select class="form-control-at" id="c-producto" name="producto_aplicable">
+                                <option value="">Cualquiera</option>
+                                <option value="vuelo">Vuelo</option>
+                                <option value="hotel">Hotel</option>
+                                <option value="auto">Auto</option>
+                                <option value="actividad">Actividad</option>
+                                <option value="crucero">Crucero</option>
+                            </select>
+                        </div>
+                        <div class="col-6 col-md-4">
+                            <label class="form-label-at" for="c-expira">Expira</label>
+                            <input type="date" class="form-control-at" id="c-expira" name="fecha_expiracion" required>
+                        </div>
+                        <div class="col-6 col-md-4">
+                            <label class="form-label-at" for="c-usos">Usos máximos</label>
+                            <input type="number" class="form-control-at" id="c-usos" name="usos_maximos" placeholder="Sin límite">
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <label class="form-label-at" for="c-acum">Acumulable con paquete</label>
+                            <select class="form-control-at" id="c-acum" name="acumulable_con_paquete">
+                                <option value="">Usar default global</option>
+                                <option value="true">Sí, excepción</option>
+                                <option value="false">No, excepción</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-at-ghost" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn-at-primary"><i class="bi bi-check2"></i>Crear cupón</button>
+                </div>
+            </form>
+        </div>
+    </div>
 </div>
-{% endif %}
+
+{% for c in pagina.items %}
+<!-- Modal: ver (solo lectura) -->
+<div class="modal fade" id="modal-ver-{{ c.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title d-flex align-items-center gap-2" style="font-size:16px;font-weight:700">
+                    <span class="modal-icon-title"><i class="bi bi-ticket-perforated" aria-hidden="true"></i></span><span class="at-mono">{{ c.codigo }}</span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body d-flex flex-column gap-2" style="font-size:13.5px">
+                <div class="d-flex justify-content-between"><span style="color:var(--at-muted)">Tipo</span><span>{{ "Porcentaje" if c.tipo == "porcentaje" else "Monto fijo" }}</span></div>
+                <div class="d-flex justify-content-between"><span style="color:var(--at-muted)">Valor</span><span class="at-mono">{{ ("%.0f"|format(c.valor) ~ "%") if c.tipo == "porcentaje" else ("$" ~ "%.2f"|format(c.valor)) }}</span></div>
+                <div class="d-flex justify-content-between"><span style="color:var(--at-muted)">Producto aplicable</span><span>{{ c.producto_aplicable or "Cualquiera" }}</span></div>
+                <div class="d-flex justify-content-between"><span style="color:var(--at-muted)">Expira</span><span class="at-mono">{{ c.fecha_expiracion[:10] }}</span></div>
+                <div class="d-flex justify-content-between"><span style="color:var(--at-muted)">Usos</span><span class="at-mono">{{ c.usos_actuales or 0 }}{% if c.usos_maximos %} / {{ c.usos_maximos }}{% endif %}</span></div>
+                <div class="d-flex justify-content-between"><span style="color:var(--at-muted)">Acumulable con paquete</span><span>{% if c.acumulable_con_paquete is none %}Default global{% elif c.acumulable_con_paquete %}Sí{% else %}No{% endif %}</span></div>
+                <div class="d-flex justify-content-between"><span style="color:var(--at-muted)">Estado</span><span>{% if c.activo %}<span class="badge-sistema">activo</span>{% else %}<span class="badge-sistema" style="opacity:.6">inactivo</span>{% endif %}</span></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-at-ghost" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: editar -->
+<div class="modal fade" id="modal-editar-{{ c.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title d-flex align-items-center gap-2" style="font-size:16px;font-weight:700">
+                    <span class="modal-icon-title"><i class="bi bi-pencil" aria-hidden="true"></i></span>Editar — <span class="at-mono">{{ c.codigo }}</span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <form method="post" action="/backoffice/ofertas/cupones/{{ c.id }}">
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-6 col-md-3">
+                            <label class="form-label-at">Tipo</label>
+                            <select class="form-control-at" name="tipo">
+                                <option value="porcentaje" {% if c.tipo == "porcentaje" %}selected{% endif %}>% porcentaje</option>
+                                <option value="monto_fijo" {% if c.tipo == "monto_fijo" %}selected{% endif %}>Monto fijo</option>
+                            </select>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label class="form-label-at">Valor</label>
+                            <input type="number" step="0.01" class="form-control-at" name="valor" value="{{ c.valor }}" required>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label class="form-label-at">Expira</label>
+                            <input type="date" class="form-control-at" name="fecha_expiracion" value="{{ c.fecha_expiracion[:10] }}" required>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label class="form-label-at">Usos máximos</label>
+                            <input type="number" class="form-control-at" name="usos_maximos" value="{{ c.usos_maximos or '' }}">
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label class="form-label-at">Producto aplicable</label>
+                            <select class="form-control-at" name="producto_aplicable">
+                                <option value="" {% if not c.producto_aplicable %}selected{% endif %}>Cualquiera</option>
+                                {% for p in ["vuelo","hotel","auto","actividad","crucero"] %}
+                                <option value="{{ p }}" {% if c.producto_aplicable == p %}selected{% endif %}>{{ p }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label class="form-label-at">Acumulable con paquete</label>
+                            <select class="form-control-at" name="acumulable_con_paquete">
+                                <option value="" {% if c.acumulable_con_paquete is none %}selected{% endif %}>Usar default global</option>
+                                <option value="true" {% if c.acumulable_con_paquete == true %}selected{% endif %}>Sí, excepción</option>
+                                <option value="false" {% if c.acumulable_con_paquete == false %}selected{% endif %}>No, excepción</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-at-ghost" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn-at-primary"><i class="bi bi-check2"></i>Guardar cambios</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: desactivar / reactivar -->
+<div class="modal fade" id="modal-alternar-{{ c.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width:420px">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title d-flex align-items-center gap-2" style="font-size:16px;font-weight:700">
+                    <span class="modal-icon-title" style="{% if c.activo %}background:var(--at-failed-bg);color:var(--at-danger){% endif %}">
+                        <i class="bi {{ 'bi-slash-circle' if c.activo else 'bi-arrow-counterclockwise' }}" aria-hidden="true"></i>
+                    </span>{{ 'Desactivar cupón' if c.activo else 'Reactivar cupón' }}
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body" style="font-size:13.5px">
+                {% if c.activo %}
+                ¿Desactivar <strong class="at-mono">{{ c.codigo }}</strong>? Deja de poder usarse de inmediato — se puede reactivar cuando quieras.
+                {% else %}
+                ¿Reactivar <strong class="at-mono">{{ c.codigo }}</strong>? Vuelve a poder usarse.
+                {% endif %}
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-at-ghost" data-bs-dismiss="modal">Cancelar</button>
+                <form method="post" action="/backoffice/ofertas/cupones/{{ c.id }}/alternar-activo" class="m-0">
+                    <button type="submit" class="{{ 'btn-at-danger' if c.activo else 'btn-at-primary' }}">
+                        <i class="bi {{ 'bi-slash-circle' if c.activo else 'bi-arrow-counterclockwise' }}" aria-hidden="true"></i>
+                        {{ 'Desactivar' if c.activo else 'Reactivar' }}
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
 {% endblock %}

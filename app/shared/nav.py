@@ -6,7 +6,29 @@ como grupo deshabilitado con badge "Próximamente" (si el usuario tiene
 acceso Nivel 1 al módulo, aunque la pantalla todavía no exista).
 """
 
+from app.seguridad.services.rbac_service import tiene_permiso
 from app.shared.pocketbase_client import get_pocketbase_client
+
+# Cada dashboard es una "tabla" (Nivel 2 de rbac_service) dentro del único
+# módulo "dashboards" — ver scripts/seed_dashboards_rbac.py sobre por qué
+# (permisos.accion no admite acciones custom tipo "ver_comercial"). El
+# orden acá es el orden de PRIORIDAD 2 del pedido del usuario, y define
+# cuál dashboard queda de primero (auto-redirect si el rol solo tiene uno,
+# ver layout_app.html: el tab de módulo enlaza a items[0].href).
+_ITEMS_DASHBOARDS = [
+    {"tabla": "comercial", "label": "Rendimiento comercial", "href": "/backoffice/dashboards/comercial", "icono": "bi-graph-up-arrow"},
+    {"tabla": "finanzas", "label": "Control financiero", "href": "/backoffice/dashboards/finanzas", "icono": "bi-cash-stack"},
+    {"tabla": "operaciones", "label": "Disrupciones", "href": "/backoffice/dashboards/disrupciones", "icono": "bi-exclamation-triangle"},
+    {"tabla": "clientes", "label": "Captación y retención", "href": "/backoffice/dashboards/clientes", "icono": "bi-person-hearts"},
+    {"tabla": "demanda", "label": "Demanda por producto", "href": "/backoffice/dashboards/demanda", "icono": "bi-bar-chart"},
+    {"tabla": "paquetes", "label": "Paquetes y carrito", "href": "/backoffice/dashboards/paquetes", "icono": "bi-box-seam"},
+    {"tabla": "catalogo_rutas", "label": "Catálogo y rutas", "href": "/backoffice/dashboards/catalogo-rutas", "icono": "bi-signpost-split"},
+    {"tabla": "soporte", "label": "Calidad de soporte", "href": "/backoffice/dashboards/soporte", "icono": "bi-headset"},
+    {"tabla": "campanas", "label": "Campañas y promociones", "href": "/backoffice/dashboards/campanas", "icono": "bi-envelope-paper"},
+    {"tabla": "asistente_ia", "label": "Asistente IA", "href": "/backoffice/dashboards/asistente-ia", "icono": "bi-robot"},
+    {"tabla": "alertas_precio", "label": "Alertas de precio", "href": "/backoffice/dashboards/alertas-precio", "icono": "bi-bell"},
+    {"tabla": "agentes", "label": "Productividad del agente", "href": "/backoffice/dashboards/agentes", "icono": "bi-person-workspace"},
+]
 
 MODULOS_CATALOGO = [
     {
@@ -17,6 +39,17 @@ MODULOS_CATALOGO = [
             {"label": "Usuarios", "href": "/admin/usuarios", "icono": "bi-people"},
             {"label": "Roles", "href": "/admin/roles", "icono": "bi-diagram-3"},
             {"label": "Auditoría", "href": "/admin/auditoria", "icono": "bi-journal-text"},
+            {"label": "Intentos fallidos", "href": "/admin/seguridad/intentos-fallidos", "icono": "bi-shield-exclamation"},
+        ],
+    },
+    {
+        "clave": "configuracion",
+        "nombre": "Configuración",
+        "icono": "bi-gear",
+        "items": [
+            {"label": "Política de contraseñas/sesión", "href": "/admin/configuracion", "icono": "bi-sliders"},
+            {"label": "Métodos de pago", "href": "/admin/configuracion/metodos-pago", "icono": "bi-credit-card-2-front"},
+            {"label": "Niveles de tarifa", "href": "/admin/configuracion/niveles-tarifa", "icono": "bi-layers"},
         ],
     },
     {
@@ -25,6 +58,8 @@ MODULOS_CATALOGO = [
         "icono": "bi-person-badge",
         "items": [
             {"label": "Buscar pasajeros", "href": "/backoffice/pasajeros", "icono": "bi-search"},
+            {"label": "Reporte de captación", "href": "/backoffice/pasajeros/reporte", "icono": "bi-graph-up"},
+            {"label": "Programa de beneficios", "href": "/backoffice/programa-beneficios", "icono": "bi-award"},
         ],
     },
     {
@@ -32,7 +67,14 @@ MODULOS_CATALOGO = [
         "nombre": "Vuelos",
         "icono": "bi-airplane",
         "items": [
+            {"label": "Catálogo de vuelos", "href": "/backoffice/vuelos", "icono": "bi-airplane"},
+            {"label": "Aerolíneas", "href": "/backoffice/vuelos/aerolineas", "icono": "bi-building"},
             {"label": "Forzar estado (demo)", "href": "/backoffice/vuelos/forzar-estado", "icono": "bi-exclamation-diamond"},
+            {"label": "Asientos y check-in", "href": "/backoffice/vuelos/config-asientos", "icono": "bi-grid-3x3-gap"},
+            {"label": "Rotación Google Flights", "href": "/backoffice/vuelos/config-rotacion-cabina", "icono": "bi-arrow-repeat"},
+            {"label": "Monitor DAG catálogo", "href": "/backoffice/vuelos/monitor-dag", "icono": "bi-diagram-3"},
+            {"label": "Vuelos activos", "href": "/backoffice/vuelos/activos", "icono": "bi-broadcast"},
+            {"label": "Catálogo publicado (MinIO)", "href": "/backoffice/vuelos/catalogo-publicado", "icono": "bi-cloud-check"},
         ],
     },
     {
@@ -41,6 +83,9 @@ MODULOS_CATALOGO = [
         "icono": "bi-calendar-check",
         "items": [
             {"label": "Reserva asistida", "href": "/backoffice/reservas/nueva", "icono": "bi-headset"},
+            {"label": "Reporte de reservas", "href": "/backoffice/reservas/reporte", "icono": "bi-graph-up"},
+            {"label": "Mi cartera", "href": "/backoffice/reservas/mi-cartera", "icono": "bi-briefcase"},
+            {"label": "Ítems por tipo de producto", "href": "/backoffice/reservas/items", "icono": "bi-boxes"},
         ],
     },
     {
@@ -48,7 +93,9 @@ MODULOS_CATALOGO = [
         "nombre": "Disrupciones",
         "icono": "bi-exclamation-triangle",
         "items": [
+            {"label": "Disrupciones", "href": "/backoffice/disrupciones", "icono": "bi-exclamation-triangle"},
             {"label": "Notificaciones", "href": "/backoffice/notificaciones", "icono": "bi-bell"},
+            {"label": "Umbral de risk score", "href": "/backoffice/disrupciones/config-riesgo", "icono": "bi-speedometer2"},
         ],
     },
     {
@@ -56,8 +103,13 @@ MODULOS_CATALOGO = [
         "nombre": "Facturación",
         "icono": "bi-receipt",
         "items": [
+            {"label": "Pagos", "href": "/backoffice/pagos", "icono": "bi-credit-card"},
+            {"label": "Facturas", "href": "/backoffice/facturas", "icono": "bi-receipt"},
             {"label": "Comisiones", "href": "/backoffice/comisiones", "icono": "bi-percent"},
             {"label": "Remesas", "href": "/backoffice/remesas", "icono": "bi-bank"},
+            {"label": "Pagos diferidos", "href": "/backoffice/pagos-diferidos", "icono": "bi-hourglass-split"},
+            {"label": "Políticas de reembolso", "href": "/backoffice/politicas-reembolso", "icono": "bi-arrow-counterclockwise"},
+            {"label": "Reembolsos", "href": "/backoffice/reembolsos", "icono": "bi-cash-coin"},
         ],
     },
     {
@@ -84,10 +136,46 @@ MODULOS_CATALOGO = [
         "nombre": "Ofertas y Marketing",
         "icono": "bi-stars",
         "items": [
+            {"label": "Ofertas destacadas", "href": "/backoffice/ofertas/destacadas", "icono": "bi-stars"},
             {"label": "Cupones", "href": "/backoffice/ofertas/cupones", "icono": "bi-ticket-perforated"},
+            {"label": "Suscriptores newsletter", "href": "/backoffice/ofertas/suscriptores", "icono": "bi-envelope"},
             {"label": "Reporte de cupones", "href": "/backoffice/ofertas/reporte-cupones", "icono": "bi-graph-up"},
             {"label": "Campañas de email", "href": "/backoffice/ofertas/campanas", "icono": "bi-envelope-paper"},
             {"label": "Acumulación con paquete", "href": "/backoffice/ofertas/config-acumulacion-paquete", "icono": "bi-sliders"},
+            {"label": "Reporte de favoritos", "href": "/backoffice/ofertas/reporte-favoritos", "icono": "bi-heart"},
+        ],
+    },
+    {
+        "clave": "paquetes",
+        "nombre": "Paquetes",
+        "icono": "bi-box-seam",
+        "items": [
+            {"label": "% Descuento por tipo", "href": "/backoffice/paquetes", "icono": "bi-percent"},
+        ],
+    },
+    {
+        "clave": "carrito",
+        "nombre": "Carrito",
+        "icono": "bi-cart3",
+        "items": [
+            {"label": "Configurar abandono", "href": "/backoffice/carrito/config-abandono", "icono": "bi-sliders"},
+            {"label": "Reporte de recuperación", "href": "/backoffice/carrito/reporte", "icono": "bi-graph-up"},
+        ],
+    },
+    {
+        "clave": "autos",
+        "nombre": "Autos",
+        "icono": "bi-car-front",
+        "items": [
+            {"label": "Reporte por proveedor/categoría", "href": "/backoffice/autos/reporte", "icono": "bi-graph-up"},
+        ],
+    },
+    {
+        "clave": "proveedores",
+        "nombre": "Proveedores comerciales",
+        "icono": "bi-building",
+        "items": [
+            {"label": "Proveedores", "href": "/backoffice/proveedores", "icono": "bi-building"},
         ],
     },
     {
@@ -99,13 +187,28 @@ MODULOS_CATALOGO = [
             {"label": "Reporte de consultas", "href": "/backoffice/asistente/reporte", "icono": "bi-graph-up"},
         ],
     },
+    {
+        "clave": "dashboards",
+        "nombre": "Dashboards",
+        "icono": "bi-speedometer2",
+        # `items` se completa por usuario en modulos_con_acceso() según el
+        # Nivel 2 (tabla) de su rol — acá queda vacío a propósito, nunca se
+        # usa este valor "de catálogo" tal cual para este módulo particular.
+        "items": [],
+    },
 ]
 
 
 async def modulos_con_acceso(usuario: dict) -> list[dict]:
     """Módulos del catálogo sobre los que el rol del usuario tiene permiso
-    Nivel 1 "ver". Pasajeros (sin `rol_id`) no ven ningún grupo — su acceso
-    es de autoservicio, no de backoffice."""
+    Nivel 1 "ver". Pasajero es autoservicio, nunca ve grupos de backoffice
+    acá — aunque su rol de sistema "Pasajero" tenga permisos "ver" propios
+    (para las pantallas de autoservicio, no del backoffice), por eso se
+    excluye por `tipo_actor` y no por ausencia de `rol_id` (obligatorio
+    desde la migración 2026-07-27, ver rbac_service.py)."""
+    if usuario.get("tipo_actor") == "pasajero":
+        return []
+
     rol_id = usuario.get("rol_id")
     if not rol_id:
         return []
@@ -124,7 +227,7 @@ async def modulos_con_acceso(usuario: dict) -> list[dict]:
     ))["items"]
     permisos_del_rol = {rp["permiso_id"] for rp in roles_permisos}
 
-    return [
+    accesibles = [
         entry
         for entry in MODULOS_CATALOGO
         if (modulo_id := modulo_id_por_clave.get(entry["clave"]))
@@ -132,6 +235,36 @@ async def modulos_con_acceso(usuario: dict) -> list[dict]:
         and permiso_id in permisos_del_rol
     ]
 
+    # Copia por-request antes de personalizar "dashboards" — MODULOS_CATALOGO
+    # es un módulo global compartido entre todas las requests/usuarios,
+    # mutar sus dicts in-place filtraría los ítems de un usuario a otro.
+    resultado = []
+    for entry in accesibles:
+        if entry["clave"] != "dashboards":
+            resultado.append(entry)
+            continue
+        items_personalizados = [
+            {"label": item["label"], "href": item["href"], "icono": item["icono"]}
+            for item in _ITEMS_DASHBOARDS
+            if await tiene_permiso(usuario, "dashboards", "ver", tabla=item["tabla"])
+        ]
+        if items_personalizados:
+            resultado.append({**entry, "items": items_personalizados})
+
+    return resultado
+
 
 async def nav_context(usuario: dict) -> dict:
     return {"usuario": usuario, "nav_modulos": await modulos_con_acceso(usuario)}
+
+
+async def primer_dashboard_accesible(usuario: dict) -> str | None:
+    """Primer dashboard (Nivel 2 "ver" sobre el módulo "dashboards") al que
+    el rol del usuario tiene acceso, en el mismo orden que el menú —
+    usado por el login para mandar a cada rol de staff directo a su
+    dashboard en vez de a un destino fijo. `None` si el rol no tiene
+    ninguno (ej. admin_ti, fuera de la matriz de la spec de dashboards)."""
+    for item in _ITEMS_DASHBOARDS:
+        if await tiene_permiso(usuario, "dashboards", "ver", tabla=item["tabla"]):
+            return item["href"]
+    return None

@@ -7,7 +7,8 @@ facturación, contacto de emergencia, etc. se incorporan cuando se
 implemente Pasajeros.
 """
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Request, UploadFile
+from fastapi.responses import Response
 
 from app.seguridad.repositories.seguridad_repo import SeguridadRepository
 from app.seguridad.services.audit_service import AuditService
@@ -19,6 +20,9 @@ from app.shared.templating import templates
 
 router = APIRouter()
 
+_MIME_TIPOS_VALIDOS = {"image/jpeg", "image/png", "image/webp"}
+_TAMANIO_MAXIMO_BYTES = 5 * 1024 * 1024  # mismo límite que usuarios.foto_perfil en el esquema real
+
 
 async def _contexto_perfil(usuario: dict, **extra) -> dict:
     contexto = await nav_context(usuario)
@@ -27,6 +31,21 @@ async def _contexto_perfil(usuario: dict, **extra) -> dict:
         rol = await SeguridadRepository()._client.get_record("roles", usuario["rol_id"])
         rol_nombre = rol["nombre"]
     contexto["rol_nombre"] = rol_nombre
+
+    # RF-PAS-002/005/006 — datos de contacto, documentos de viaje y viajeros
+    # frecuentes solo existen para pasajero (agente/admin no tienen registro
+    # en `pasajeros`); Pasajeros es dueño de esos datos, así que se importa
+    # acá adentro (no al tope del módulo) para no crear una dependencia dura
+    # de Seguridad -> Pasajeros en todos los usos de este archivo.
+    if usuario.get("tipo_actor") == "pasajero":
+        from app.pasajeros.repositories.pasajeros_repo import PasajerosRepository
+        from app.pasajeros.services.pasajeros_service import listar_documentos, listar_viajeros_frecuentes
+
+        pas_repo = PasajerosRepository()
+        contexto["pasajero"] = await pas_repo.pasajero_de_usuario(usuario["id"])
+        contexto["documentos_viaje"] = await listar_documentos(usuario)
+        contexto["viajeros_frecuentes"] = await listar_viajeros_frecuentes(usuario)
+
     contexto.update(extra)
     return contexto
 
@@ -82,7 +101,7 @@ async def cambiar_password(
 
     password_service = PasswordService()
     try:
-        password_service.validar_fortaleza(password_nueva)
+        await password_service.validar_fortaleza(password_nueva)
     except PasswordDebil as exc:
         return templates.TemplateResponse(
             request, "mi_perfil.html", await _contexto_perfil(usuario, error_password=exc.motivo),
@@ -99,6 +118,49 @@ async def cambiar_password(
     return templates.TemplateResponse(
         request, "mi_perfil.html", await _contexto_perfil(usuario, mensaje="Contraseña actualizada")
     )
+
+
+@router.post("/mi-perfil/foto")
+async def mi_perfil_subir_foto(
+    request: Request,
+    foto: UploadFile,
+    usuario: dict = Depends(verificar_sesion),
+):
+    contenido = await foto.read()
+    error = None
+    if foto.content_type not in _MIME_TIPOS_VALIDOS:
+        error = "Formato no admitido — solo JPG, PNG o WEBP."
+    elif len(contenido) > _TAMANIO_MAXIMO_BYTES:
+        error = "La imagen supera el tamaño máximo de 5 MB."
+
+    if error:
+        return templates.TemplateResponse(
+            request, "mi_perfil.html", await _contexto_perfil(usuario, error=error), status_code=400
+        )
+
+    repo = SeguridadRepository()
+    actualizado = await repo.actualizar_foto(
+        usuario["id"], foto.filename or "foto.jpg", contenido, foto.content_type
+    )
+    await AuditService().insertar(
+        "editar", "usuarios", usuario_id=usuario["id"], registro_id=usuario["id"],
+        detalle={"campos": ["foto_perfil"]},
+    )
+    return templates.TemplateResponse(
+        request, "mi_perfil.html", await _contexto_perfil(actualizado, mensaje="Foto de perfil actualizada")
+    )
+
+
+@router.get("/mi-perfil/foto")
+async def mi_perfil_ver_foto(usuario: dict = Depends(verificar_sesion)):
+    if not usuario.get("foto_perfil"):
+        raise HTTPException(status_code=404)
+    repo = SeguridadRepository()
+    contenido = await repo.descargar_foto(usuario["id"], usuario["foto_perfil"])
+    media_type = {"png": "image/png", "webp": "image/webp"}.get(
+        usuario["foto_perfil"].rsplit(".", 1)[-1].lower(), "image/jpeg"
+    )
+    return Response(content=contenido, media_type=media_type)
 
 
 @router.post("/mi-perfil/solicitar-eliminacion")

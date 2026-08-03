@@ -1,4 +1,4 @@
-{% extends "layout_portal.html" %}
+{% extends layout_base %}
 {% block title %}Reserva {{ reserva.codigo_reserva if reserva else '' }} — AeroTrack Travel{% endblock %}
 
 {% block content %}
@@ -7,13 +7,13 @@
     <i class="bi bi-ticket-perforated at-empty-icon" aria-hidden="true"></i>
     <strong>Reserva no encontrada</strong>
     <p>Es posible que haya expirado o no exista.</p>
-    <a href="/mis-reservas" class="btn-at-ghost mt-2"><i class="bi bi-arrow-left"></i> Mis reservas</a>
+    <a href="{{ volver_a }}" class="btn-at-ghost mt-2"><i class="bi bi-arrow-left"></i> {{ volver_texto }}</a>
 </div>
 
 {% else %}
-<a href="/mis-reservas" class="d-inline-flex align-items-center gap-2 mb-4"
+<a href="{{ volver_a }}" class="d-inline-flex align-items-center gap-2 mb-4"
    style="font-size:13px;color:var(--at-muted);text-decoration:none;font-weight:500">
-    <i class="bi bi-arrow-left"></i>Mis reservas
+    <i class="bi bi-arrow-left"></i>{{ volver_texto }}
 </a>
 
 <!-- Header de reserva -->
@@ -28,6 +28,11 @@
             {% else %}
             {{ reserva.origen_legible }} → {{ reserva.destino_legible }} ·
             <strong>{{ reserva.aerolinea_nombre }}</strong>
+            {% endif %}
+            {% if reserva.es_paquete %}
+            <span class="badge-status success" style="font-size:11px;margin-left:6px">
+                <i class="bi bi-box-seam"></i> Paquete{% if reserva.descuento_paquete_pct %} · {{ reserva.descuento_paquete_pct | int }}% de ahorro{% endif %}
+            </span>
             {% endif %}
         </div>
     </div>
@@ -116,10 +121,15 @@
 
         <!-- Acciones -->
         <div class="d-flex gap-2 flex-wrap">
-            {% if not reserva.es_multiproducto and reserva.estado in ("confirmada", "modificada", "completada") %}
+            {% if reserva.estado in ("confirmada", "modificada", "completada") %}
+            <a href="/reservas/{{ reserva.id }}/voucher-pdf" class="btn-at-ghost">
+                <i class="bi bi-file-earmark-pdf" aria-hidden="true"></i>Descargar voucher
+            </a>
+            {% if not reserva.es_multiproducto %}
             <a href="/reservas/{{ reserva.id }}/itinerario-pdf" class="btn-at-ghost">
                 <i class="bi bi-file-earmark-pdf" aria-hidden="true"></i>Descargar itinerario
             </a>
+            {% endif %}
             {% endif %}
             {% if reserva.estado not in ("cancelada", "completada") %}
             <form method="post" action="/reservas/{{ reserva.id }}/cancelar"
@@ -157,6 +167,13 @@
                 <span class="at-mono">${{ "%.2f"|format(e.precio) }}</span>
             </div>
             {% endfor %}
+            {% set subtotal_real = (reserva.items | sum(attribute='precio_final')) + (reserva.extras | sum(attribute='precio')) if reserva.es_multiproducto else reserva.precio_tarifa + (reserva.extras | sum(attribute='precio')) %}
+            {% if reserva.es_paquete and subtotal_real > reserva.total_pagar %}
+            <div class="d-flex justify-content-between align-items-center mb-2" style="font-size:13.5px;color:var(--at-success)">
+                <span><i class="bi bi-tag-fill"></i> Descuento de paquete{% if reserva.descuento_paquete_pct %} ({{ reserva.descuento_paquete_pct | int }}%){% endif %}</span>
+                <span class="at-mono">−${{ "%.2f"|format(subtotal_real - reserva.total_pagar) }}</span>
+            </div>
+            {% endif %}
             <div style="border-top:2px dashed var(--at-border);margin:14px 0"></div>
             <div class="d-flex justify-content-between align-items-center">
                 <span style="font-weight:700;font-size:15px">Total pagado</span>

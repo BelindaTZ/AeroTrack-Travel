@@ -1,0 +1,59 @@
+{% extends "layout_app.html" %}
+{% block title %}Monitor DAG catálogo de vuelos — AeroTrack Travel{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <h1><span class="heading-icon"><i class="bi bi-diagram-3"></i></span>Monitor del DAG de catálogo de vuelos</h1>
+    <p>Estado en vivo del pipeline Airflow que publica <code>vuelos_catalogo</code> (CU-T07).</p>
+</div>
+
+{% if error %}
+<div class="flash-bar">
+    <div class="flash-error"><i class="bi bi-exclamation-triangle-fill"></i>No se pudo contactar a Airflow: {{ error }}</div>
+</div>
+{% else %}
+<div class="at-card mb-3 d-flex flex-wrap gap-4 align-items-center">
+    <div>
+        <div class="form-label-at" style="margin-bottom:4px">DAG</div>
+        <strong class="at-mono">{{ info.dag_id }}</strong>
+    </div>
+    <div>
+        <div class="form-label-at" style="margin-bottom:4px">Estado</div>
+        {% if info.is_paused %}
+        <span class="badge-sistema" style="background:var(--amber-100);color:var(--amber-700)">Pausado</span>
+        {% else %}
+        <span class="badge-sistema" style="background:var(--at-success-bg);color:var(--at-success-fg)">Activo</span>
+        {% endif %}
+    </div>
+    {% if info.ultima_corrida %}
+    <div>
+        <div class="form-label-at" style="margin-bottom:4px">Última corrida</div>
+        <span class="badge-sistema">{{ info.ultima_corrida.state }}</span>
+        <span class="at-mono" style="font-size:12px;color:var(--at-muted)">{{ info.ultima_corrida.execution_date[:19] }}</span>
+    </div>
+    {% endif %}
+</div>
+
+<div class="at-table-wrapper">
+    <div class="at-table-header"><span class="at-table-title">Últimas {{ info.corridas | length }} corridas</span></div>
+    {% if info.corridas %}
+    <div class="at-table-scroll">
+        <table class="at-table">
+            <thead><tr><th>Fecha de ejecución</th><th>Estado</th><th>Inicio</th><th>Fin</th></tr></thead>
+            <tbody>
+                {% for r in info.corridas %}
+                <tr>
+                    <td class="at-mono" style="font-size:12px">{{ r.execution_date[:19] }}</td>
+                    <td><span class="badge-sistema">{{ r.state }}</span></td>
+                    <td class="at-mono" style="font-size:12px;color:var(--at-muted)">{{ r.start_date[:19] if r.start_date else "—" }}</td>
+                    <td class="at-mono" style="font-size:12px;color:var(--at-muted)">{{ r.end_date[:19] if r.end_date else "—" }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="at-empty"><i class="bi bi-inbox at-empty-icon" aria-hidden="true"></i><strong>Sin corridas registradas todavía</strong></div>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}

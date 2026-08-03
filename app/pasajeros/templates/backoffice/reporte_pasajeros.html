@@ -1,0 +1,94 @@
+{% extends "layout_app.html" %}
+{% from "_paginacion.html" import controles %}
+{% from "_informe_header.html" import header %}
+{% block title %}Reporte de pasajeros — AeroTrack Travel{% endblock %}
+{% block content %}
+{{ header(
+    "bi-person-lines-fill",
+    "Pasajeros nuevos por período y canal",
+    "Base de pasajeros con filtros de período, destino y frecuencia, y captación por canal de registro.",
+    request,
+    cu_ref="CU-T05 / CU-T37",
+    export_path="/backoffice/pasajeros/reporte/exportar"
+) }}
+
+<form method="get" action="/backoffice/pasajeros/reporte" data-auto-filtros class="at-card d-flex flex-wrap gap-3 align-items-end mb-3">
+    <div>
+        <label class="form-label-at" for="f-desde">Registrado desde</label>
+        <input type="date" class="form-control-at" id="f-desde" name="desde" value="{{ filtros.desde }}">
+    </div>
+    <div>
+        <label class="form-label-at" for="f-hasta">Registrado hasta</label>
+        <input type="date" class="form-control-at" id="f-hasta" name="hasta" value="{{ filtros.hasta }}">
+    </div>
+    <div>
+        <label class="form-label-at" for="f-destino">Destino (código)</label>
+        <input type="text" class="form-control-at" id="f-destino" name="destino" placeholder="ej. MIA" value="{{ filtros.destino }}" style="width:120px;text-transform:uppercase">
+    </div>
+    <div>
+        <label class="form-label-at" for="f-frecuencia">Mín. reservas</label>
+        <input type="number" class="form-control-at" id="f-frecuencia" name="frecuencia_min" min="0" value="{{ filtros.frecuencia_min }}" style="width:110px">
+    </div>
+    <div>
+        <label class="form-label-at" for="f-canal">Canal de registro</label>
+        <select class="form-control-at" id="f-canal" name="canal_registro" style="min-width:170px">
+            <option value="">Todos</option>
+            {% for c in canales %}
+            <option value="{{ c }}" {% if filtros.canal_registro == c %}selected{% endif %}>{{ c.replace('_', ' ') }}</option>
+            {% endfor %}
+        </select>
+    </div>
+</form>
+
+{% if por_canal %}
+<div class="at-card mb-3 d-flex flex-wrap gap-4">
+    {% for canal, cantidad in por_canal %}
+    <div>
+        <div style="font-size:12.5px;color:var(--at-muted);text-transform:capitalize">{{ canal.replace('_', ' ') }}</div>
+        <div style="font-size:22px;font-weight:700">{{ cantidad }}</div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<div class="at-table-wrapper">
+    <div class="at-table-header"><span class="at-table-title">{{ pagina.total_items }} pasajero(s)</span></div>
+    {% if pagina.items %}
+    <div class="at-table-scroll">
+        <table class="at-table">
+            <thead>
+                <tr>
+                    <th>Nombre</th><th>Email</th><th>Registrado</th>
+                    <th>Canal</th><th>Reservas</th><th>Tiene reserva</th><th>Destinos</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in pagina.items %}
+                <tr>
+                    <td style="font-weight:600">{{ p.nombre_completo }}</td>
+                    <td class="at-mono" style="font-size:12.5px">{{ p.email }}</td>
+                    <td class="at-mono" style="font-size:12px;color:var(--at-muted)">{{ p.fecha_registro }}</td>
+                    <td><span class="badge-sistema">{{ p.canal_registro.replace('_', ' ') }}</span></td>
+                    <td class="at-mono">{{ p.num_reservas }}</td>
+                    <td>
+                        {% if p.num_reservas %}
+                        <span class="badge-sistema" style="background:var(--at-success-bg);color:var(--at-success-fg)">sí</span>
+                        {% else %}
+                        <span class="badge-sistema">no</span>
+                        {% endif %}
+                    </td>
+                    <td class="at-mono" style="font-size:12.5px">{{ p.destinos | join(', ') if p.destinos else "—" }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {{ controles(pagina, request) }}
+    {% else %}
+    <div class="at-empty">
+        <i class="bi bi-person-x at-empty-icon" aria-hidden="true"></i>
+        <strong>No hay pasajeros con estos filtros</strong>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

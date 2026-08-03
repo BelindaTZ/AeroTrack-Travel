@@ -8,7 +8,15 @@ import secrets
 import string
 
 from app.reservas.repositories.reservas_repo import ReservasRepository
+from app.shared.cupo_service import liberar_cupo
 from app.vuelos.repositories.vuelos_repo import VuelosRepository
+from app.vuelos.services.asientos_service import (
+    AsientoNoDisponible,
+    AsientoNoValido,
+    SeleccionNoPermitidaAun,
+    liberar_asiento,
+    validar_y_reservar_asiento,
+)
 from app.vuelos.services.cupo_service import verificar_y_reservar_cupo
 
 DEFAULT_EXPIRACION_MINUTOS = 15
@@ -30,6 +38,22 @@ class PrecioDesactualizado(Exception):
 
 class CupoNoDisponible(Exception):
     pass
+
+
+# Re-exportadas para que routers/callers no importen directo de
+# asientos_service — mismo criterio que el resto de excepciones de este
+# módulo (todas las que puede lanzar crear_reserva viven acá).
+__all__ = [
+    "AsientoNoDisponible",
+    "AsientoNoValido",
+    "CupoNoDisponible",
+    "PasajeroNoEncontrado",
+    "PrecioDesactualizado",
+    "SeleccionNoPermitidaAun",
+    "TarifaNoEncontrada",
+    "crear_reserva",
+    "crear_reserva_asistida",
+]
 
 
 def _generar_codigo_reserva() -> str:
@@ -54,10 +78,11 @@ async def _crear_reserva_interno(
     canal: str,
     extras: list[dict] | None = None,
     agente_id: str | None = None,
+    asiento_id: str | None = None,
 ) -> dict:
     repo = ReservasRepository()
     vuelos_repo = VuelosRepository()
-    extras = extras or []
+    extras = list(extras or [])
 
     tarifa = await vuelos_repo.obtener_tarifa(tarifa_id)
     if tarifa is None:
@@ -73,6 +98,26 @@ async def _crear_reserva_interno(
     # siempre vía el servicio de Vuelos — nunca escritura directa aquí.
     if not await verificar_y_reservar_cupo(tarifa_id):
         raise CupoNoDisponible()
+
+    asiento = None
+    if asiento_id:
+        try:
+            vuelo = await vuelos_repo.obtener_vuelo(tarifa["vuelo_id"])
+            nivel = await vuelos_repo.nivel_tarifa(tarifa["nivel_tarifa_id"])
+            asiento = await validar_y_reservar_asiento(vuelo, nivel, asiento_id, repo=vuelos_repo)
+        except (AsientoNoValido, AsientoNoDisponible, SeleccionNoPermitidaAun):
+            # El cupo ya se reservó arriba — sin esto quedaría consumido
+            # por una reserva que nunca se llega a crear (RN-RES-001).
+            await liberar_cupo("tarifas_vuelo", tarifa_id, "cupos_disponibles")
+            raise
+        if asiento["es_premium"]:
+            extras.append(
+                {
+                    "tipo": "asiento",
+                    "descripcion": f"Asiento premium {asiento['fila']}{asiento['columna']}",
+                    "precio": asiento["recargo"],
+                }
+            )
 
     total_extras = sum(e["precio"] for e in extras)
     total_pagar = round(tarifa["precio_final"] + total_extras, 2)
@@ -111,7 +156,7 @@ async def _crear_reserva_interno(
             "estado_item": "pendiente",
         }
     )
-    await repo.agregar_pasajero(reserva["id"], pasajero_id)
+    await repo.agregar_pasajero(reserva["id"], pasajero_id, asiento_id=asiento_id if asiento else None)
     for extra in extras:
         await repo.agregar_extra(
             reserva["id"], extra["tipo"], extra.get("descripcion", ""), extra["precio"]
@@ -121,14 +166,23 @@ async def _crear_reserva_interno(
 
 
 async def crear_reserva(
-    usuario: dict, tarifa_id: str, precio_esperado: float, extras: list[dict] | None = None
+    usuario: dict,
+    tarifa_id: str,
+    precio_esperado: float,
+    extras: list[dict] | None = None,
+    asiento_id: str | None = None,
 ) -> dict:
     repo = ReservasRepository()
     pasajero = await repo.pasajero_de_usuario(usuario["id"])
     if pasajero is None:
         raise PasajeroNoEncontrado()
     return await _crear_reserva_interno(
-        pasajero["id"], tarifa_id, precio_esperado, canal="autoservicio", extras=extras
+        pasajero["id"],
+        tarifa_id,
+        precio_esperado,
+        canal="autoservicio",
+        extras=extras,
+        asiento_id=asiento_id,
     )
 
 
@@ -138,6 +192,7 @@ async def crear_reserva_asistida(
     tarifa_id: str,
     precio_esperado: float,
     extras: list[dict] | None = None,
+    asiento_id: str | None = None,
 ) -> dict:
     repo = ReservasRepository()
     pasajero = await repo.pasajero_por_email(email_pasajero)
@@ -150,4 +205,5 @@ async def crear_reserva_asistida(
         canal="asistida",
         extras=extras,
         agente_id=agente["id"],
+        asiento_id=asiento_id,
     )

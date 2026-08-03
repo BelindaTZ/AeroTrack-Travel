@@ -6,6 +6,8 @@ un 500 apenas el pasajero tuviera una reserva de solo un producto que no
 fuera un vuelo (ej. un auto comprado vía Carrito)."""
 
 from app.carrito.services.carrito_service import agregar_item, confirmar_checkout
+from app.reservas.repositories.reservas_repo import ReservasRepository
+from app.shared import minio_operational_client as moc
 
 
 async def _login(client, usuario):
@@ -42,10 +44,10 @@ async def test_detalle_reserva_solo_auto_no_revienta(client, pb, pasajero_factor
     assert "Opel Mokka" in resp.text
     assert "auto" in resp.text
 
-    reserva_items = await pb.list_records("reserva_items", {"filter": f'reserva_id="{reserva["id"]}"'})
-    for ri in reserva_items["items"]:
-        await pb.delete_record("reserva_items", ri["id"])
-    await pb.delete_record("reservas", reserva["id"])
+    reserva_items = await ReservasRepository().items_de_reserva(reserva["id"])
+    for ri in reserva_items:
+        await moc.eliminar("reserva_items", ri["id"])
+    await moc.eliminar("reservas", reserva["id"])
     await pb.delete_record("autos_catalogo", auto["id"])
 
 
@@ -61,8 +63,8 @@ async def test_mis_reservas_no_revienta_con_reserva_multiproducto(client, pb, pa
     assert resp.status_code == 200
     assert reserva["codigo_reserva"] in resp.text
 
-    reserva_items = await pb.list_records("reserva_items", {"filter": f'reserva_id="{reserva["id"]}"'})
-    for ri in reserva_items["items"]:
-        await pb.delete_record("reserva_items", ri["id"])
-    await pb.delete_record("reservas", reserva["id"])
+    reserva_items = await ReservasRepository().items_de_reserva(reserva["id"])
+    for ri in reserva_items:
+        await moc.eliminar("reserva_items", ri["id"])
+    await moc.eliminar("reservas", reserva["id"])
     await pb.delete_record("autos_catalogo", auto["id"])

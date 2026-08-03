@@ -146,11 +146,22 @@
     <!-- Contenido -->
     <main id="at-content">
         {% set _msg = mensaje or request.query_params.get('mensaje') %}
+        {% set _tipo = tipo or request.query_params.get('tipo') or 'exito' %}
         {% if _msg %}
         <div class="flash-bar">
+            {% if _tipo == 'error' %}
+            <div class="flash-error toast-autodismiss">
+                <i class="bi bi-exclamation-triangle-fill"></i>{{ _msg }}
+            </div>
+            {% elif _tipo == 'advertencia' %}
+            <div class="flash-warning toast-autodismiss">
+                <i class="bi bi-exclamation-circle-fill"></i>{{ _msg }}
+            </div>
+            {% else %}
             <div class="flash-success toast-autodismiss">
                 <i class="bi bi-check-circle-fill"></i>{{ _msg }}
             </div>
+            {% endif %}
         </div>
         {% endif %}
         {% block content %}{% endblock %}

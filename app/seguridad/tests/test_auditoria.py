@@ -93,7 +93,10 @@ async def test_vista_auditoria_lista_orden_descendente(admin_client, pb):
 async def test_filtros_sin_boton_aplicar(admin_client):
     resp = await admin_client.get("/admin/auditoria")
     html = resp.text
-    assert "requestSubmit" in html  # auto-envío al cambiar filtro (J9)
+    # IS-02 (auditoría de informes simples, 2026-08-01) — el auto-envío ahora
+    # se conecta vía el script global `filtros-auto.js` (fix J9 reusado por
+    # todos los informes), no con un <script> inline por página.
+    assert 'data-auto-filtros' in html
     assert ">Aplicar<" not in html
     assert ">Buscar<" not in html
 
@@ -111,3 +114,41 @@ async def test_exportacion_respeta_filtro(admin_client, pb):
 
     await pb.delete_record("auditoria", r1["id"])
     await pb.delete_record("auditoria", r2["id"])
+
+
+# ── IS-02 (auditoría de informes simples, 2026-08-01) — filtro por actor
+# (email, resuelto a usuario_id) y paginación real ──────────────────────
+
+async def test_filtro_por_actor_email(admin_client, pb, usuario_factory):
+    marca = "marca-actor-test"
+    actor = await usuario_factory()
+    otro = await usuario_factory()
+    r1 = await pb.create_record(
+        "auditoria", {"accion": marca, "tabla": "usuarios", "usuario_id": actor["id"], "detalle": {}}
+    )
+    r2 = await pb.create_record(
+        "auditoria", {"accion": marca, "tabla": "usuarios", "usuario_id": otro["id"], "detalle": {}}
+    )
+
+    try:
+        resp = await admin_client.get(f"/admin/auditoria?accion={marca}&actor_email={actor['email']}")
+        assert resp.status_code == 200
+        assert actor["id"] in resp.text
+        assert otro["id"] not in resp.text
+    finally:
+        await pb.delete_record("auditoria", r1["id"])
+        await pb.delete_record("auditoria", r2["id"])
+
+
+async def test_filtro_por_actor_email_inexistente_no_muestra_todo(admin_client):
+    resp = await admin_client.get("/admin/auditoria?actor_email=no-existe@aerotrack.test")
+    assert resp.status_code == 200
+    assert "Sin registros para el filtro actual" in resp.text
+
+
+async def test_paginacion_auditoria(admin_client):
+    resp = await admin_client.get("/admin/auditoria?page=1")
+    assert resp.status_code == 200
+
+    resp = await admin_client.get("/admin/auditoria?page=999")
+    assert resp.status_code == 200

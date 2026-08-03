@@ -1,0 +1,71 @@
+{% extends "layout_app.html" %}
+{% from "_paginacion.html" import controles %}
+{% from "_informe_header.html" import header %}
+{% block title %}Reporte de favoritos — AeroTrack Travel{% endblock %}
+{% block content %}
+{{ header(
+    "bi-heart-fill",
+    "Destinos y productos más guardados como favoritos",
+    "Productos que los pasajeros guardan como favoritos, agrupados por tipo y ordenados por veces guardado.",
+    request,
+    cu_ref="CU-T55",
+    export_path="/backoffice/ofertas/reporte-favoritos/exportar"
+) }}
+
+<div class="at-card mb-3 d-flex gap-4">
+    <div>
+        <div style="font-size:12.5px;color:var(--at-muted)">Total de favoritos guardados (filtro actual)</div>
+        <div style="font-size:22px;font-weight:700">{{ total_favoritos }}</div>
+    </div>
+    <div>
+        <div style="font-size:12.5px;color:var(--at-muted)">Productos distintos</div>
+        <div style="font-size:22px;font-weight:700">{{ pagina.total_items }}</div>
+    </div>
+</div>
+
+<div class="at-table-wrapper">
+    <div class="at-table-header">
+        <form method="get" action="/backoffice/ofertas/reporte-favoritos" data-auto-filtros class="d-flex gap-2 align-items-end flex-wrap">
+            <select class="form-control-at" name="tipo" style="width:170px">
+                <option value="">Todos los tipos</option>
+                {% for t in tipos %}
+                <option value="{{ t }}" {% if filtros.tipo == t %}selected{% endif %}>{{ t | capitalize }}</option>
+                {% endfor %}
+            </select>
+            <div>
+                <label class="form-label-at" for="f-desde">Desde</label>
+                <input type="date" class="form-control-at" id="f-desde" name="desde" value="{{ filtros.desde }}">
+            </div>
+            <div>
+                <label class="form-label-at" for="f-hasta">Hasta</label>
+                <input type="date" class="form-control-at" id="f-hasta" name="hasta" value="{{ filtros.hasta }}">
+            </div>
+            {% if filtros.tipo or filtros.desde or filtros.hasta %}
+            <a href="/backoffice/ofertas/reporte-favoritos" class="btn-at-ghost">Limpiar</a>
+            {% endif %}
+        </form>
+    </div>
+    {% if pagina.items %}
+    <div class="at-table-scroll">
+        <table class="at-table">
+            <thead><tr><th>Tipo</th><th>Producto</th><th>Veces guardado</th></tr></thead>
+            <tbody>
+                {% for r in pagina.items %}
+                <tr>
+                    <td><span class="badge-sistema" style="text-transform:capitalize">{{ r.tipo }}</span></td>
+                    <td class="at-mono" style="font-size:12.5px">{{ r.producto_ref }}</td>
+                    <td style="font-weight:600">{{ r.veces_guardado }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {{ controles(pagina, request) }}
+    {% else %}
+    <div class="at-empty">
+        <i class="bi bi-heart at-empty-icon" aria-hidden="true"></i>
+        <strong>Sin favoritos para el filtro actual</strong>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

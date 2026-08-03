@@ -1,0 +1,115 @@
+{% extends "layout_portal.html" %}
+{% block title %}Comparar hoteles — AeroTrack Travel{% endblock %}
+{% block content %}
+<a href="/hoteles/buscar" class="d-inline-flex align-items-center gap-2 mb-4"
+   style="font-size:13px;color:var(--at-muted);text-decoration:none;font-weight:500">
+    <i class="bi bi-arrow-left"></i>Volver a la búsqueda
+</a>
+
+<h1 class="mb-4" style="font-size:22px;font-weight:800;letter-spacing:-.03em">
+    <i class="bi bi-columns-gap me-2"></i>Comparar hoteles
+</h1>
+
+{% if error %}
+<div class="flash-bar" role="alert">
+    <div class="flash-error"><i class="bi bi-exclamation-triangle-fill"></i>{{ error }}</div>
+</div>
+{% endif %}
+
+{% if hoteles and hoteles|length >= 2 %}
+<div style="overflow-x:auto">
+    <div style="display:grid;grid-template-columns:180px repeat({{ hoteles|length }}, minmax(220px, 1fr));gap:1px;background:var(--at-border);border:1px solid var(--at-border);border-radius:var(--at-r-lg);overflow:hidden;min-width:{{ 180 + hoteles|length * 220 }}px">
+
+        <!-- Fila: nombre/imagen -->
+        <div style="background:var(--at-bg);padding:12px;font-size:12px;font-weight:700;color:var(--at-muted);display:flex;align-items:end">Propiedad</div>
+        {% for h in hoteles %}
+        <div style="background:var(--at-surface);padding:14px">
+            {% if h.imagen_principal %}
+            <div style="height:90px;border-radius:var(--at-r-sm);overflow:hidden;margin-bottom:8px;background:var(--at-bg)">
+                <img src="{{ h.imagen_principal }}" alt="" style="width:100%;height:100%;object-fit:cover;filter:grayscale(1)">
+            </div>
+            {% endif %}
+            <strong style="font-size:13.5px">{{ h.nombre }}</strong>
+        </div>
+        {% endfor %}
+
+        <!-- Fila: precio -->
+        <div style="background:var(--at-bg);padding:12px;font-size:12px;font-weight:700;color:var(--at-muted)">Precio desde</div>
+        {% for h in hoteles %}
+        <div style="background:var(--at-surface);padding:14px" class="at-mono">
+            {% if h.precio_desde %}<strong style="font-size:16px;color:var(--at-primary)">${{ "%.0f"|format(h.precio_desde) }}</strong><span style="font-size:11px;color:var(--at-muted)"> /noche</span>
+            {% else %}<span style="color:var(--at-sub)">Sin tarifas</span>{% endif %}
+        </div>
+        {% endfor %}
+
+        <!-- Fila: estrellas -->
+        <div style="background:var(--at-bg);padding:12px;font-size:12px;font-weight:700;color:var(--at-muted)">Estrellas</div>
+        {% for h in hoteles %}
+        <div style="background:var(--at-surface);padding:14px">
+            {% if h.estrellas %}{{ h.estrellas | int }}<i class="bi bi-star-fill" style="color:var(--amber-400)"></i>{% else %}—{% endif %}
+        </div>
+        {% endfor %}
+
+        <!-- Fila: calificación -->
+        <div style="background:var(--at-bg);padding:12px;font-size:12px;font-weight:700;color:var(--at-muted)">Calificación</div>
+        {% for h in hoteles %}
+        <div style="background:var(--at-surface);padding:14px">
+            {% if h.calificacion_promedio %}
+            {{ "%.1f"|format(h.calificacion_promedio) }}
+            {% if h.cantidad_resenas %}<span style="font-size:11px;color:var(--at-muted)">({{ h.cantidad_resenas | int }} reseñas)</span>{% endif %}
+            {% else %}—{% endif %}
+        </div>
+        {% endfor %}
+
+        {% if hoteles[0].category_scores %}
+        {% for clave in ['Value', 'Location', 'Rooms', 'Cleanliness', 'Service'] %}
+        <div style="background:var(--at-bg);padding:12px;font-size:12px;font-weight:700;color:var(--at-muted)">{{ clave }}</div>
+        {% for h in hoteles %}
+        <div style="background:var(--at-surface);padding:14px">{{ h.category_scores.get(clave, '—') }}</div>
+        {% endfor %}
+        {% endfor %}
+        {% endif %}
+
+        <!-- Fila: servicios principales -->
+        <div style="background:var(--at-bg);padding:12px;font-size:12px;font-weight:700;color:var(--at-muted)">Servicios</div>
+        {% for h in hoteles %}
+        <div style="background:var(--at-surface);padding:14px;font-size:12px;color:var(--at-muted)">
+            {% for s in h.servicios[:5] %}<div>• {{ s }}</div>{% endfor %}
+            {% if not h.servicios %}—{% endif %}
+        </div>
+        {% endfor %}
+
+        <!-- Fila: cancelación -->
+        <div style="background:var(--at-bg);padding:12px;font-size:12px;font-weight:700;color:var(--at-muted)">Cancelación (tarifa más económica)</div>
+        {% for h in hoteles %}
+        <div style="background:var(--at-surface);padding:14px;font-size:12.5px">
+            {% if h.reembolsable and h.cancelacion_hasta %}
+            <span style="color:var(--at-success)"><i class="bi bi-check-circle-fill"></i> Gratis hasta {{ h.cancelacion_hasta[:10] }}</span>
+            {% elif h.reembolsable %}
+            <span style="color:var(--at-success)"><i class="bi bi-check-circle-fill"></i> Reembolsable</span>
+            {% else %}
+            <span style="color:var(--at-sub)">No reembolsable</span>
+            {% endif %}
+        </div>
+        {% endfor %}
+
+        <!-- Fila: acción -->
+        <div style="background:var(--at-bg);padding:12px"></div>
+        {% for h in hoteles %}
+        <div style="background:var(--at-surface);padding:14px">
+            <a href="/hoteles/{{ h.id }}" class="btn-at-accent w-100 justify-content-center" style="padding:8px;font-size:13px">
+                Ver detalle
+            </a>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% elif hoteles %}
+<div class="at-empty" style="border:1px solid var(--at-border);border-radius:var(--at-r-lg);background:var(--at-surface)">
+    <i class="bi bi-columns-gap at-empty-icon" aria-hidden="true"></i>
+    <strong>Selecciona al menos 2 hoteles para comparar</strong>
+    <p>Marca la casilla "Comparar" en al menos 2 resultados de búsqueda.</p>
+    <a href="/hoteles/buscar" class="btn-at-ghost mt-2"><i class="bi bi-arrow-left"></i> Volver a la búsqueda</a>
+</div>
+{% endif %}
+{% endblock %}

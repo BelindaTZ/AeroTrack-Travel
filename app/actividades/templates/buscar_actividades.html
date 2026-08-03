@@ -2,8 +2,9 @@
 {% block title %}Buscar actividades — AeroTrack Travel{% endblock %}
 {% block description %}Descubre experiencias y actividades por destino, con reseñas reales.{% endblock %}
 
+{% import "_selector_lugar.html" as sel %}
 {% block hero %}
-<section class="at-hero-search {% if resultados is not none %}compact{% endif %}" aria-label="Buscador de actividades">
+<section class="at-hero-search hero-actividades {% if resultados is not none %}compact{% endif %}" aria-label="Buscador de actividades">
     <div style="max-width:960px;margin:0 auto;position:relative;z-index:2">
         {% if not resultados %}
         <div class="hero-eyebrow">
@@ -14,20 +15,21 @@
         <p class="hero-sub">Tours, excursiones y actividades con reseñas reales de otros viajeros.</p>
         {% endif %}
 
-        <datalist id="lista-ciudades-actividades">
-            {% for c in ciudades %}<option value="{{ c }}">{% endfor %}
-        </datalist>
-
         <form method="get" action="/actividades/buscar" id="form-busqueda-actividades"
               class="{% if resultados %}search-card-compact{% else %}search-card{% endif %}">
             <div class="row g-3 align-items-end">
-                <div class="col-9 col-md-10">
-                    <label class="form-label-at" for="ciudad">Destino</label>
-                    <input type="text" class="form-control-at" id="ciudad" name="ciudad"
-                           list="lista-ciudades-actividades" placeholder="Paris"
-                           value="{{ filtros.ciudad }}" required autocomplete="off">
+                <div class="col-12 col-md-6">
+                    {{ sel.campo('ciudad', 'ciudad', filtros.ciudad, ciudades, 'Destino', 'Ciudad', 'compass') }}
                 </div>
-                <div class="col-3 col-md-2">
+                <div class="col-6 col-md-2">
+                    <label class="form-label-at" for="desde">Desde</label>
+                    <input type="date" class="form-control-at" id="desde" name="desde" value="{{ filtros.desde }}">
+                </div>
+                <div class="col-6 col-md-2">
+                    <label class="form-label-at" for="hasta">Hasta</label>
+                    <input type="date" class="form-control-at" id="hasta" name="hasta" value="{{ filtros.hasta }}">
+                </div>
+                <div class="col-12 col-md-2">
                     <button type="submit" id="btn-buscar-actividades" class="btn-search-hero w-100 justify-content-center">
                         <i class="bi bi-search" aria-hidden="true"></i> Buscar
                     </button>
@@ -39,19 +41,23 @@
 {% endblock %}
 
 {% block content %}
-{% if resultados is not none %}
 
 <form id="form-filtros-actividades" method="get" action="/actividades/buscar" style="display:none">
     <input type="hidden" name="ciudad" value="{{ filtros.ciudad }}">
+    <input type="hidden" name="desde" value="{{ filtros.desde }}">
+    <input type="hidden" name="hasta" value="{{ filtros.hasta }}">
     <input type="hidden" name="categoria" id="f-categoria" value="{{ filtros.categoria }}">
     <input type="hidden" name="precio_max" id="f-precio-max" value="{{ filtros.precio_max }}">
     <input type="hidden" name="calificacion_min" id="f-calificacion-min" value="{{ filtros.calificacion_min }}">
 </form>
 
+{# Filtros visibles desde el inicio, mismo criterio que hoteles
+   (`buscar_hoteles.html`) — REG-J9 los sigue aplicando instantáneamente
+   vía form-filtros-actividades, sea cual sea el estado del listado. #}
 <div class="search-layout">
     <aside class="search-sidebar" aria-label="Filtros de búsqueda">
         <div class="sidebar-section" style="background:var(--navy-50);border-bottom:1px solid var(--navy-100)">
-            <div style="font-size:13px;font-weight:700;color:var(--navy-800)">{{ filtros.ciudad }}</div>
+            <div style="font-size:13px;font-weight:700;color:var(--navy-800)">{{ filtros.ciudad or "Todos los destinos" }}</div>
         </div>
 
         {% if categorias %}
@@ -102,10 +108,20 @@
     </aside>
 
     <div class="search-results-area">
+        {% if resultados is none %}
+        <div class="at-empty" style="border:1px solid var(--at-border);border-radius:var(--at-r-lg);background:var(--at-surface)">
+            <i class="bi bi-compass at-empty-icon" aria-hidden="true"></i>
+            <strong>Elige un destino para ver actividades disponibles</strong>
+            <p>Usa el buscador de arriba para empezar — los filtros ya quedan listos.</p>
+        </div>
+        {% else %}
         <div class="results-header">
             <div>
                 <div class="results-title">{{ resultados | length }} actividad(es) encontrada(s)</div>
-                <div class="results-sub">{{ filtros.ciudad }}</div>
+                <div class="results-sub">
+                    {{ filtros.ciudad }}
+                    {% if filtros.desde or filtros.hasta %}· entre {{ filtros.desde or "…" }} y {{ filtros.hasta or "…" }}{% endif %}
+                </div>
             </div>
         </div>
 
@@ -136,7 +152,7 @@
                             ${{ "%.0f"|format(a.precio_desde) }}<span style="font-size:11px;font-weight:500;color:var(--at-muted)"> desde</span>
                         </div>
                         {% endif %}
-                        <a href="/actividades/{{ a.id }}" class="btn-at-ghost w-100 justify-content-center mt-2">
+                        <a href="/actividades/{{ a.id }}{% if request.query_params.get('paquete_id') %}?paquete_id={{ request.query_params.get('paquete_id') }}{% endif %}" class="btn-at-ghost w-100 justify-content-center mt-2">
                             Ver detalle <i class="bi bi-chevron-right"></i>
                         </a>
                     </div>
@@ -152,9 +168,9 @@
             <a href="/actividades/buscar" class="btn-at-ghost mt-2"><i class="bi bi-arrow-left"></i> Nueva búsqueda</a>
         </div>
         {% endif %}
+        {% endif %}
     </div>
 </div>
-{% endif %}
 {% endblock %}
 
 {% block scripts %}

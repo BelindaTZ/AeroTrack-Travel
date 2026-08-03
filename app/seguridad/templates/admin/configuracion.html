@@ -1,0 +1,244 @@
+{% extends "layout_app.html" %}
+{% block title %}Configuración del sistema — AeroTrack Travel{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <h1><span class="heading-icon"><i class="bi bi-sliders"></i></span>Configuración del sistema</h1>
+    <p>Política de contraseñas y duración de sesión (CU-T03).</p>
+</div>
+
+<div class="at-card" style="max-width:520px">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <strong style="font-size:14.5px">Política de contraseñas y sesión</strong>
+        <button class="btn-at-primary" style="padding:6px 14px;font-size:12.5px" data-bs-toggle="modal" data-bs-target="#modal-editar">
+            <i class="bi bi-pencil" aria-hidden="true"></i>Editar
+        </button>
+    </div>
+    <div class="d-flex flex-column gap-2" style="font-size:13.5px">
+        <div class="d-flex justify-content-between"><span style="color:var(--at-muted)">Longitud mínima de contraseña</span><span class="at-mono">{{ min_length }}</span></div>
+        <div class="d-flex justify-content-between"><span style="color:var(--at-muted)">Exigir al menos un número</span><span>{{ "Sí" if requiere_numero else "No" }}</span></div>
+        <div class="d-flex justify-content-between"><span style="color:var(--at-muted)">Duración de sesión</span><span class="at-mono">{{ duracion_sesion_dias }} día{{ "s" if duracion_sesion_dias != 1 else "" }}</span></div>
+    </div>
+</div>
+
+<!-- ── Plantillas de notificación ─────────────────────────────────── -->
+<div class="page-heading" style="margin-top:28px">
+    <h2 style="font-size:17px;font-weight:700;display:flex;align-items:center;gap:8px"><i class="bi bi-envelope-paper"></i>Plantillas de notificación</h2>
+    <p style="font-size:13px">Asunto/cuerpo de los correos que el sistema ya envía — recuperación de contraseña, bienvenida, disrupciones. Los textos entre llaves (ej. <code>{enlace}</code>) se reemplazan automáticamente, no los borres.</p>
+</div>
+<div class="at-table-wrapper">
+    <div class="at-table-scroll">
+        <table class="at-table">
+            <thead><tr><th>Clave</th><th>Valor actual</th><th class="actions-col">Acciones</th></tr></thead>
+            <tbody>
+            {% for p in plantillas %}
+            <tr>
+                <td>
+                    <div style="font-weight:600">{{ p.descripcion or p.clave }}</div>
+                    <div class="at-mono" style="font-size:11px;color:var(--at-sub)">{{ p.clave }}</div>
+                </td>
+                <td style="max-width:360px;font-size:12.5px;color:var(--at-muted)">{{ p.valor[:90] }}{% if p.valor|length > 90 %}…{% endif %}</td>
+                <td class="actions-col">
+                    <button type="button" class="btn-icon" data-bs-toggle="modal" data-bs-target="#modal-plantilla-{{ p.id }}" title="Editar">
+                        <i class="bi bi-pencil" aria-hidden="true"></i>
+                    </button>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- ── Feature flags ──────────────────────────────────────────────── -->
+<div class="page-heading" style="margin-top:28px">
+    <h2 style="font-size:17px;font-weight:700;display:flex;align-items:center;gap:8px"><i class="bi bi-toggle-on"></i>Feature flags</h2>
+    <p style="font-size:13px">Interruptores que el código consulta antes de ejecutar una acción — ej. desactivar Stripe temporalmente sin apagar el resto del sitio.</p>
+</div>
+<div class="at-table-wrapper">
+    <div class="at-table-header">
+        <div></div>
+        <button class="btn-at-primary" data-bs-toggle="modal" data-bs-target="#modal-nueva-flag">
+            <i class="bi bi-plus-lg" aria-hidden="true"></i>Nuevo flag
+        </button>
+    </div>
+    {% if not feature_flags %}
+    <div class="at-empty">
+        <i class="bi bi-toggle-on at-empty-icon" aria-hidden="true"></i>
+        <strong>Sin feature flags todavía</strong>
+    </div>
+    {% else %}
+    <div class="at-table-scroll">
+        <table class="at-table">
+            <thead><tr><th>Clave</th><th>Descripción</th><th>Estado</th><th class="actions-col">Acciones</th></tr></thead>
+            <tbody>
+            {% for f in feature_flags %}
+            <tr>
+                <td class="at-mono" style="font-weight:600">{{ f.clave }}</td>
+                <td style="font-size:12.5px;color:var(--at-muted)">{{ f.descripcion or "—" }}</td>
+                <td>{% if f.valor.strip().lower() != "false" %}<span class="badge-sistema">activado</span>{% else %}<span class="badge-sistema" style="opacity:.6">desactivado</span>{% endif %}</td>
+                <td class="actions-col">
+                    <form method="post" action="/admin/configuracion/flags/{{ f.id }}/alternar" class="m-0 d-inline">
+                        <button type="submit" class="btn-at-ghost" style="padding:5px 12px;font-size:12.5px">
+                            {{ "Desactivar" if f.valor.strip().lower() != "false" else "Activar" }}
+                        </button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</div>
+
+<!-- ── Parámetros de negocio ──────────────────────────────────────── -->
+<div class="page-heading" style="margin-top:28px">
+    <h2 style="font-size:17px;font-weight:700;display:flex;align-items:center;gap:8px"><i class="bi bi-sliders2"></i>Parámetros de negocio</h2>
+    <p style="font-size:13px">Constantes de negocio (precios de extras, umbrales) — antes fijas en el código, ahora editables sin desplegar.</p>
+</div>
+<div class="at-table-wrapper">
+    <div class="at-table-scroll">
+        <table class="at-table">
+            <thead><tr><th>Clave</th><th>Descripción</th><th>Valor</th><th class="actions-col">Acciones</th></tr></thead>
+            <tbody>
+            {% for p in parametros %}
+            <tr>
+                <td class="at-mono" style="font-weight:600">{{ p.clave }}</td>
+                <td style="font-size:12.5px;color:var(--at-muted)">{{ p.descripcion or "—" }}</td>
+                <td class="at-mono">{{ p.valor }}</td>
+                <td class="actions-col">
+                    <button type="button" class="btn-icon" data-bs-toggle="modal" data-bs-target="#modal-parametro-{{ p.id }}" title="Editar">
+                        <i class="bi bi-pencil" aria-hidden="true"></i>
+                    </button>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Modal: nuevo feature flag -->
+<div class="modal fade" id="modal-nueva-flag" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title d-flex align-items-center gap-2" style="font-size:16px;font-weight:700">
+                    <span class="modal-icon-title"><i class="bi bi-toggle-on" aria-hidden="true"></i></span>Nuevo feature flag
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <form method="post" action="/admin/configuracion/flags">
+                <div class="modal-body d-flex flex-column gap-3">
+                    <div>
+                        <label class="form-label-at" for="flag-clave">Clave</label>
+                        <input type="text" class="form-control-at at-mono" id="flag-clave" name="clave" placeholder="modulo.nombre_habilitado" required>
+                        <div style="font-size:11.5px;color:var(--at-sub);margin-top:4px">Solo tiene efecto real si algún punto del código la consulta explícitamente.</div>
+                    </div>
+                    <div>
+                        <label class="form-label-at" for="flag-descripcion">Descripción</label>
+                        <input type="text" class="form-control-at" id="flag-descripcion" name="descripcion">
+                    </div>
+                    <div>
+                        <label class="d-flex align-items-center gap-2" style="cursor:pointer">
+                            <input type="checkbox" name="valor" value="true" checked>
+                            Activado al crearlo
+                        </label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-at-ghost" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn-at-primary"><i class="bi bi-check2"></i>Crear flag</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% for p in plantillas %}
+<div class="modal fade" id="modal-plantilla-{{ p.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title d-flex align-items-center gap-2" style="font-size:16px;font-weight:700">
+                    <span class="modal-icon-title"><i class="bi bi-envelope-paper" aria-hidden="true"></i></span>{{ p.descripcion or p.clave }}
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <form method="post" action="/admin/configuracion/plantillas/{{ p.id }}">
+                <div class="modal-body">
+                    <label class="form-label-at" for="valor-{{ p.id }}">Valor</label>
+                    <textarea class="form-control-at at-mono" id="valor-{{ p.id }}" name="valor" rows="4" required>{{ p.valor }}</textarea>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-at-ghost" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn-at-primary"><i class="bi bi-check2"></i>Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+{% for p in parametros %}
+<div class="modal fade" id="modal-parametro-{{ p.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width:420px">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title d-flex align-items-center gap-2" style="font-size:16px;font-weight:700">
+                    <span class="modal-icon-title"><i class="bi bi-sliders2" aria-hidden="true"></i></span>{{ p.clave }}
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <form method="post" action="/admin/configuracion/parametros/{{ p.id }}">
+                <div class="modal-body">
+                    <label class="form-label-at" for="param-{{ p.id }}">Valor</label>
+                    <input type="text" class="form-control-at at-mono" id="param-{{ p.id }}" name="valor" value="{{ p.valor }}" required>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-at-ghost" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn-at-primary"><i class="bi bi-check2"></i>Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+<!-- Modal: editar configuración -->
+<div class="modal fade" id="modal-editar" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title d-flex align-items-center gap-2" style="font-size:16px;font-weight:700">
+                    <span class="modal-icon-title"><i class="bi bi-sliders" aria-hidden="true"></i></span>Editar configuración
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <form method="post" action="/admin/configuracion">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label-at" for="min_length">Longitud mínima de contraseña</label>
+                        <input type="number" class="form-control-at" id="min_length" name="min_length" min="6" max="64" value="{{ min_length }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="d-flex align-items-center gap-2" style="cursor:pointer">
+                            <input type="checkbox" name="requiere_numero" value="true" {% if requiere_numero %}checked{% endif %}>
+                            Exigir al menos un número además de letras
+                        </label>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label-at" for="duracion_sesion_dias">Duración de sesión (días)</label>
+                        <input type="number" class="form-control-at" id="duracion_sesion_dias" name="duracion_sesion_dias" min="1" max="90" value="{{ duracion_sesion_dias }}" required>
+                        <div style="font-size:11.5px;color:var(--at-sub);margin-top:4px">Aplica a los próximos inicios de sesión — no afecta sesiones ya abiertas.</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-at-ghost" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn-at-primary"><i class="bi bi-check2"></i>Guardar cambios</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

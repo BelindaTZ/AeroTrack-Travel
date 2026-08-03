@@ -1,5 +1,8 @@
 """CU-T33 (reporte), CU-T34 (configuración) — Actor: Administrador únicamente."""
 
+from app.asistente_ia.repositories.asistente_repo import AsistenteRepository
+from app.shared import minio_operational_client as moc
+
 _CLAVES_ASISTENTE = ("asistente_ia.tono", "asistente_ia.temas_permitidos", "asistente_ia.respuestas_predefinidas")
 
 
@@ -82,7 +85,7 @@ async def test_reporte_cuenta_consultas_reales(pb, admin_client, pasajero_factor
     assert resp.status_code == 200
     assert "consulta única de prueba para reporte" in resp.text
 
-    mensajes = await pb.list_records("mensajes_ia", {"filter": f'conversacion_id="{resultado["conversacion_id"]}"'})
-    for m in mensajes["items"]:
-        await pb.delete_record("mensajes_ia", m["id"])
-    await pb.delete_record("conversaciones_ia", resultado["conversacion_id"])
+    mensajes = await AsistenteRepository().mensajes_de_conversacion(resultado["conversacion_id"])
+    for m in mensajes:
+        await moc.eliminar("mensajes_ia", m["id"])
+    await moc.eliminar("conversaciones_ia", resultado["conversacion_id"])

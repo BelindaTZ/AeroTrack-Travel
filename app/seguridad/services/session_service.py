@@ -12,6 +12,28 @@ from app.shared.pocketbase_client import PocketBaseError, get_pocketbase_client
 COOKIE_NAME = "pb_auth"
 
 
+async def resolver_tipo_actor(rol_id: str | None) -> str:
+    """Deriva "pasajero"/"agente"/"administrador" a partir del rol asignado.
+
+    `usuarios` ya no tiene un campo `tipo_actor` propio (migración
+    2026-07-27): a qué panel corresponde una cuenta es una propiedad del
+    ROL (`roles.tipo_panel`), nunca algo que cada usuario fije aparte y que
+    pudiera desalinearse de su rol real. Se llama en cada punto donde se
+    resuelve una sesión (login, OAuth, `verificar_sesion`) para inyectar
+    `usuario["tipo_actor"]` — así templates y redirects existentes siguen
+    leyendo esa clave sin cambios, aunque ya no sea una columna persistida.
+    "administrador" distingue por nombre del rol de sistema porque es
+    puramente cosmético (badge de la topbar, destino de "/") — ya no
+    autoriza nada (ver rbac_service.tiene_permiso)."""
+    if not rol_id:
+        return "pasajero"
+    pb = get_pocketbase_client()
+    rol = await pb.get_record("roles", rol_id)
+    if rol.get("tipo_panel") != "backoffice":
+        return "pasajero"
+    return "administrador" if rol.get("nombre") == "Administrador" else "agente"
+
+
 class SesionExpirada(Exception):
     """Token ausente, inválido, expirado, o usuario inactivo.
 
@@ -43,6 +65,8 @@ async def verificar_sesion(request: Request) -> dict:
     usuario = resultado["record"]
     if not usuario.get("activo", False):
         raise SesionExpirada(next_path=ruta_actual)
+
+    usuario["tipo_actor"] = await resolver_tipo_actor(usuario.get("rol_id"))
 
     request.state.usuario = usuario
     request.state.pb_token = resultado["token"]

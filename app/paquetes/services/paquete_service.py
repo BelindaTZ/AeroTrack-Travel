@@ -13,6 +13,18 @@ nunca duplica esa lógica.
 por ID directo (el pasajero ya eligió su vuelo/hotel/auto/actividad en la
 pantalla real de cada módulo) — no hay una pantalla de construcción de
 paquete unificada todavía.
+
+**2026-07-27 — cupo/expiración conectados (antes faltaban por completo)**:
+`iniciar_paquete`/`agregar_componente`/`cambiar_componente` no verificaban
+ni reservaban cupo real (a diferencia de Carrito/Reservas, que siempre
+pasan por `cupo_service`) — un paquete podía armarse y confirmarse sobre
+un vuelo/hotel/actividad ya agotado, sin decrementar nada. Tampoco se fijaba
+`fecha_expiracion_pago`, así que un paquete abandonado a medio construir
+nunca expiraba ni liberaba el cupo que sí llegó a reservar. Ambos, corregidos
+acá con el mismo `app.shared.cupo_service`/`CATALOGO_POR_TIPO` que ya usan
+Carrito y Reservas — `auto` sigue sin concepto de cupo (`campo_cupo is None`),
+y `crucero` sigue fuera de Paquetes (ningún `tipos_paquete_descuento` lo
+incluye y el router de construcción no expone sus campos de id).
 """
 
 import datetime
@@ -21,6 +33,8 @@ import string
 
 from app.paquetes.repositories.paquetes_repo import PaquetesRepository
 from app.reservas.repositories.reservas_repo import ReservasRepository
+from app.shared.catalogo_producto import CATALOGO_POR_TIPO
+from app.shared.cupo_service import liberar_cupo, verificar_y_reservar_cupo
 from app.shared.pocketbase_client import PocketBaseError, get_pocketbase_client
 from app.vuelos.repositories.vuelos_repo import VuelosRepository
 
@@ -30,6 +44,7 @@ from app.vuelos.repositories.vuelos_repo import VuelosRepository
 # RN-PAQ-001), el resto en orden fijo para que la combinación sea determinista.
 ORDEN_TIPOS = ["vuelo", "hotel", "auto", "actividad", "crucero"]
 TIPOS_OBLIGATORIOS = {"vuelo", "hotel"}
+DEFAULT_EXPIRACION_MINUTOS = 15
 
 _CAMPOS_ID_POR_TIPO = {
     "vuelo": ["vuelo_id", "tarifa_vuelo_id"],
@@ -54,8 +69,8 @@ class ComponenteObligatorioFaltante(Exception):
         super().__init__(f"Faltan componentes obligatorios: {', '.join(sorted(faltantes))}")
 
 
-def _ahora_iso() -> str:
-    return datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S.000Z")
+class CupoNoDisponible(Exception):
+    pass
 
 
 def _generar_codigo_reserva() -> str:
@@ -63,11 +78,25 @@ def _generar_codigo_reserva() -> str:
     return "".join(secrets.choice(alfabeto) for _ in range(6))
 
 
-def _combinacion_de(tipos_presentes: set[str]) -> str:
+def combinacion_de(tipos_presentes: set[str]) -> str:
     return "+".join(t for t in ORDEN_TIPOS if t in tipos_presentes)
 
 
-async def _reserva_del_pasajero_o_error(reservas_repo: ReservasRepository, pasajero_id: str, reserva_id: str) -> dict:
+async def _minutos_expiracion(reservas_repo: ReservasRepository) -> int:
+    config = await reservas_repo.config("reserva.expiracion_minutos")
+    if config is None:
+        return DEFAULT_EXPIRACION_MINUTOS
+    try:
+        return int(config["valor"])
+    except (TypeError, ValueError):
+        return DEFAULT_EXPIRACION_MINUTOS
+
+
+async def verificar_propiedad(reservas_repo: ReservasRepository, pasajero_id: str, reserva_id: str) -> dict:
+    """Pública (antes `_reserva_del_pasajero_o_error`) — también la usa
+    `router_resumen.py` para no exponer el resumen/condiciones de un
+    paquete ajeno con solo adivinar el `reserva_id` (el endpoint verificaba
+    que el usuario FUERA pasajero, pero nunca que esa reserva fuera suya)."""
     reserva = await reservas_repo.obtener_reserva(reserva_id)
     if reserva is None:
         raise ReservaNoEncontrada()
@@ -89,7 +118,14 @@ async def iniciar_paquete(pasajero_id: str, vuelo_id: str, tarifa_vuelo_id: str,
     """RF-PAQ-001 — primer componente (siempre vuelo, es obligatorio junto
     con hotel, RN-PAQ-001). Crea la reserva header y el primer `reserva_items`."""
     reservas_repo = ReservasRepository()
-    ahora = _ahora_iso()
+
+    coleccion, _, _, campo_cupo = CATALOGO_POR_TIPO["vuelo"]
+    if not await verificar_y_reservar_cupo(coleccion, tarifa_vuelo_id, campo_cupo):
+        raise CupoNoDisponible()
+
+    ahora = datetime.datetime.now(datetime.timezone.utc)
+    minutos = await _minutos_expiracion(reservas_repo)
+    expiracion = ahora + datetime.timedelta(minutes=minutos)
 
     reserva = await reservas_repo.crear_reserva(
         {
@@ -99,7 +135,8 @@ async def iniciar_paquete(pasajero_id: str, vuelo_id: str, tarifa_vuelo_id: str,
             "estado": "pendiente_pago",
             "es_paquete": False,
             "total_pagar": precio_final,
-            "fecha_reserva": ahora,
+            "fecha_reserva": ahora.strftime("%Y-%m-%d %H:%M:%S.000Z"),
+            "fecha_expiracion_pago": expiracion.strftime("%Y-%m-%d %H:%M:%S.000Z"),
         }
     )
     await reservas_repo.crear_item(
@@ -118,7 +155,15 @@ async def iniciar_paquete(pasajero_id: str, vuelo_id: str, tarifa_vuelo_id: str,
 async def agregar_componente(pasajero_id: str, reserva_id: str, tipo_producto: str, ids: dict, precio_final: float) -> dict:
     """RF-PAQ-001 — agrega hotel/auto/actividad al paquete en construcción."""
     reservas_repo = ReservasRepository()
-    await _reserva_del_pasajero_o_error(reservas_repo, pasajero_id, reserva_id)
+    await verificar_propiedad(reservas_repo, pasajero_id, reserva_id)
+
+    info = CATALOGO_POR_TIPO.get(tipo_producto)
+    if info is not None:
+        coleccion, _, campo_id, campo_cupo = info
+        registro_id = ids.get(campo_id)
+        if campo_cupo is not None and registro_id:
+            if not await verificar_y_reservar_cupo(coleccion, registro_id, campo_cupo):
+                raise CupoNoDisponible()
 
     data = {"reserva_id": reserva_id, "tipo_producto": tipo_producto, "precio_final": precio_final, "estado_item": "pendiente"}
     for campo in _CAMPOS_ID_POR_TIPO[tipo_producto]:
@@ -131,9 +176,28 @@ async def agregar_componente(pasajero_id: str, reserva_id: str, tipo_producto: s
 
 
 async def cambiar_componente(pasajero_id: str, reserva_id: str, item_id: str, nuevos_ids: dict, precio_final: float) -> dict:
-    """RF-PAQ-003 (REG-J10) — reemplaza un componente sin perder los demás."""
+    """RF-PAQ-003 (REG-J10) — reemplaza un componente sin perder los demás.
+    Reserva el cupo del ítem nuevo ANTES de liberar el del viejo (mismo
+    orden que `modificar_reserva_service.py`) — si el nuevo no tiene cupo,
+    el viejo se queda intacto en vez de perder ambos."""
     reservas_repo = ReservasRepository()
-    await _reserva_del_pasajero_o_error(reservas_repo, pasajero_id, reserva_id)
+    await verificar_propiedad(reservas_repo, pasajero_id, reserva_id)
+
+    items = await reservas_repo.items_de_reserva(reserva_id)
+    item_actual = next((i for i in items if i["id"] == item_id), None)
+    if item_actual is None:
+        raise ReservaNoEncontrada()
+
+    info = CATALOGO_POR_TIPO.get(item_actual["tipo_producto"])
+    if info is not None:
+        coleccion, _, campo_id, campo_cupo = info
+        registro_id_nuevo = nuevos_ids.get(campo_id)
+        registro_id_actual = item_actual.get(campo_id)
+        if campo_cupo is not None and registro_id_nuevo and registro_id_nuevo != registro_id_actual:
+            if not await verificar_y_reservar_cupo(coleccion, registro_id_nuevo, campo_cupo):
+                raise CupoNoDisponible()
+            if registro_id_actual:
+                await liberar_cupo(coleccion, registro_id_actual, campo_cupo)
 
     data = {"precio_final": precio_final}
     data.update(nuevos_ids)
@@ -152,7 +216,7 @@ async def calcular_resumen(reserva_id: str) -> dict:
     items = await reservas_repo.items_de_reserva(reserva_id)
     tipos_presentes = {item["tipo_producto"] for item in items}
     subtotal = round(sum(item.get("precio_final") or 0.0 for item in items), 2)
-    combinacion = _combinacion_de(tipos_presentes)
+    combinacion = combinacion_de(tipos_presentes)
 
     descuento = await paquetes_repo.descuento_por_combinacion(combinacion)
     porcentaje = descuento["porcentaje_descuento"] if descuento else 0.0
@@ -174,7 +238,7 @@ async def confirmar_paquete(pasajero_id: str, reserva_id: str) -> dict:
     y COPIA el descuento vigente a la reserva (no se recalcula después,
     aunque `tipos_paquete_descuento` cambie más tarde)."""
     reservas_repo = ReservasRepository()
-    await _reserva_del_pasajero_o_error(reservas_repo, pasajero_id, reserva_id)
+    await verificar_propiedad(reservas_repo, pasajero_id, reserva_id)
 
     resumen = await calcular_resumen(reserva_id)
     tipos_presentes = {c["tipo_producto"] for c in resumen["componentes"]}
@@ -252,5 +316,5 @@ async def agregar_traslado_aeropuerto(pasajero_id: str, reserva_id: str, descrip
     """RF-PAQ-005 — mismo mecanismo que equipaje/asiento/seguro
     (`reserva_extras`), no una tabla propia."""
     reservas_repo = ReservasRepository()
-    await _reserva_del_pasajero_o_error(reservas_repo, pasajero_id, reserva_id)
+    await verificar_propiedad(reservas_repo, pasajero_id, reserva_id)
     return await reservas_repo.agregar_extra(reserva_id, "traslado_aeropuerto", descripcion, precio)

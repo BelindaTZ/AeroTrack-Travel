@@ -1,0 +1,137 @@
+{% extends "layout_app.html" %}
+{% block title %}Paquetes y Carrito — AeroTrack Travel{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <h1><span class="heading-icon"><i class="bi bi-box-seam"></i></span>Paquetes y Carrito</h1>
+    <p>Rendimiento de paquetes combinados y abandono del carrito.</p>
+</div>
+
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <div id="selector-periodo" class="filter-bar mb-0"></div>
+    <button type="button" class="btn-at-ghost" onclick="window.print()"><i class="bi bi-file-earmark-pdf"></i> Exportar PDF</button>
+</div>
+
+<div id="db-paquetes-cargando" style="text-align:center;padding:50px 0;color:var(--at-muted)">
+    <div class="spinner-border" style="color:var(--at-primary)" role="status"></div>
+</div>
+
+<div id="db-paquetes-contenido" style="display:none">
+    <div class="row g-3 mb-3">
+        <div class="col-12 col-md-4">
+            <div class="at-card" style="height:100%">
+                <div style="font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--at-sub)">Paquetes vendidos del período</div>
+                <div class="at-mono" id="kpi-vendidos" style="font-size:30px;font-weight:700;color:var(--at-primary)">—</div>
+            </div>
+        </div>
+        <div class="col-12 col-md-4">
+            <div class="at-card" style="height:100%">
+                <div style="font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--at-sub)">Margen bruto promedio</div>
+                <div class="at-mono" id="kpi-margen" style="font-size:30px;font-weight:700;color:var(--at-text)">—</div>
+                <div style="font-size:11.5px;color:var(--at-muted)"><span id="kpi-margen-pct"></span>% sobre precio de venta</div>
+            </div>
+        </div>
+        <div class="col-12 col-md-4">
+            <div class="at-card" style="height:100%">
+                <div style="font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--at-sub);margin-bottom:4px">Abandono de carrito</div>
+                <div id="chart-gauge-abandono" style="height:110px"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-12 col-lg-6">
+            <div class="at-card">
+                <div style="font-size:12.5px;font-weight:700;margin-bottom:6px">Ventas por tipo de combinación</div>
+                <div id="chart-ventas-combinacion" style="height:220px"></div>
+            </div>
+        </div>
+        <div class="col-12 col-lg-6">
+            <div class="at-card">
+                <div style="font-size:12.5px;font-weight:700;margin-bottom:6px">Margen por combinación</div>
+                <div id="chart-margen-combinacion" style="height:220px"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-12 col-lg-7">
+            <div class="at-card" style="height:100%">
+                <div style="font-size:12.5px;font-weight:700;margin-bottom:6px">Carritos creados vs completados</div>
+                <div id="chart-carritos" style="height:220px"></div>
+            </div>
+        </div>
+        <div class="col-12 col-lg-5">
+            <div class="at-table-wrapper" style="height:100%">
+                <div class="at-table-header"><span class="at-table-title">Top 5 combinaciones más vendidas</span></div>
+                <table class="table" style="font-size:12.5px;margin-bottom:0">
+                    <thead><tr><th>Combinación</th><th class="text-end">Vendidos</th><th class="text-end">Ingresos</th><th class="text-end">Margen%</th></tr></thead>
+                    <tbody id="tabla-top-combinaciones"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+var chartsPaquetes = [];
+function cargarDatosPaquetes(desde, hasta) {
+    document.getElementById('db-paquetes-cargando').style.display = '';
+    document.getElementById('db-paquetes-contenido').style.display = 'none';
+    fetch('/backoffice/dashboards/paquetes/datos?desde=' + desde + '&hasta=' + hasta).then(function (r) { return r.json(); }).then(renderPaquetes);
+}
+function renderPaquetes(d) {
+    document.getElementById('db-paquetes-cargando').style.display = 'none';
+    document.getElementById('db-paquetes-contenido').style.display = '';
+    chartsPaquetes.forEach(function (c) { c && c.dispose(); });
+    chartsPaquetes = [];
+
+    document.getElementById('kpi-vendidos').textContent = d.total_vendidos;
+    document.getElementById('kpi-margen').textContent = '$' + d.margen_promedio_por_paquete.toLocaleString('es', { maximumFractionDigits: 0 });
+    document.getElementById('kpi-margen-pct').textContent = d.margen_pct_promedio;
+
+    var colorAbandono = d.tasa_abandono_carrito > 95 ? AEROTRACK_SEMANTIC.danger : (d.tasa_abandono_carrito < 90 ? AEROTRACK_SEMANTIC.success : AEROTRACK_SEMANTIC.accent);
+    chartsPaquetes.push(initChart('chart-gauge-abandono', {
+        series: [{
+            type: 'gauge', min: 0, max: 100, startAngle: 180, endAngle: 0, radius: '100%', center: ['50%', '85%'],
+            axisLine: { lineStyle: { width: 10, color: [[1, colorAbandono + '33']] } },
+            pointer: { length: '55%', itemStyle: { color: colorAbandono } },
+            progress: { show: true, width: 10, itemStyle: { color: colorAbandono } },
+            splitLine: { show: false }, axisTick: { show: false }, axisLabel: { show: false }, anchor: { show: false }, title: { show: false },
+            detail: { fontSize: 20, fontWeight: 700, offsetCenter: [0, '-15%'], formatter: '{value}%', color: colorAbandono },
+            data: [{ value: d.tasa_abandono_carrito }],
+        }],
+    }));
+
+    chartsPaquetes.push(initChart('chart-ventas-combinacion', {
+        xAxis: { type: 'category', data: d.ventas_por_combinacion.map(function (x) { return x.tipo_combinacion; }), axisLabel: { rotate: 30 } },
+        yAxis: { type: 'value' },
+        series: [{ type: 'bar', data: d.ventas_por_combinacion.map(function (x) { return x.total_vendidos; }) }],
+    }));
+
+    chartsPaquetes.push(initChart('chart-margen-combinacion', {
+        xAxis: { type: 'category', data: d.ventas_por_combinacion.map(function (x) { return x.tipo_combinacion; }), axisLabel: { rotate: 30 } },
+        yAxis: { type: 'value' },
+        series: [{ type: 'bar', data: d.ventas_por_combinacion.map(function (x) { return Math.round(x.margen_bruto); }) }],
+    }));
+
+    chartsPaquetes.push(initChart('chart-carritos', {
+        legend: { bottom: 0 },
+        xAxis: { type: 'category', data: d.carritos_por_dia.dias },
+        yAxis: { type: 'value' },
+        series: [
+            { name: 'Creados', type: 'line', data: d.carritos_por_dia.creados, smooth: true },
+            { name: 'Completados (reservas confirmadas)', type: 'line', data: d.carritos_por_dia.completados, smooth: true },
+        ],
+    }));
+
+    document.getElementById('tabla-top-combinaciones').innerHTML = d.top_5_combinaciones.map(function (x) {
+        return '<tr><td>' + x.tipo_combinacion + '</td><td class="text-end">' + x.total_vendidos + '</td>' +
+               '<td class="text-end">$' + x.ingresos_brutos.toLocaleString('es', { maximumFractionDigits: 0 }) + '</td>' +
+               '<td class="text-end">' + Math.round(x.margen_porcentaje) + '%</td></tr>';
+    }).join('') || '<tr><td colspan="4" class="text-center" style="color:var(--at-muted)">Sin paquetes en el período</td></tr>';
+}
+initSelectorPeriodo('selector-periodo', function (periodo) { cargarDatosPaquetes(periodo.desde, periodo.hasta); });
+</script>
+{% endblock %}

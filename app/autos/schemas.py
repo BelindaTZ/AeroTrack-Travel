@@ -11,3 +11,5 @@ class AutoBusquedaOut(BaseModel):
     precio_dia: float
     moneda: str
     modalidad_pago_disponible: str | None = None
+    dias: int | None = None
+    precio_total: float | None = None

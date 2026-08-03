@@ -1,0 +1,180 @@
+{% extends "layout_app.html" %}
+{% block title %}Control Financiero — AeroTrack Travel{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <h1><span class="heading-icon"><i class="bi bi-cash-stack"></i></span>Control Financiero del Período</h1>
+    <p>Ingresos, comisiones, remesas y reembolsos — trazabilidad de flujos financieros en vivo.</p>
+</div>
+
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <div id="selector-periodo" class="filter-bar mb-0"></div>
+    <button type="button" class="btn-at-ghost" onclick="window.print()">
+        <i class="bi bi-file-earmark-pdf"></i> Exportar PDF
+    </button>
+</div>
+
+<div id="db-finanzas-cargando" style="text-align:center;padding:50px 0;color:var(--at-muted)">
+    <div class="spinner-border" style="color:var(--at-primary)" role="status"></div>
+</div>
+
+<div id="db-finanzas-contenido" style="display:none">
+    <!-- Fila 1 — Ingresos principales -->
+    <div class="row g-3 mb-3">
+        <div class="col-12 col-md-4">
+            <div class="at-card" style="height:100%;background:linear-gradient(135deg, var(--navy-700), var(--sky-500));color:#fff">
+                <div style="font-size:11px;letter-spacing:.5px;text-transform:uppercase;opacity:.85">Ingresos totales del período</div>
+                <div class="at-mono" id="kpi-ingresos-totales" style="font-size:36px;font-weight:700">—</div>
+            </div>
+        </div>
+        <div class="col-12 col-md-4">
+            <div class="at-card" style="height:100%">
+                <div style="font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--at-sub)">Take rate (comisión)</div>
+                <div class="at-mono" id="kpi-take-rate" style="font-size:30px;font-weight:700;color:var(--at-text)">—</div>
+                <div style="font-size:11.5px;color:var(--at-muted)">Objetivo de referencia: <span id="kpi-take-rate-objetivo"></span>%</div>
+            </div>
+        </div>
+        <div class="col-12 col-md-4">
+            <div class="at-card" style="height:100%">
+                <div style="font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--at-sub)">Ingreso promedio por reserva</div>
+                <div class="at-mono" id="kpi-ingreso-promedio" style="font-size:30px;font-weight:700;color:var(--at-text)">—</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Fila 2 — Obligaciones pendientes -->
+    <div class="row g-3 mb-3">
+        <div class="col-12 col-md-4">
+            <div class="at-card" id="card-comisiones-pendientes" style="height:100%">
+                <div style="font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--at-sub)">Comisiones pendientes de cobro</div>
+                <div class="at-mono" id="kpi-comisiones-pendientes" style="font-size:26px;font-weight:700">—</div>
+                <div id="lista-comisiones-aerolineas" style="font-size:11.5px;color:var(--at-muted);margin-top:4px"></div>
+            </div>
+        </div>
+        <div class="col-12 col-md-4">
+            <div class="at-card" id="card-remesas-pendientes" style="height:100%">
+                <div style="font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--at-sub)">Remesas pendientes a proveedores</div>
+                <div class="at-mono" id="kpi-remesas-pendientes" style="font-size:26px;font-weight:700">—</div>
+                <div id="remesa-mas-antigua" style="font-size:11.5px;color:var(--at-muted);margin-top:4px"></div>
+            </div>
+        </div>
+        <div class="col-12 col-md-4">
+            <div class="at-card" style="height:100%">
+                <div style="font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--at-sub)">Reembolsos del período</div>
+                <div class="at-mono" id="kpi-reembolsos" style="font-size:26px;font-weight:700;color:var(--at-text)">—</div>
+                <div style="font-size:11.5px;color:var(--at-muted)"><span id="kpi-reembolsos-pct"></span>% sobre ingresos brutos</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Columna vertical — detalle histórico -->
+    <div class="at-card mb-3">
+        <div style="font-size:12.5px;font-weight:700;margin-bottom:6px">Tendencia de ingresos netos — últimos 6 períodos</div>
+        <div id="chart-tendencia-ingresos" style="height:220px"></div>
+    </div>
+    <div class="at-card mb-3">
+        <div style="font-size:12.5px;font-weight:700;margin-bottom:6px">Ingresos vs. reembolsos por producto</div>
+        <div id="chart-ingresos-vs-reembolsos" style="height:240px"></div>
+    </div>
+    <div class="at-card mb-3">
+        <div style="font-size:12.5px;font-weight:700;margin-bottom:6px">Ingresos por día del mes <span style="font-weight:400;color:var(--at-muted);font-size:11.5px">(mes de fin del período seleccionado)</span></div>
+        <div id="chart-mapa-calor" style="height:220px"></div>
+    </div>
+    <div class="at-table-wrapper">
+        <div class="at-table-header"><span class="at-table-title">Desglose financiero por producto</span></div>
+        <table class="table" style="font-size:12.5px;margin-bottom:0">
+            <thead><tr><th>Producto</th><th class="text-end">Ingresos</th><th class="text-end">Comisiones</th><th class="text-end">Reembolsos</th><th class="text-end">Remesas</th></tr></thead>
+            <tbody id="tabla-desglose"></tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+var chartsFinanzas = [];
+
+function cargarDatosFinanzas(desde, hasta) {
+    document.getElementById('db-finanzas-cargando').style.display = '';
+    document.getElementById('db-finanzas-contenido').style.display = 'none';
+    fetch('/backoffice/dashboards/finanzas/datos?desde=' + desde + '&hasta=' + hasta)
+        .then(function (r) { return r.json(); })
+        .then(renderFinanzas);
+}
+
+function _money(v) { return '$' + Number(v).toLocaleString('es', { maximumFractionDigits: 0 }); }
+
+function renderFinanzas(d) {
+    document.getElementById('db-finanzas-cargando').style.display = 'none';
+    document.getElementById('db-finanzas-contenido').style.display = '';
+    chartsFinanzas.forEach(function (c) { c && c.dispose(); });
+    chartsFinanzas = [];
+
+    document.getElementById('kpi-ingresos-totales').textContent = _money(d.ingresos_totales);
+    document.getElementById('kpi-take-rate').textContent = d.take_rate + '%';
+    document.getElementById('kpi-take-rate').style.color = d.take_rate < d.take_rate_objetivo ? AEROTRACK_SEMANTIC.danger : AEROTRACK_SEMANTIC.success;
+    document.getElementById('kpi-take-rate-objetivo').textContent = d.take_rate_objetivo;
+    document.getElementById('kpi-ingreso-promedio').textContent = _money(d.ingreso_promedio);
+
+    var cardComisiones = document.getElementById('card-comisiones-pendientes');
+    cardComisiones.style.background = d.comisiones_pendientes_total > 0 ? 'var(--at-warning-bg)' : '';
+    document.getElementById('kpi-comisiones-pendientes').textContent = _money(d.comisiones_pendientes_total);
+    document.getElementById('kpi-comisiones-pendientes').style.color = d.comisiones_pendientes_total > 0 ? 'var(--at-warning-fg)' : 'var(--at-text)';
+    document.getElementById('lista-comisiones-aerolineas').innerHTML = d.comisiones_pendientes_por_aerolinea.slice(0, 4).map(function (a) {
+        return a.aerolinea + ': ' + _money(a.monto);
+    }).join('<br>') || 'Sin comisiones pendientes';
+
+    var cardRemesas = document.getElementById('card-remesas-pendientes');
+    var hayRemesas = d.remesas_pendientes_conteo > 0;
+    cardRemesas.style.background = hayRemesas ? 'var(--at-failed-bg)' : '';
+    document.getElementById('kpi-remesas-pendientes').textContent = _money(d.remesas_pendientes_total);
+    document.getElementById('kpi-remesas-pendientes').style.color = hayRemesas ? 'var(--at-danger)' : 'var(--at-text)';
+    document.getElementById('remesa-mas-antigua').textContent = d.remesa_mas_antigua
+        ? (d.remesas_pendientes_conteo + ' pendiente(s) — la más antigua generada el ' + d.remesa_mas_antigua.slice(0, 10))
+        : 'Sin remesas pendientes';
+
+    document.getElementById('kpi-reembolsos').textContent = _money(d.reembolsos_periodo);
+    document.getElementById('kpi-reembolsos-pct').textContent = d.reembolsos_pct_ingresos;
+
+    chartsFinanzas.push(initChart('chart-tendencia-ingresos', {
+        xAxis: { type: 'category', data: d.tendencia_6_periodos.map(function (p) { return p.periodo.slice(0, 7); }) },
+        yAxis: { type: 'value' },
+        series: [{ type: 'line', smooth: true, data: d.tendencia_6_periodos.map(function (p) { return Math.round(p.ingresos_netos); }), areaStyle: {} }],
+    }));
+
+    chartsFinanzas.push(initChart('chart-ingresos-vs-reembolsos', {
+        legend: { bottom: 0 },
+        xAxis: { type: 'category', data: d.desglose.map(function (x) { return x.tipo_producto; }) },
+        yAxis: { type: 'value' },
+        series: [
+            { name: 'Ingresos', type: 'bar', data: d.desglose.map(function (x) { return x.ingresos; }) },
+            { name: 'Reembolsos', type: 'bar', data: d.desglose.map(function (x) { return x.reembolsos; }) },
+        ],
+    }));
+
+    var maxMonto = Math.max.apply(null, d.mapa_calor.map(function (c) { return c.monto; }).concat([1]));
+    chartsFinanzas.push(initChart('chart-mapa-calor', {
+        tooltip: { position: 'top', formatter: function (p) { return 'Día ' + p.data[3] + ': ' + _money(p.data[2]); } },
+        grid: { top: 20, bottom: 20 },
+        xAxis: { type: 'category', data: [0, 1, 2, 3, 4, 5, 6], name: 'Día de la semana', splitArea: { show: true } },
+        yAxis: { type: 'category', data: [0, 1, 2, 3, 4], name: 'Semana', splitArea: { show: true } },
+        visualMap: { min: 0, max: maxMonto, calculable: true, orient: 'horizontal', left: 'center', bottom: 0, inRange: { color: ['#dceefb', '#0072ce'] } },
+        series: [{
+            type: 'heatmap',
+            data: d.mapa_calor.map(function (c) { return [(c.dia - 1) % 7, Math.floor((c.dia - 1) / 7), Math.round(c.monto), c.dia]; }),
+            label: { show: false },
+        }],
+    }));
+
+    var tbody = document.getElementById('tabla-desglose');
+    tbody.innerHTML = d.desglose.map(function (x) {
+        return '<tr><td>' + x.tipo_producto + '</td><td class="text-end">' + _money(x.ingresos) + '</td>' +
+               '<td class="text-end">' + _money(x.comisiones) + '</td><td class="text-end">' + _money(x.reembolsos) + '</td>' +
+               '<td class="text-end">' + _money(x.remesas) + '</td></tr>';
+    }).join('') || '<tr><td colspan="5" class="text-center" style="color:var(--at-muted)">Sin datos en el período</td></tr>';
+}
+
+initSelectorPeriodo('selector-periodo', function (periodo) {
+    cargarDatosFinanzas(periodo.desde, periodo.hasta);
+});
+</script>
+{% endblock %}

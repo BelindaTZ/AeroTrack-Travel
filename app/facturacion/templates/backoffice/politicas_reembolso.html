@@ -1,0 +1,103 @@
+{% extends "layout_app.html" %}
+{% from "_paginacion.html" import controles %}
+{% block title %}Políticas de reembolso — AeroTrack Travel{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <h1><span class="heading-icon"><i class="bi bi-arrow-counterclockwise"></i></span>Políticas de reembolso</h1>
+    <p>Porcentaje y ventana de reembolso por tipo de tarifa/producto (CU-T18).</p>
+</div>
+
+<div class="at-table-wrapper">
+    <div class="at-table-header">
+        <form method="get" data-auto-filtros class="d-flex flex-wrap gap-2 align-items-end">
+            <div>
+                <label class="form-label-at" for="f-nombre">Nombre</label>
+                <input type="text" id="f-nombre" name="nombre" class="form-control-at" value="{{ filtros.nombre }}"
+                       placeholder="Nombre..." style="min-width:220px">
+            </div>
+            {% if filtros.nombre %}
+            <a href="/backoffice/politicas-reembolso" class="btn-at-ghost">Limpiar</a>
+            {% endif %}
+        </form>
+        <button class="btn-at-primary" data-bs-toggle="modal" data-bs-target="#modalNuevaPolitica">
+            <i class="bi bi-plus-lg" aria-hidden="true"></i>Nueva política
+        </button>
+    </div>
+
+    {% if not pagina.items %}
+    <div class="at-empty">
+        <i class="bi bi-arrow-counterclockwise at-empty-icon" aria-hidden="true"></i>
+        <strong>Sin políticas con estos filtros</strong>
+    </div>
+    {% else %}
+    <div class="at-table-scroll">
+        <table class="at-table">
+            <thead><tr><th>Nombre</th><th>Condiciones</th><th>% Reembolso</th><th>Ventana (h)</th><th class="actions-col">Acciones</th></tr></thead>
+            <tbody>
+                {% for p in pagina.items %}
+                <tr>
+                    <form method="post" action="/backoffice/politicas-reembolso/{{ p.id }}">
+                        <td>
+                            <input type="text" class="form-control-at" style="min-width:180px" name="nombre" value="{{ p.nombre }}" required>
+                        </td>
+                        <td>
+                            <input type="text" class="form-control-at" style="min-width:260px" name="condiciones" value="{{ p.condiciones }}" required>
+                        </td>
+                        <td>
+                            <input type="number" class="form-control-at" style="width:90px;padding:6px 10px;font-size:13px"
+                                   name="porcentaje_reembolso" value="{{ p.porcentaje_reembolso }}" min="0" max="100" step="1" required>
+                        </td>
+                        <td>
+                            <input type="number" class="form-control-at" style="width:90px;padding:6px 10px;font-size:13px"
+                                   name="ventana_horas" value="{{ p.ventana_horas }}" min="0" step="1" required>
+                        </td>
+                        <td class="actions-col">
+                            <button type="submit" class="btn-at-ghost" style="padding:6px 14px;font-size:12.5px">Guardar</button>
+                        </td>
+                    </form>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {{ controles(pagina, request) }}
+    {% endif %}
+</div>
+
+<div class="modal fade" id="modalNuevaPolitica" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width:460px">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" style="font-size:16px;font-weight:700">Nueva política de reembolso</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <form method="post" action="/backoffice/politicas-reembolso">
+                <div class="modal-body d-flex flex-column gap-3">
+                    <div>
+                        <label class="form-label-at" for="np-nombre">Nombre</label>
+                        <input type="text" class="form-control-at" id="np-nombre" name="nombre" required>
+                    </div>
+                    <div>
+                        <label class="form-label-at" for="np-condiciones">Condiciones</label>
+                        <input type="text" class="form-control-at" id="np-condiciones" name="condiciones" required>
+                    </div>
+                    <div class="d-flex gap-3">
+                        <div class="flex-fill">
+                            <label class="form-label-at" for="np-porcentaje">% Reembolso</label>
+                            <input type="number" class="form-control-at" id="np-porcentaje" name="porcentaje_reembolso" min="0" max="100" step="1" required>
+                        </div>
+                        <div class="flex-fill">
+                            <label class="form-label-at" for="np-ventana">Ventana (h)</label>
+                            <input type="number" class="form-control-at" id="np-ventana" name="ventana_horas" min="0" step="1" required>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-at-ghost" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn-at-primary">Crear</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

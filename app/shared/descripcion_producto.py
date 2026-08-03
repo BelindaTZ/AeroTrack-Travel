@@ -50,12 +50,13 @@ async def fecha_referencia_item(item: dict) -> tuple[str, str] | None:
     reserva en próxima/activa/pasada (Cuenta/Mis Viajes) — `None` si el tipo
     de producto no tiene una fecha propia que resolver.
 
-    **Gap real, no un olvido:** Hoteles y Autos no tienen fecha aquí porque
-    Carrito nunca captura check-in/check-out ni recogida/devolución al
-    agregar el ítem (`reserva_items.fecha_inicio`/`fecha_fin` existen en el
-    esquema pero ningún flujo de compra los escribe todavía) — ver
-    `errores-conocidos.md`. No se inventa una fecha para no fabricar dato."""
+    Hotel/Auto (gap real cerrado 2026-07-29, ver `errores-conocidos.md`):
+    ahora sí traen `fecha_inicio`/`fecha_fin` propios en el ítem — Carrito
+    los captura al agregar (check-in/check-out, recogida/devolución) y los
+    copia verbatim a `reserva_items` en el checkout."""
     tipo = item["tipo_producto"]
+    if tipo in ("hotel", "auto") and item.get("fecha_inicio"):
+        return (item["fecha_inicio"][:10], (item.get("fecha_fin") or item["fecha_inicio"])[:10])
     if tipo == "vuelo" and item.get("vuelo_id"):
         vuelo = await VuelosRepository().obtener_vuelo(item["vuelo_id"])
         if vuelo:

@@ -5,6 +5,9 @@ la raíz del repo."""
 
 import pytest
 
+from app.facturacion.repositories.facturacion_repo import FacturacionRepository
+from app.shared import minio_operational_client as moc
+
 
 @pytest.fixture
 async def pago_factory(pb):
@@ -22,7 +25,7 @@ async def pago_factory(pb):
             "estado": estado,
         }
         data.update(extra)
-        pago = await pb.create_record("pagos", data)
+        pago = await FacturacionRepository().crear_pago(data)
         creados.append(pago["id"])
         return pago
 
@@ -30,6 +33,6 @@ async def pago_factory(pb):
 
     for pago_id in creados:
         try:
-            await pb.delete_record("pagos", pago_id)
+            await moc.eliminar("pagos", pago_id)
         except Exception:
             pass

@@ -1,0 +1,161 @@
+{% extends "layout_app.html" %}
+{% block title %}Rendimiento Comercial — AeroTrack Travel{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <h1><span class="heading-icon"><i class="bi bi-graph-up-arrow"></i></span>Rendimiento Comercial y Embudo de Conversión</h1>
+    <p>Conversión, valor de reserva y abandono de carrito — actualizado en vivo desde ClickHouse y el operacional.</p>
+</div>
+
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <div id="selector-periodo" class="filter-bar mb-0"></div>
+    {% if puede_exportar %}
+    <button type="button" class="btn-at-ghost" onclick="window.print()">
+        <i class="bi bi-file-earmark-pdf"></i> Exportar PDF
+    </button>
+    {% endif %}
+</div>
+
+<div id="db-comercial-cargando" style="text-align:center;padding:50px 0;color:var(--at-muted)">
+    <div class="spinner-border" style="color:var(--at-primary)" role="status"></div>
+</div>
+
+<div id="db-comercial-contenido" style="display:none">
+    <!-- Grupo A — Métricas clave -->
+    <div class="row g-3 mb-3">
+        <div class="col-12 col-md-4">
+            <div class="at-card" style="height:100%">
+                <div style="font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--at-sub)">Conversión búsqueda → reserva</div>
+                <div class="at-mono" id="kpi-conversion" style="font-size:30px;font-weight:700;color:var(--at-primary)">—</div>
+                <div style="font-size:11.5px;color:var(--at-muted)">Benchmark OTA: 2%–5%</div>
+                <div style="font-size:10.5px;color:var(--at-sub);margin-top:4px" title="Solo se registran búsquedas de usuarios autenticados con filtros explícitos — no captura la navegación anónima, así que subestima el volumen real de búsquedas.">
+                    <i class="bi bi-info-circle"></i> Búsquedas registradas solo de usuarios autenticados
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-md-4">
+            <div class="at-card" style="height:100%">
+                <div style="font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--at-sub)">Valor promedio de reserva (ASV)</div>
+                <div class="at-mono" id="kpi-asv" style="font-size:30px;font-weight:700;color:var(--at-text)">—</div>
+            </div>
+        </div>
+        <div class="col-12 col-md-4">
+            <div class="at-card" style="height:100%">
+                <div style="font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--at-sub);margin-bottom:4px">Abandono de carrito</div>
+                <div id="chart-gauge-abandono" style="height:110px"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Grupo B — Volumen y distribución -->
+    <div class="row g-3 mb-3">
+        <div class="col-12 col-lg-7">
+            <div class="at-card">
+                <div style="font-size:12.5px;font-weight:700;margin-bottom:6px">Tendencia de reservas</div>
+                <div id="chart-tendencia-reservas" style="height:260px"></div>
+            </div>
+        </div>
+        <div class="col-12 col-lg-5">
+            <div class="at-card">
+                <div style="font-size:12.5px;font-weight:700;margin-bottom:6px">Ingresos por producto</div>
+                <div id="chart-ingresos-producto" style="height:260px"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Grupo C — Canal y estado -->
+    <div class="row g-3">
+        <div class="col-12 col-md-4">
+            <div class="at-card">
+                <div style="font-size:12.5px;font-weight:700;margin-bottom:6px">Canal de venta</div>
+                <div id="chart-canal" style="height:200px"></div>
+            </div>
+        </div>
+        <div class="col-12 col-md-4">
+            <div class="at-card" style="height:100%">
+                <div style="font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--at-sub)">Reservas próximas a expirar</div>
+                <div class="at-mono" id="kpi-por-expirar" style="font-size:30px;font-weight:700;color:var(--at-danger)">—</div>
+                <div style="font-size:11.5px;color:var(--at-muted)">Pendientes de pago, vencen en menos de 24h</div>
+            </div>
+        </div>
+        <div class="col-12 col-md-4">
+            <div class="at-table-wrapper" style="height:100%">
+                <div class="at-table-header"><span class="at-table-title">Top 5 productos</span></div>
+                <table class="table" style="font-size:12.5px;margin-bottom:0">
+                    <thead><tr><th>Producto</th><th class="text-end">Reservas</th><th class="text-end">Ingresos</th></tr></thead>
+                    <tbody id="tabla-top-productos"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+var ICONOS_PRODUCTO = { vuelo: 'bi-airplane', hotel: 'bi-building', auto: 'bi-car-front', actividad: 'bi-ticket-perforated', crucero: 'bi-water', paquete: 'bi-box-seam' };
+var chartsComercial = [];
+
+function cargarDatosComercial(desde, hasta) {
+    document.getElementById('db-comercial-cargando').style.display = '';
+    document.getElementById('db-comercial-contenido').style.display = 'none';
+    fetch('/backoffice/dashboards/comercial/datos?desde=' + desde + '&hasta=' + hasta)
+        .then(function (r) { return r.json(); })
+        .then(renderComercial);
+}
+
+function renderComercial(d) {
+    document.getElementById('db-comercial-cargando').style.display = 'none';
+    document.getElementById('db-comercial-contenido').style.display = '';
+    chartsComercial.forEach(function (c) { c && c.dispose(); });
+    chartsComercial = [];
+
+    document.getElementById('kpi-conversion').textContent = d.tasa_conversion + '%';
+    document.getElementById('kpi-asv').textContent = '$' + d.asv.toLocaleString('es', { maximumFractionDigits: 0 });
+    document.getElementById('kpi-por-expirar').textContent = d.reservas_por_expirar;
+
+    var colorAbandono = d.tasa_abandono > 95 ? AEROTRACK_SEMANTIC.danger : (d.tasa_abandono < 90 ? AEROTRACK_SEMANTIC.success : AEROTRACK_SEMANTIC.accent);
+    chartsComercial.push(initChart('chart-gauge-abandono', {
+        series: [{
+            type: 'gauge', min: 0, max: 100, startAngle: 180, endAngle: 0, radius: '100%', center: ['50%', '85%'],
+            axisLine: { lineStyle: { width: 10, color: [[1, colorAbandono + '33']] } },
+            pointer: { show: true, length: '55%', itemStyle: { color: colorAbandono } },
+            progress: { show: true, width: 10, itemStyle: { color: colorAbandono } },
+            splitLine: { show: false }, axisTick: { show: false }, axisLabel: { show: false },
+            anchor: { show: false }, title: { show: false },
+            detail: { valueAnimation: true, fontSize: 20, fontWeight: 700, offsetCenter: [0, '-15%'], formatter: '{value}%', color: colorAbandono },
+            data: [{ value: d.tasa_abandono }],
+        }],
+    }));
+
+    chartsComercial.push(initChart('chart-tendencia-reservas', {
+        xAxis: { type: 'category', data: d.tendencia_reservas.dias },
+        yAxis: { type: 'value' },
+        series: [
+            { name: 'Período actual', type: 'line', data: d.tendencia_reservas.actual, smooth: true, itemStyle: { color: AEROTRACK_SEMANTIC.primary } },
+            { name: 'Período anterior', type: 'line', data: d.tendencia_reservas.anterior, smooth: true, itemStyle: { color: '#bab6b6' }, lineStyle: { type: 'dashed' } },
+        ],
+    }));
+
+    chartsComercial.push(initChart('chart-ingresos-producto', {
+        xAxis: { type: 'value' },
+        yAxis: { type: 'category', data: d.ingresos_por_producto.map(function (p) { return p.tipo_producto; }) },
+        series: [{ type: 'bar', data: d.ingresos_por_producto.map(function (p) { return Math.round(p.ingresos_brutos); }), label: { show: true, position: 'right' } }],
+    }));
+
+    chartsComercial.push(initChart('chart-canal', {
+        legend: { bottom: 0 },
+        series: [{ type: 'pie', radius: ['45%', '70%'], data: d.canal.map(function (c) { return { name: c.canal, value: c.total }; }), label: { formatter: '{b}\n{d}%' } }],
+    }));
+
+    var tbody = document.getElementById('tabla-top-productos');
+    tbody.innerHTML = d.top_productos.map(function (p) {
+        return '<tr><td><i class="bi ' + (ICONOS_PRODUCTO[p.tipo_producto] || 'bi-box') + ' me-1"></i>' + p.tipo_producto + '</td>' +
+               '<td class="text-end">' + p.conteo + '</td><td class="text-end">$' + p.ingresos.toLocaleString('es', { maximumFractionDigits: 0 }) + '</td></tr>';
+    }).join('') || '<tr><td colspan="3" class="text-center" style="color:var(--at-muted)">Sin datos en el período</td></tr>';
+}
+
+initSelectorPeriodo('selector-periodo', function (periodo) {
+    cargarDatosComercial(periodo.desde, periodo.hasta);
+});
+</script>
+{% endblock %}

@@ -10,6 +10,7 @@ from app.paquetes.services.paquete_service import (
     calcular_resumen,
     condiciones_por_componente,
     confirmar_paquete,
+    verificar_propiedad,
 )
 from app.reservas.repositories.reservas_repo import ReservasRepository
 from app.seguridad.services.audit_service import AuditService
@@ -27,7 +28,17 @@ async def _pasajero_id(usuario: dict) -> str:
 
 @router.get("/{reserva_id}/resumen")
 async def resumen(reserva_id: str, usuario: dict = Depends(verificar_sesion)) -> dict:
-    await _pasajero_id(usuario)
+    pasajero_id = await _pasajero_id(usuario)
+    # Antes solo verificaba que el usuario FUERA pasajero, nunca que esta
+    # reserva fuera SUYA — cualquier pasajero autenticado podía ver el
+    # resumen/condiciones de un paquete ajeno adivinando el reserva_id (IDOR).
+    try:
+        await verificar_propiedad(ReservasRepository(), pasajero_id, reserva_id)
+    except ReservaNoEncontrada:
+        raise HTTPException(status_code=404, detail="Paquete no encontrado")
+    except SinPermiso:
+        raise HTTPException(status_code=403, detail="Sin permiso sobre ese paquete")
+
     desglose = await calcular_resumen(reserva_id)
     desglose["condiciones"] = await condiciones_por_componente(reserva_id)
     return desglose
