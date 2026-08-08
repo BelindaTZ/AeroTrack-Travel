@@ -1,0 +1,152 @@
+{% extends "layout_app.html" %}
+{% block title %}Gestión de Disrupciones — AeroTrack Travel{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <h1><span class="heading-icon"><i class="bi bi-exclamation-octagon"></i></span>Gestión de Disrupciones — Vista Ejecutiva</h1>
+    <p>DS-02 — efectividad global de las notificaciones proactivas, consolidado desde ClickHouse.</p>
+</div>
+
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <div id="selector-periodo" class="filter-bar mb-0"></div>
+    <button type="button" class="btn-at-ghost" onclick="window.print()">
+        <i class="bi bi-file-earmark-pdf"></i> Exportar PDF
+    </button>
+</div>
+
+<div id="db-disrup-cargando" style="text-align:center;padding:50px 0;color:var(--at-muted)">
+    <div class="spinner-border" style="color:var(--at-primary)" role="status"></div>
+</div>
+
+<div id="db-disrup-contenido" style="display:none">
+    <!-- Fila superior -->
+    <div class="row g-3 mb-3">
+        <div class="col-12 col-md-4">
+            <div class="at-card" style="height:100%">
+                <div class="dash-kpi-label">Notificaciones enviadas</div>
+                <div class="at-mono dash-kpi-value" id="kpi-notificaciones" style="color:var(--at-text)">—</div>
+            </div>
+        </div>
+        <div class="col-12 col-md-4">
+            <div class="at-card" style="height:100%">
+                <div class="dash-kpi-label">Tasa de efectividad global</div>
+                <div class="at-mono dash-kpi-value" id="kpi-efectividad" style="color:var(--at-primary)">—</div>
+            </div>
+        </div>
+        <div class="col-12 col-md-4">
+            <div class="at-card" style="height:100%">
+                <div class="dash-kpi-label">OTP histórico BTS/FAA</div>
+                <div class="at-mono dash-kpi-value" id="kpi-otp" style="color:var(--at-text)">—</div>
+                <div style="font-size:11.5px;color:var(--at-muted)">Rutas con disrupciones monitoreadas en el período</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Centro -->
+    <div class="row g-3 mb-3">
+        <div class="col-12 col-lg-7">
+            <div class="at-card">
+                <div class="dash-chart-title">Tasa de efectividad — últimos 6 períodos</div>
+                <div id="chart-tendencia-efectividad" style="height:240px"></div>
+                <div id="msg-sin-tendencia" style="display:none;text-align:center;color:var(--at-muted);padding:20px 0">Sin datos para el período seleccionado</div>
+            </div>
+        </div>
+        <div class="col-12 col-lg-5">
+            <div class="at-card">
+                <div class="dash-chart-title">Notificaciones con acción del pasajero</div>
+                <div id="chart-accion" style="height:240px"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Fila inferior -->
+    <div class="row g-3 mb-3">
+        <div class="col-12 col-md-6">
+            <div class="at-card" style="height:100%">
+                <div class="dash-kpi-label">Satisfacción promedio del soporte</div>
+                <div class="at-mono dash-kpi-value" id="kpi-satisfaccion" style="color:var(--at-text)">—</div>
+            </div>
+        </div>
+        <div class="col-12 col-md-6">
+            <div class="at-card" style="height:100%">
+                <div class="dash-kpi-label">Casos escalados abiertos</div>
+                <div class="at-mono dash-kpi-value" id="kpi-casos-abiertos" style="color:var(--at-danger)">—</div>
+            </div>
+        </div>
+    </div>
+    <div class="at-card">
+        <div class="dash-chart-title">Top 5 aerolíneas por notificaciones</div>
+        <div id="chart-top-aerolineas" style="height:220px"></div>
+    </div>
+
+    <!-- Drill-down -->
+    <div class="mt-4 pt-3" style="border-top:1px solid var(--at-border)">
+        <div class="dash-chart-title mb-2"><i class="bi bi-signpost-split"></i> Ver detalle por área</div>
+        <div class="d-flex flex-wrap gap-2">
+            <a class="btn-at-ghost" href="/backoffice/dashboards/disrupciones"><i class="bi bi-exclamation-triangle"></i> Monitoreo de Disrupciones</a>
+            <a class="btn-at-ghost" href="/backoffice/dashboards/soporte"><i class="bi bi-headset"></i> Calidad de Soporte</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+var chartsDisrup = [];
+
+function cargarDatosDisrup(desde, hasta) {
+    document.getElementById('db-disrup-cargando').style.display = '';
+    document.getElementById('db-disrup-contenido').style.display = 'none';
+    fetch('/backoffice/estrategico/disrupciones/datos?desde=' + desde + '&hasta=' + hasta)
+        .then(function (r) { return r.json(); })
+        .then(renderDisrup);
+}
+
+function renderDisrup(d) {
+    document.getElementById('db-disrup-cargando').style.display = 'none';
+    document.getElementById('db-disrup-contenido').style.display = '';
+    chartsDisrup.forEach(function (c) { c && c.dispose(); });
+    chartsDisrup = [];
+
+    document.getElementById('kpi-notificaciones').textContent = d.notificaciones_enviadas;
+    document.getElementById('kpi-efectividad').textContent = d.tasa_efectividad + '%';
+    document.getElementById('kpi-otp').textContent = d.otp_benchmark_bts + '%';
+
+    var hayTendencia = d.tendencia_efectividad && d.tendencia_efectividad.length > 0;
+    document.getElementById('chart-tendencia-efectividad').style.display = hayTendencia ? '' : 'none';
+    document.getElementById('msg-sin-tendencia').style.display = hayTendencia ? 'none' : '';
+    if (hayTendencia) {
+        chartsDisrup.push(initChart('chart-tendencia-efectividad', {
+            xAxis: { type: 'category', data: d.tendencia_efectividad.map(function (p) { return p.periodo.slice(0, 7); }) },
+            yAxis: { type: 'value', max: 100 },
+            series: [{ type: 'line', smooth: true, data: d.tendencia_efectividad.map(function (p) { return p.tasa_efectividad_global; }), itemStyle: { color: AEROTRACK_SEMANTIC.primary } }],
+        }));
+    }
+
+    chartsDisrup.push(initChart('chart-accion', {
+        legend: { bottom: 0 },
+        series: [{
+            type: 'pie', radius: ['45%', '70%'],
+            data: [
+                { name: 'Con acción del pasajero', value: d.con_accion, itemStyle: { color: AEROTRACK_SEMANTIC.success } },
+                { name: 'Sin acción del pasajero', value: d.sin_accion, itemStyle: { color: AEROTRACK_SEMANTIC.muted } },
+            ],
+            label: { formatter: '{b}\n{d}%' },
+        }],
+    }));
+
+    document.getElementById('kpi-satisfaccion').textContent = d.satisfaccion_promedio ? (d.satisfaccion_promedio + ' / 5') : '—';
+    document.getElementById('kpi-casos-abiertos').textContent = d.casos_escalados_abiertos;
+
+    chartsDisrup.push(initChart('chart-top-aerolineas', {
+        grid: { top: 10, bottom: 10 },
+        xAxis: { type: 'value' },
+        yAxis: { type: 'category', data: d.top_aerolineas.map(function (a) { return a.aerolinea_nombre; }) },
+        series: [{ type: 'bar', data: d.top_aerolineas.map(function (a) { return a.total_notificaciones; }) }],
+    }));
+}
+
+initSelectorPeriodo('selector-periodo', function (periodo) {
+    cargarDatosDisrup(periodo.desde, periodo.hasta);
+}, PRESETS_ESTRATEGICO);
+</script>
+{% endblock %}

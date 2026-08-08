@@ -7,6 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 
 from app.dashboards.router_backoffice import router as dashboards_backoffice_router
+from app.dashboards.router_estrategico import router as dashboards_estrategico_router
 from app.shared.nav import nav_context
 from app.shared.router_interno_analitica import router as analitica_interno_router
 from app.shared.templating import templates
@@ -164,6 +165,7 @@ app.include_router(ofertas_backoffice_router)
 app.include_router(asistente_conversacion_router)
 app.include_router(asistente_backoffice_router)
 app.include_router(dashboards_backoffice_router)
+app.include_router(dashboards_estrategico_router)
 
 
 @app.exception_handler(SesionExpirada)

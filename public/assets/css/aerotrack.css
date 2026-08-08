@@ -184,7 +184,10 @@ a { color: var(--at-primary); }
 }
 
 /* ─────────────────────────── SIDEBAR APP ───────────────────────── */
-#at-sidebar, #at-sidebar-pasajero {
+/* #at-sidebar-pasajero: único sidebar que queda — fallback mínimo para el
+   pasajero que llega a /app por error. El backoffice (staff) usa tabs
+   horizontales, ver sección "TABS DE MÓDULO (v6, backoffice)" más abajo. */
+#at-sidebar-pasajero {
   width: var(--sidebar-w);
   min-height: 100vh;
   background: var(--at-sidebar-bg);
@@ -317,10 +320,10 @@ a { color: var(--at-primary); }
 }
 
 /* ─────────────────────── SHELL (app/portal) ─────────────────────── */
-/* Sin sidebar por defecto (backoffice v4 = tabs superiores, ver
-   #at-module-tabs abajo) — `.has-sidebar` es la excepción, solo para el
-   caso borde del pasajero que llega por error a una URL de `/app` y ve
-   el sidebar mínimo heredado de v3 (`#at-sidebar-pasajero`). */
+/* Sin sidebar en ningún panel salvo el caso borde del pasajero que llega
+   por error a una URL de `/app` (`#at-sidebar-pasajero`, `.has-sidebar`).
+   El backoffice (staff) usa tabs horizontales — ver sección "TABS DE
+   MÓDULO (v6, backoffice)" más abajo. */
 #at-main { margin-left: 0; min-height: 100vh; display: flex; flex-direction: column; }
 #at-main.has-sidebar { margin-left: var(--sidebar-w); }
 
@@ -334,58 +337,6 @@ a { color: var(--at-primary); }
   position: sticky; top: 0; z-index: 90;
   box-shadow: var(--at-shadow-xs);
 }
-
-/* ─────────────────── TABS SUPERIORES DE MÓDULO (backoffice v4) ─────
-   Reemplaza el sidebar lateral de v3 para Agente/Administrador — patrón
-   confirmado en el canvas Modernist importado: franja horizontal, tab
-   activo con fondo --at-text invertido (texto claro sobre fondo oscuro),
-   sin sidebar. El pasajero que cae en /app por error sigue usando el
-   sidebar mínimo heredado (`.has-sidebar`), fuera de este patrón. */
-#at-module-tabs {
-  background: var(--at-surface);
-  border-bottom: 2px solid var(--at-divider);
-  position: sticky; top: var(--topbar-h); z-index: 80;
-  overflow-x: auto;
-}
-.at-module-tabs-scroll {
-  display: flex; gap: 2px; padding: 0 24px; min-width: max-content;
-}
-.at-module-tab {
-  display: flex; align-items: center; gap: 7px;
-  padding: 13px 16px; margin-bottom: -2px;
-  font-size: 12.5px; font-weight: 700; letter-spacing: .1px;
-  color: var(--at-muted); text-decoration: none; white-space: nowrap;
-  border-bottom: 2px solid transparent;
-  border-radius: var(--at-r-sm) var(--at-r-sm) 0 0;
-  transition: background var(--at-dur-fast), color var(--at-dur-fast);
-}
-.at-module-tab:hover:not(.active):not(.disabled-soon) {
-  background: var(--at-bg); color: var(--at-text);
-}
-.at-module-tab.active {
-  background: var(--at-text); color: var(--at-surface);
-}
-.at-module-tab.disabled-soon {
-  color: var(--at-sub); cursor: default; opacity: .55;
-}
-.at-module-tab .badge-proximamente { margin-left: 2px; }
-
-#at-submodule-tabs {
-  display: flex; gap: 22px; padding: 0 24px;
-  background: var(--at-bg);
-  border-bottom: 1px solid var(--at-border);
-  overflow-x: auto;
-}
-.at-submodule-tab {
-  display: flex; align-items: center; gap: 6px;
-  padding: 10px 1px; margin-bottom: -1px;
-  font-size: 12.5px; font-weight: 600;
-  color: var(--at-muted); text-decoration: none; white-space: nowrap;
-  border-bottom: 2px solid transparent;
-  transition: color var(--at-dur-fast), border-color var(--at-dur-fast);
-}
-.at-submodule-tab:hover { color: var(--at-text); }
-.at-submodule-tab.active { color: var(--at-primary); border-color: var(--at-primary); }
 
 /* Avatar chip */
 .avatar-chip {
@@ -452,6 +403,43 @@ a { color: var(--at-primary); }
   background: rgba(255,255,255,.14); color: #fff; font-weight: 600;
 }
 #portal-topbar .portal-nav-link i { font-size: 14px; }
+
+/* Divisor entre grupo primario (verticales de búsqueda) y grupo de
+   cuenta (Mis Viajes/Carrito) — agrupación v5, ver diseno-visual.md */
+#portal-topbar .portal-nav-sep {
+  width: 1px; align-self: stretch; margin: 6px 4px;
+  background: rgba(255,255,255,.14); flex-shrink: 0;
+}
+
+/* Trigger "Más" (Notificaciones/Ayuda/Ofertas/Asistente) — mismo trato
+   visual que portal-nav-link, agrega chevron y estado activo si la ruta
+   actual cae dentro del grupo secundario. */
+#portal-topbar .portal-nav-more {
+  display: flex; align-items: center; gap: 5px;
+  padding: 6px 12px; border-radius: var(--at-r-full);
+  color: rgba(255,255,255,.72); background: transparent; border: none;
+  text-decoration: none; font-size: 13px; font-weight: 500; cursor: pointer;
+  transition: background var(--at-dur-fast), color var(--at-dur-fast);
+}
+#portal-topbar .portal-nav-more:hover,
+#portal-topbar .portal-nav-more[aria-expanded="true"] { background: rgba(255,255,255,.10); color: #fff; }
+#portal-topbar .portal-nav-more.active { color: #fff; font-weight: 600; }
+#portal-topbar .portal-nav-more .bi-chevron-down { font-size: 10px; transition: transform var(--at-dur-fast); }
+#portal-topbar .portal-nav-more[aria-expanded="true"] .bi-chevron-down { transform: rotate(180deg); }
+
+.portal-nav-more-menu {
+  font-size: 13px; border-radius: 14px; border: 1px solid var(--at-border);
+  box-shadow: var(--at-shadow-lg); padding: 6px; min-width: 190px; margin-top: 8px;
+}
+.portal-nav-more-menu .portal-nav-link {
+  display: flex; align-items: center; gap: 9px;
+  padding: 8px 12px; border-radius: 8px;
+  color: var(--at-text); font-size: 13px; font-weight: 500;
+}
+.portal-nav-more-menu .portal-nav-link:hover { background: var(--at-bg); }
+.portal-nav-more-menu .portal-nav-link.active { background: var(--at-primary-lt); color: var(--at-primary-h); font-weight: 600; }
+.portal-nav-more-menu .portal-nav-link i { font-size: 14px; width: 16px; text-align: center; }
+
 #portal-topbar .portal-actions {
   display: flex; align-items: center; gap: 10px;
 }
@@ -524,8 +512,10 @@ a { color: var(--at-primary); }
 }
 
 /* Fotos reales en el hero de cada buscador (Unsplash, con licencia —
-   scripts/fetch_hero_images.py) — mismo trato visual que login_hero.jpg:
-   foto + scrim de color + grayscale parcial (ver .login-dark-panel::before) */
+   scripts/fetch_hero_images.py) — fotografía a color real (v5, ver
+   diseno-visual.md "Imágenes"); el scrim de marca (gradiente ink→sky)
+   sigue siendo lo que sostiene legibilidad + disciplina de marca, la
+   foto debajo ya no se desatura. */
 .at-hero-search.hero-vuelos::before,
 .at-hero-search.hero-hoteles::before,
 .at-hero-search.hero-autos::before,
@@ -535,7 +525,6 @@ a { color: var(--at-primary); }
   background-size: cover, cover;
   background-position: center, center;
   background-repeat: no-repeat;
-  filter: grayscale(.4);
   animation: none; /* la foto ya da textura, no hace falta el shift animado sobre ella */
 }
 .at-hero-search.hero-vuelos::before {
@@ -713,7 +702,6 @@ a { color: var(--at-primary); }
 }
 .categoria-foto-card img {
   position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
-  filter: grayscale(.3);
 }
 .categoria-foto-card::after {
   content: ''; position: absolute; inset: 0;
@@ -735,7 +723,11 @@ a { color: var(--at-primary); }
 }
 .destacado-slide-texto { padding: 20px; display: flex; flex-direction: column; gap: 2px; }
 .destacado-slide-texto strong { font-size: 18px; font-weight: 800; }
-.destacado-slide-texto span { font-size: 12.5px; color: rgba(255,255,255,.85); }
+/* :not(.type-chip) — el selector genérico de span pisaba el color propio
+   del chip (fondo claro + texto blanco = casi ilegible, contraste real
+   ~1.1:1). Bug de contraste encontrado auditando WCAG en vivo 2026-08-07
+   (Fase 3). El chip ya define su propio par fondo/texto correcto abajo. */
+.destacado-slide-texto span:not(.type-chip) { font-size: 12.5px; color: rgba(255,255,255,.85); }
 
 /* Grid de destinos populares (Inicio) — datos reales de vuelos_catalogo */
 .destinos-grid {
@@ -938,10 +930,22 @@ a { color: var(--at-primary); }
 .badge-status.failed  { background: var(--at-failed-bg);  color: var(--at-failed-fg); }
 .badge-status.pending { background: var(--at-pending-bg); color: var(--at-pending-fg); }
 .badge-status.warning { background: var(--at-warning-bg); color: var(--at-warning-fg); }
+/* Ícono real vía Bootstrap Icons (::before + codepoint), no un punto de
+   color — J7 de la constitución exige que el estado nunca dependa solo
+   del color. Un solo cambio acá cubre los 15+ templates que ya usan
+   .badge-status sin tocar ninguno (mismo patrón que la migración de
+   tokens v4). Códigos verificados contra bootstrap-icons@1.11.3 real,
+   no adivinados. Auditoría de accesibilidad, Fase 3, 2026-08-07. */
 .badge-status::before {
-  content: ''; width: 5px; height: 5px; border-radius: 50%;
-  background: currentColor; flex-shrink: 0;
+  font-family: "bootstrap-icons" !important;
+  font-size: 11px; line-height: 1; flex-shrink: 0;
+  -webkit-font-smoothing: antialiased;
 }
+.badge-status.running::before { content: "\f4f2"; } /* bi-play-circle-fill */
+.badge-status.success::before { content: "\f26a"; } /* bi-check-circle-fill */
+.badge-status.failed::before  { content: "\f622"; } /* bi-x-circle-fill */
+.badge-status.pending::before { content: "\f41f"; } /* bi-hourglass-split */
+.badge-status.warning::before { content: "\f33a"; } /* bi-exclamation-triangle-fill */
 
 /* ─────────────────────── TOGGLE / CHECKBOX ─────────────────────── */
 .toggle-switch { position: relative; display: inline-block; width: 36px; height: 20px; flex-shrink: 0; }
@@ -1244,16 +1248,14 @@ table.perm-matrix.perm-matrix-inner tbody tr:hover td { background: var(--at-bg)
   background-color: var(--navy-900); /* fallback */
 }
 .login-dark-panel::before {
-  /* Capa de foto aislada en su propio pseudo-elemento — así el
-     grayscale(1) (Modernist, ver diseno-visual.md sección Imágenes) solo
-     afecta la fotografía, nunca el overlay de scrim ni el contenido de
-     marca que van encima (ambos con z-index mayor, filter no los toca
-     porque viven en capas de stacking distintas). */
+  /* Capa de foto aislada en su propio pseudo-elemento — el overlay de
+     scrim y el contenido de marca van encima con z-index mayor, en capas
+     de stacking distintas (v5: foto a color real, ver diseno-visual.md
+     "Imágenes" — la disciplina de marca la sostiene el scrim, no el B&N). */
   content: ''; position: absolute; inset: 0; z-index: 0;
   background-image: url('/static/assets/images/login_hero.jpg');
   background-size: cover;
   background-position: center top;
-  filter: grayscale(1);
 }
 .login-panel-bg { display: none; } /* Ya no se usa */
 .login-panel-overlay {
@@ -1355,9 +1357,6 @@ table.perm-matrix.perm-matrix-inner tbody tr:hover td { background: var(--at-bg)
   #at-main.has-sidebar { margin-left: 0; }
   #at-content { padding: 16px; }
   #at-topbar { padding: 0 16px; }
-  #at-module-tabs { top: 0; position: static; }
-  .at-module-tabs-scroll { padding: 0 12px; }
-  #at-submodule-tabs { padding: 0 12px; }
 
   /* Portal topbar mobile */
   #portal-topbar { padding: 0 16px; }
@@ -1381,6 +1380,13 @@ table.perm-matrix.perm-matrix-inner tbody tr:hover td { background: var(--at-bg)
   .portal-nav-mobile .portal-nav-link:hover { background: rgba(255,255,255,.10); color: #fff; }
   .portal-nav-mobile .portal-nav-link.active { background: rgba(255,255,255,.14); color: #fff; font-weight: 600; }
   .portal-nav-mobile .portal-nav-link i { font-size: 15px; width: 18px; text-align: center; }
+  .portal-nav-mobile-label {
+    font-size: 10.5px; font-weight: 700; color: rgba(255,255,255,.35);
+    letter-spacing: 1.2px; text-transform: uppercase;
+    padding: 12px 14px 4px;
+  }
+  .portal-nav-mobile-label:first-child { padding-top: 6px; }
+  .portal-nav-mobile-sep { border-top: 1px solid rgba(255,255,255,.08); margin: 6px 4px; }
 
   /* Hero search mobile */
   .at-hero-search { padding: 32px 18px 40px; }
@@ -1513,7 +1519,7 @@ table.perm-matrix.perm-matrix-inner tbody tr:hover td { background: var(--at-bg)
   transition: border-color var(--at-dur-base), box-shadow var(--at-dur-base);
 }
 .flight-row:hover {
-  border-color: var(--navy-300);
+  border-color: var(--at-accent);
   box-shadow: var(--at-shadow-md);
 }
 .flight-row-header {
@@ -1534,7 +1540,7 @@ table.perm-matrix.perm-matrix-inner tbody tr:hover td { background: var(--at-bg)
 }
 .airline-logo-box {
   width: 32px; height: 32px; border-radius: 8px;
-  background: var(--navy-50); border: 1px solid var(--navy-100);
+  background: var(--sky-50); border: 1px solid var(--sky-100);
   display: flex; align-items: center; justify-content: center;
   font-size: 13px; flex-shrink: 0;
 }
@@ -1559,19 +1565,19 @@ table.perm-matrix.perm-matrix-inner tbody tr:hover td { background: var(--at-bg)
 }
 .stops-line {
   width: 100%; height: 1px;
-  background: linear-gradient(90deg, var(--slate-300), var(--slate-300));
+  background: linear-gradient(90deg, var(--neutral-300), var(--neutral-300));
   position: relative; display: flex; align-items: center; justify-content: center;
 }
 .stops-line::before, .stops-line::after {
   content: ''; width: 5px; height: 5px; border-radius: 50%;
-  background: var(--slate-400); position: absolute;
+  background: var(--neutral-400); position: absolute;
 }
 .stops-line::before { left: 0; }
 .stops-line::after  { right: 0; }
 .stops-dot {
   width: 6px; height: 6px; border-radius: 50%;
-  background: var(--amber-500); border: 2px solid var(--at-surface);
-  box-shadow: 0 0 0 1px var(--amber-500);
+  background: var(--coral-500); border: 2px solid var(--at-surface);
+  box-shadow: 0 0 0 1px var(--coral-500);
 }
 .stops-label {
   font-size: 10.5px; font-weight: 600; color: var(--at-muted);
@@ -1591,7 +1597,7 @@ table.perm-matrix.perm-matrix-inner tbody tr:hover td { background: var(--at-bg)
 .flight-price-col .main-price {
   font-family: var(--font-mono);
   font-size: 22px; font-weight: 800;
-  color: var(--navy-800); letter-spacing: -.03em; line-height: 1.1;
+  color: var(--sky-800); letter-spacing: -.03em; line-height: 1.1;
 }
 .flight-price-col .taxes {
   font-size: 10.5px; color: var(--at-sub);
@@ -1602,7 +1608,7 @@ table.perm-matrix.perm-matrix-inner tbody tr:hover td { background: var(--at-bg)
   margin-top: 1px;
 }
 .btn-select-flight {
-  background: linear-gradient(135deg, var(--amber-500), var(--amber-700));
+  background: linear-gradient(135deg, var(--coral-500), var(--coral-700));
   color: #fff; border: none;
   padding: 9px 20px; border-radius: var(--at-r-md);
   font-size: 13.5px; font-weight: 700; cursor: pointer;
@@ -1619,10 +1625,10 @@ table.perm-matrix.perm-matrix-inner tbody tr:hover td { background: var(--at-bg)
 
 /* Expandir detalles del vuelo */
 .flight-row-footer {
-  border-top: 1px solid var(--slate-100);
+  border-top: 1px solid var(--neutral-200);
   padding: 10px 18px;
   display: flex; align-items: center; justify-content: space-between;
-  background: var(--slate-50);
+  background: var(--neutral-100);
 }
 .flight-tags {
   display: flex; flex-wrap: wrap; gap: 6px;
@@ -1636,7 +1642,7 @@ table.perm-matrix.perm-matrix-inner tbody tr:hover td { background: var(--at-bg)
 }
 .flight-tag i { font-size: 11px; }
 .flight-tag.good { color: var(--at-success); border-color: #b9e3cb; background: var(--green-50); }
-.flight-tag.warn { color: var(--amber-700); border-color: var(--amber-100); background: var(--amber-50); }
+.flight-tag.warn { color: var(--coral-700); border-color: var(--coral-100); background: var(--coral-100); }
 
 /* ── Responsive del buscador ── */
 @media (max-width: 900px) {
@@ -1736,5 +1742,327 @@ table.perm-matrix.perm-matrix-inner tbody tr:hover td { background: var(--at-bg)
 
 @media (max-width: 480px) {
   #at-chat-panel { right: -8px; width: calc(100vw - 16px); }
+}
+
+/* ═════════════════ TABS DE CATEGORÍA + MEGA MENÚ (v7, backoffice) ═════
+   16 módulos agrupados en ~6 categorías paraguas (Sistema, Clientes,
+   Catálogo y Operación, Comercial, Soporte, Dashboards — ver nav.py,
+   CATEGORIAS_NAV) para que la fila de primer nivel tenga pocos ítems
+   fijos sin depender de overflow. Cada categoría abre un mega menú con
+   una columna por módulo — ver referencia visual Apple/Nike/Figma citada
+   por el usuario 2026-08-07. Reemplaza el intento anterior de Priority+
+   sobre 16 tabs planos (v6, 2026-08-06): con solo 6 tabs fijos, el
+   scroll horizontal es un fallback aceptable (no el problema que era con
+   16), así que se sacó el JS de overflow. */
+#at-module-tabs {
+  background: var(--at-surface);
+  /* Regla de 2px, no 1px — mismo recurso estructural "de marca" que ya usa
+     el resto del sistema (--at-divider, ver diseno-visual.md) en vez del
+     --at-border genérico de 1px; le da más presencia a la fila sin agregar
+     decoración nueva (pedido 2026-08-07: "un poco más de distintivo"). */
+  border-bottom: 2px solid var(--at-divider);
+  padding: 10px 24px;
+  position: sticky; top: var(--topbar-h); z-index: 80;
+  display: flex; align-items: center; gap: 4px;
+}
+/* flex-wrap, no overflow-x:auto — un ancestro con overflow recorta el
+   .dropdown-menu (position:absolute) del mega menú aunque esté "abierto"
+   (mismo problema de clipping que en buscar_hoteles.html). Ahí la
+   solución fue mover el menú a document.body, pero eso rompe la
+   navegación por teclado de Bootstrap: su manejador de ArrowUp/ArrowDown
+   busca el botón toggle como hermano anterior del menú en el DOM — al
+   moverlo esa relación se pierde. Con solo 6 tabs, envolver a una segunda
+   línea en pantallas angostas es una alternativa mejor: nunca recorta y
+   nunca rompe el teclado. Bug encontrado y corregido 2026-08-07 auditando
+   accesibilidad en vivo (Fase 3 del rediseño). */
+.at-module-tabs-scroll {
+  display: flex; align-items: center; justify-content: center; gap: 4px; flex: 1;
+  min-width: 0; flex-wrap: wrap;
+}
+.at-module-tab {
+  display: flex; align-items: center; gap: 7px;
+  padding: 8px 16px; border-radius: var(--at-r-full);
+  color: var(--at-muted); text-decoration: none; background: transparent; border: none;
+  font-size: 13px; font-weight: 600; white-space: nowrap; flex-shrink: 0; cursor: pointer;
+  transition: background var(--at-dur-fast), color var(--at-dur-fast);
+}
+.at-module-tab i:first-child { font-size: 14px; }
+.at-module-tab:hover:not(.active):not(.disabled-soon),
+.at-module-tab[aria-expanded="true"]:not(.active) { background: var(--at-bg); color: var(--at-text); }
+.at-module-tab.active { background: var(--at-primary); color: #fff; box-shadow: var(--at-shadow-glow); }
+.at-module-tab.disabled-soon { color: var(--at-sub); cursor: default; opacity: .6; }
+.at-module-tab .badge-proximamente { margin-left: 2px; }
+.at-category-chevron { font-size: 9px; opacity: .7; transition: transform var(--at-dur-fast); }
+.at-module-tab[aria-expanded="true"] .at-category-chevron { transform: rotate(180deg); }
+
+/* Mega menú — una columna por módulo dentro de la categoría */
+/* display:flex solo cuando Bootstrap agrega .show — sin condicionarlo se
+   pisa el display:none default de .dropdown-menu (misma especificidad,
+   pero esta regla carga después en el cascade). `width: max-content` es
+   necesario acá: un contenedor flex con flex-wrap:wrap y position:absolute
+   (heredado de .dropdown-menu) sin ancho explícito colapsa a una columna
+   por fila — el algoritmo shrink-to-fit no "adivina" que varias columnas
+   entran en una fila salvo que el ancho ya esté forzado antes de decidir
+   el wrap. max-width sigue acotando cuando el contenido no entra en
+   pantalla. Bugs reales encontrados 2026-08-07 al verificar en vivo. */
+.at-mega-menu.show {
+  display: flex; align-items: flex-start; gap: 28px; flex-wrap: wrap;
+  padding: 18px 22px; margin-top: 8px;
+  border-radius: 16px; border: 1px solid var(--at-border);
+  box-shadow: var(--at-shadow-lg);
+  width: max-content;
+  max-width: min(94vw, 880px);
+}
+.at-mega-col { min-width: 168px; max-width: 220px; }
+.at-mega-col-title {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; font-weight: 700; color: var(--at-text);
+  text-decoration: none; padding: 6px 8px; border-radius: 8px; margin: -6px -8px 4px;
+  transition: background var(--at-dur-fast), color var(--at-dur-fast);
+}
+.at-mega-col-title:hover { background: var(--at-bg); }
+.at-mega-col-title.active { color: var(--at-primary); }
+.at-mega-col-title i { font-size: 14px; flex-shrink: 0; }
+.at-mega-col-items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px; }
+.at-mega-col-items a {
+  display: block; padding: 6px 8px 6px 30px; border-radius: 8px;
+  font-size: 12.5px; color: var(--at-muted); text-decoration: none;
+  transition: background var(--at-dur-fast), color var(--at-dur-fast);
+}
+.at-mega-col-items a:hover { background: var(--at-bg); color: var(--at-text); }
+.at-mega-col-items a.active { background: var(--at-primary-lt); color: var(--at-primary-h); font-weight: 600; }
+
+/* Dropdown de Dashboards (sin sub-módulos, solo ítems — lista simple) */
+.at-module-more-menu {
+  font-size: 13px; border-radius: 14px; border: 1px solid var(--at-border);
+  box-shadow: var(--at-shadow-lg); padding: 6px; min-width: 240px; margin-top: 8px;
+  max-height: 70vh; overflow-y: auto;
+}
+.at-module-more-menu .at-module-more-item {
+  display: flex; align-items: center; gap: 9px;
+  padding: 8px 12px; border-radius: 8px;
+  color: var(--at-text); text-decoration: none; font-size: 13px; font-weight: 500;
+}
+.at-module-more-menu .at-module-more-item:hover { background: var(--at-bg); }
+.at-module-more-menu .at-module-more-item.active { background: var(--at-primary-lt); color: var(--at-primary-h); font-weight: 600; }
+.at-module-more-menu .at-module-more-item i { font-size: 14px; width: 16px; text-align: center; }
+
+@media (max-width: 900px) {
+  #at-module-tabs { padding: 8px 16px; }
+  .at-mega-menu.show { gap: 20px; padding: 16px; }
+}
+
+/* ═════════════════ BREADCRUMB (v7, backoffice) ═════════════════════
+   3 niveles desde que el nav tiene categoría → módulo (v7): inicio /
+   categoría / módulo actual. Reemplaza la señal de "dónde estoy" que
+   antes daba la fila de sub-tabs (retirada, ver TABS DE CATEGORÍA arriba).
+   Último ítem no es link. Segmentos que son un ID/código de entidad (ej.
+   "AT-88291") van en mono, ver diseno-visual.md J4. */
+.at-breadcrumb {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  padding: 12px 0 4px; margin-bottom: 6px;
+  font-size: 12.5px; color: var(--at-muted);
+}
+.at-breadcrumb a {
+  color: var(--at-muted); text-decoration: none; font-weight: 500;
+  padding: 4px 2px; border-radius: var(--at-r-xs);
+}
+.at-breadcrumb a:hover { color: var(--at-primary); }
+.at-breadcrumb .at-breadcrumb-sep { color: var(--at-sub); font-size: 10px; }
+.at-breadcrumb .at-breadcrumb-current {
+  color: var(--at-text); font-weight: 700;
+}
+.at-breadcrumb .at-breadcrumb-id { font-family: var(--font-mono); }
+
+/* ═════════════════ PRODUCT CARD (v5, canónica) ══════════════════════
+   Reemplaza las cards dispares de hoteles/autos/cruceros/actividades
+   (grid) y la lista de vuelos (row) — un único componente, dos
+   variantes de layout. Fotografía a color real, marco de 2px en vez
+   de sombra alrededor de la imagen (Modernist: regla, no sombra),
+   badge de estado como chip que rompe el borde inferior de la foto.
+   Ver app/shared/templates/_product_card.html. */
+.product-card {
+  display: flex; flex-direction: column;
+  background: var(--at-surface); border: 1px solid var(--at-border);
+  border-radius: var(--at-r-lg); overflow: visible;
+  text-decoration: none; color: inherit; height: 100%;
+  transition: border-color var(--at-dur-fast) var(--at-ease);
+}
+.product-card:hover, .product-card:focus-visible { border-color: var(--at-accent); }
+
+.product-card-media {
+  position: relative; height: 168px; margin: 10px 10px 0;
+  border: 2px solid var(--at-border); border-radius: var(--at-r-md);
+  overflow: hidden; background: var(--at-bg);
+  transition: border-color var(--at-dur-fast) var(--at-ease);
+}
+.product-card:hover .product-card-media { border-color: var(--at-accent); }
+.product-card-media img {
+  width: 100%; height: 100%; object-fit: cover;
+  transition: transform var(--at-dur-slow) var(--at-ease);
+}
+.product-card:hover .product-card-media img { transform: scale(1.03); }
+
+/* Chip de estado que "rompe" el borde inferior de la foto — motivo
+   ticket-stub, nunca solo color: siempre ícono + texto. */
+.product-card-chip {
+  position: absolute; left: 12px; bottom: -11px; z-index: 2;
+  display: inline-flex; align-items: center; gap: 5px;
+  background: var(--at-surface); border: 1.5px solid var(--at-border);
+  border-radius: var(--at-r-full); padding: 4px 11px;
+  font-size: 11px; font-weight: 700; color: var(--at-text);
+  box-shadow: var(--at-shadow-xs);
+}
+.product-card-chip.accent { border-color: var(--at-accent); color: var(--at-accent-h); }
+.product-card-chip.success { border-color: var(--at-success); color: var(--at-success); }
+.product-card-chip.warning { border-color: var(--coral-500); color: var(--at-warning-fg); }
+
+.product-card-body {
+  padding: 20px 14px 14px; flex: 1;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.product-card-kicker {
+  font-family: var(--font-mono); font-size: 10.5px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .07em; color: var(--at-muted);
+}
+.product-card-title {
+  font-family: var(--font-display); font-weight: 700; font-size: 15.5px;
+  color: var(--at-text); line-height: 1.3;
+}
+.product-card-meta {
+  font-size: 12.5px; color: var(--at-muted);
+  display: flex; align-items: center; gap: 5px; flex-wrap: wrap;
+}
+.product-card-footer {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  padding: 0 14px 14px; margin-top: auto; gap: 8px;
+}
+.product-card-price {
+  font-family: var(--font-mono); font-weight: 700; font-size: 19px;
+  color: var(--at-text); text-align: right; line-height: 1;
+}
+.product-card-price .unit {
+  display: block; font-family: var(--font-text); font-weight: 500;
+  font-size: 11px; color: var(--at-muted); margin-top: 3px;
+}
+
+/* Variante lista/fila — vuelos: sin imagen, kicker = aerolínea/código
+   de vuelo en mono, precio con el mismo tratamiento a la derecha. */
+.product-card-row {
+  display: flex; align-items: center; gap: 16px;
+  background: var(--at-surface); border: 1px solid var(--at-border);
+  border-radius: var(--at-r-lg); padding: 14px 18px;
+  text-decoration: none; color: inherit;
+  transition: border-color var(--at-dur-fast) var(--at-ease);
+}
+.product-card-row:hover, .product-card-row:focus-visible { border-color: var(--at-accent); }
+.product-card-row .product-card-kicker { margin-bottom: 2px; }
+.product-card-row .product-card-price { font-size: 20px; }
+
+@media (max-width: 700px) {
+  .product-card-row { flex-wrap: wrap; }
+}
+
+/* ═════════════════ UTILIDADES (v5) ══════════════════════════════════
+   Reemplazan los patrones de style="" más repetidos (checkout, carrito,
+   mis_viajes, paquetes — ver plan de rollout). Solo cosmética/tipografía,
+   nunca reemplazan estructura ligada a JS. */
+.at-card-title {
+  font-size: 15px; font-weight: 700; margin: 0 0 14px; letter-spacing: -.01em;
+  display: flex; align-items: center;
+}
+.at-hint {
+  font-size: 12px; color: var(--at-muted); line-height: 1.6;
+}
+.at-price-row {
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 14px; margin-bottom: 8px;
+}
+.at-price-row .label { color: var(--at-muted); }
+.at-price-row.total { font-weight: 700; font-size: 15px; margin-bottom: 0; }
+.at-price-row.total .at-mono { font-size: 22px; font-weight: 800; color: var(--at-primary); letter-spacing: -.02em; }
+
+/* Barra de precio fija en checkout mobile — J8 (checkout completo en
+   375px con desglose siempre visible). El resumen sticky de escritorio
+   pierde su ventaja en una sola columna, donde queda debajo del mapa de
+   asientos; esta barra sustituye esa función solo bajo el breakpoint lg. */
+.checkout-mobile-bar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 95;
+  background: var(--at-surface); border-top: 2px solid var(--at-divider);
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  box-shadow: var(--at-shadow-lg);
+}
+.checkout-mobile-bar .label {
+  font-size: 10.5px; color: var(--at-muted); text-transform: uppercase; letter-spacing: .4px;
+}
+.checkout-mobile-bar .total { font-size: 18px; font-weight: 800; color: var(--at-primary); }
+.checkout-mobile-bar .btn-at-accent { padding: 10px 20px; font-size: 14px; font-weight: 700; white-space: nowrap; }
+
+/* ═════════════════ DASHBOARD "MIS VIAJES" (v5, portal) ═════════════
+   Antes una lista plana — stat tiles + highlight del próximo viaje,
+   ambos derivados de `grupos` (ya calculado por el router, sin queries
+   nuevas). Ver app/cuenta/templates/mis_viajes.html. */
+.stats-row {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 12px; margin-bottom: 20px;
+}
+.stat-tile {
+  background: var(--at-surface); border: 1px solid var(--at-border);
+  border-radius: var(--at-r-lg); padding: 16px 18px;
+}
+.stat-tile .stat-value {
+  font-family: var(--font-mono); font-size: 26px; font-weight: 800;
+  color: var(--at-primary); line-height: 1;
+}
+.stat-tile .stat-label {
+  font-size: 11px; color: var(--at-muted); margin-top: 6px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .04em;
+}
+
+.trip-highlight {
+  display: flex; align-items: center; justify-content: space-between; gap: 20px;
+  background: linear-gradient(135deg, var(--sky-800), var(--sky-900));
+  color: #fff; border-radius: var(--at-r-xl); padding: 24px 28px; margin-bottom: 24px;
+  text-decoration: none; flex-wrap: wrap;
+}
+.trip-highlight:hover { color: #fff; }
+.trip-highlight .kicker {
+  font-family: var(--font-mono); font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .08em; color: rgba(255,255,255,.65);
+  margin-bottom: 6px;
+}
+.trip-highlight .route { font-family: var(--font-display); font-size: 22px; font-weight: 800; }
+.trip-highlight .meta { font-size: 13px; color: rgba(255,255,255,.75); margin-top: 4px; }
+.trip-highlight .cta {
+  background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.3);
+  border-radius: var(--at-r-md); padding: 10px 18px; font-weight: 700;
+  font-size: 13.5px; white-space: nowrap; color: #fff;
+}
+.trip-highlight:hover .cta { background: rgba(255,255,255,.22); }
+@media (max-width: 560px) {
+  .trip-highlight { padding: 20px; }
+}
+
+/* Kicker genérico — etiqueta pequeña uppercase (categoría, sección),
+   Archivo no mono (para eso está .product-card-kicker) */
+.at-kicker {
+  font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--at-muted); font-weight: 700; margin-bottom: 2px;
+}
+
+/* ═════════════════ DASHBOARDS BACKOFFICE (v5) ═══════════════════════
+   Patrón repetido en los 12 dashboards (KPI + gráfico ECharts) — antes
+   inline por completo, ver app/dashboards/templates/backoffice/*.html. */
+.dash-kpi-label {
+  font-size: 11px; letter-spacing: .5px; text-transform: uppercase; color: var(--at-sub);
+}
+.dash-kpi-value { font-size: 30px; font-weight: 700; }
+.dash-chart-title { font-size: 12.5px; font-weight: 700; margin-bottom: 6px; }
+/* Punto de color junto al label — identifica un KPI por categoría (ej. un
+   objetivo estratégico) sin recurrir a un borde lateral grueso en la card. */
+.dash-oe-dot {
+  display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+  margin-right: 6px; vertical-align: middle;
 }
 

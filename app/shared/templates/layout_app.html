@@ -105,46 +105,116 @@
         </div>
     </header>
 
-    <!-- ═══════ TABS DE MÓDULO (reemplaza el sidebar para Agente/Administrador, v4) ═══════ -->
+    <!-- ═══════ TABS DE CATEGORÍA (v7, horizontal — mega menú de columnas)
+         16 módulos agrupados en ~6 categorías paraguas (nav.py, CATEGORIAS_NAV)
+         para que la fila de primer nivel tenga pocos ítems fijos, sin
+         depender de overflow — cada categoría abre un mega menú con una
+         columna por módulo, ningún módulo ni ítem se pierde (a pedido del
+         usuario 2026-08-07: agrupar sin ocultar nada, y sin scroll horizontal
+         plano de 16 tabs). Dashboards queda fuera de las categorías (no
+         tiene sub-módulos, solo ítems) como su propio tab. ═══════ -->
     {% if usuario.tipo_actor != 'pasajero' %}
-    {% set ns = namespace(activo=none) %}
-    {% for modulo in nav_modulos %}
-        {% if modulo['items'] %}
+    {% set ns = namespace(activo=none, categoria=none) %}
+    {% for cat in nav_categorias %}
+        {% for modulo in cat.modulos %}
             {% for item in modulo['items'] %}
-                {% if request.url.path.startswith(item.href) %}{% set ns.activo = modulo %}{% endif %}
+                {% if request.url.path.startswith(item.href) %}{% set ns.activo = modulo %}{% set ns.categoria = cat %}{% endif %}
             {% endfor %}
-        {% endif %}
+        {% endfor %}
     {% endfor %}
+    {% if nav_dashboards %}
+        {% for item in nav_dashboards['items'] %}
+            {% if request.url.path.startswith(item.href) %}{% set ns.activo = nav_dashboards %}{% endif %}
+        {% endfor %}
+    {% endif %}
+    {% if nav_estrategico %}
+        {% for item in nav_estrategico['items'] %}
+            {% if request.url.path.startswith(item.href) %}{% set ns.activo = nav_estrategico %}{% endif %}
+        {% endfor %}
+    {% endif %}
     <nav id="at-module-tabs" aria-label="Módulos del backoffice">
         <div class="at-module-tabs-scroll">
-            {% for modulo in nav_modulos %}
-                {% if modulo['items'] %}
-                <a class="at-module-tab {% if ns.activo and ns.activo.clave == modulo.clave %}active{% endif %}"
-                   href="{{ modulo['items'][0].href }}">
-                    <i class="bi {{ modulo.icono }}" aria-hidden="true"></i>{{ modulo.nombre }}
-                </a>
-                {% else %}
-                <span class="at-module-tab disabled-soon" aria-disabled="true">
-                    <i class="bi {{ modulo.icono }}" aria-hidden="true"></i>{{ modulo.nombre }}
-                    <span class="badge-proximamente">Próximamente</span>
-                </span>
-                {% endif %}
+            {% for cat in nav_categorias %}
+            <div class="dropdown">
+                <button class="at-module-tab {% if ns.categoria and ns.categoria.clave == cat.clave %}active{% endif %}"
+                        type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="bi {{ cat.icono }}" aria-hidden="true"></i>{{ cat.nombre }}
+                    <i class="bi bi-chevron-down at-category-chevron" aria-hidden="true"></i>
+                </button>
+                <div class="dropdown-menu at-mega-menu">
+                    {% for modulo in cat.modulos %}
+                    <div class="at-mega-col">
+                        <a class="dropdown-item at-mega-col-title {% if ns.activo and ns.activo.clave == modulo.clave and modulo['items']|length == 1 %}active{% endif %}"
+                           href="{{ modulo['items'][0].href }}">
+                            <i class="bi {{ modulo.icono }}" aria-hidden="true"></i>{{ modulo.nombre }}
+                        </a>
+                        {% if modulo['items']|length > 1 %}
+                        <ul class="at-mega-col-items">
+                            {% for item in modulo['items'] %}
+                            <li>
+                                <a class="dropdown-item {% if request.url.path.startswith(item.href) %}active{% endif %}" href="{{ item.href }}">
+                                    {{ item.label }}
+                                </a>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
             {% endfor %}
+            {% if nav_dashboards %}
+            <div class="dropdown">
+                <button class="at-module-tab {% if ns.activo and ns.activo.clave == 'dashboards' %}active{% endif %}"
+                        type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="bi {{ nav_dashboards.icono }}" aria-hidden="true"></i>{{ nav_dashboards.nombre }}
+                    <i class="bi bi-chevron-down at-category-chevron" aria-hidden="true"></i>
+                </button>
+                <div class="dropdown-menu at-module-more-menu">
+                    {% for item in nav_dashboards['items'] %}
+                    <a class="dropdown-item at-module-more-item {% if request.url.path.startswith(item.href) %}active{% endif %}" href="{{ item.href }}">
+                        <i class="bi {{ item.icono }}" aria-hidden="true"></i>{{ item.label }}
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+            {% if nav_estrategico %}
+            <div class="dropdown">
+                <button class="at-module-tab {% if ns.activo and ns.activo.clave == 'estrategico' %}active{% endif %}"
+                        type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="bi {{ nav_estrategico.icono }}" aria-hidden="true"></i>{{ nav_estrategico.nombre }}
+                    <i class="bi bi-chevron-down at-category-chevron" aria-hidden="true"></i>
+                </button>
+                <div class="dropdown-menu at-module-more-menu">
+                    {% for item in nav_estrategico['items'] %}
+                    <a class="dropdown-item at-module-more-item {% if request.url.path.startswith(item.href) %}active{% endif %}" href="{{ item.href }}">
+                        <i class="bi {{ item.icono }}" aria-hidden="true"></i>{{ item.label }}
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
         </div>
     </nav>
-    {% if ns.activo and ns.activo['items']|length > 1 %}
-    <nav id="at-submodule-tabs" aria-label="Secciones de {{ ns.activo.nombre }}">
-        {% for item in ns.activo['items'] %}
-        <a class="at-submodule-tab {% if request.url.path.startswith(item.href) %}active{% endif %}" href="{{ item.href }}">
-            <i class="bi {{ item.icono }}" aria-hidden="true"></i>{{ item.label }}
-        </a>
-        {% endfor %}
-    </nav>
-    {% endif %}
     {% endif %}
 
     <!-- Contenido -->
     <main id="at-content">
+        {% if usuario.tipo_actor != 'pasajero' %}
+        <nav class="at-breadcrumb" aria-label="Ruta de navegación">
+            <a href="/"><i class="bi bi-house" aria-hidden="true"></i></a>
+            {% if ns.categoria %}
+            <span class="at-breadcrumb-sep"><i class="bi bi-chevron-right"></i></span>
+            <span>{{ ns.categoria.nombre }}</span>
+            {% endif %}
+            {% if ns.activo %}
+            <span class="at-breadcrumb-sep"><i class="bi bi-chevron-right"></i></span>
+            <span class="at-breadcrumb-current">{{ ns.activo.nombre }}</span>
+            {% endif %}
+        </nav>
+        {% endif %}
         {% set _msg = mensaje or request.query_params.get('mensaje') %}
         {% set _tipo = tipo or request.query_params.get('tipo') or 'exito' %}
         {% if _msg %}
@@ -175,22 +245,27 @@
     transition: transform 200ms cubic-bezier(.16,1,.3,1);
   }
   #at-sidebar-pasajero.open { transform: translateX(0); }
-  #at-main[style*="margin-left:0"] { margin-left: 0 !important; }
 }
 </style>
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     var btn = document.getElementById('btn-toggle-sidebar-mobile');
-    var sidebarApp = document.getElementById('at-sidebar');
     var sidebarPas = document.getElementById('at-sidebar-pasajero');
-    var sidebar = sidebarApp || sidebarPas;
-    if (btn && sidebar) {
+    if (btn && sidebarPas) {
         btn.addEventListener('click', function () {
-            var abierto = sidebar.classList.toggle('open');
+            var abierto = sidebarPas.classList.toggle('open');
             btn.setAttribute('aria-expanded', abierto ? 'true' : 'false');
         });
     }
+
+    // Los dropdowns de categoría/Dashboards se inicializan solos vía el
+    // data-api de Bootstrap (data-bs-toggle="dropdown") — no hace falta JS
+    // acá. .at-module-tabs-scroll usa flex-wrap en vez de overflow:auto a
+    // propósito (ver aerotrack.css): mover el .dropdown-menu a
+    // document.body para escapar un overflow recortante (como se hace en
+    // buscar_hoteles.html) rompe la navegación por teclado de Bootstrap,
+    // que asume que el menú es hermano de su botón toggle en el DOM.
 });
 </script>
 {% endblock %}

@@ -49,7 +49,7 @@ def extraer() -> dict:
     conteos = {}
     for base in ARCHIVOS:
         df = _obtener(base)
-        ch.escribir_parquet(df, _nombre_archivo(base, marca), config.PARQUET_CRUDO)
+        ch.escribir_parquet(df, _nombre_archivo(base, marca), config.PARQUET_E)
         conteos[base] = len(df)
     print(f"[extraer] marca={marca} {conteos}")
     return {"marca": marca, "conteos": conteos}
@@ -65,8 +65,8 @@ def transformar(extraido: dict) -> dict:
     dataframes = {}
     for base in ARCHIVOS:
         nombre = _nombre_archivo(base, marca)
-        dataframes[base] = pd.read_parquet(config.PARQUET_CRUDO / nombre)
-        ch.mover_parquet(nombre, config.PARQUET_CRUDO, config.PARQUET_PROCESANDO)
+        dataframes[base] = pd.read_parquet(config.PARQUET_E / nombre)
+        ch.mover_parquet(nombre, config.PARQUET_E, config.PARQUET_T)
 
     reservas = dataframes["reservas"]
     items = dataframes["reserva-items"]
@@ -118,11 +118,11 @@ def transformar(extraido: dict) -> dict:
     else:
         margen = pd.DataFrame(columns=columnas)
 
-    ch.escribir_parquet(margen, _nombre_archivo("agg_paquetes_margen_mes", marca), config.PARQUET_PROCESANDO)
+    ch.escribir_parquet(margen, _nombre_archivo("agg_paquetes_margen_mes", marca), config.PARQUET_T)
     print(f"[transformar] agg_paquetes_margen_mes: {len(margen)} filas")
 
     for base in ARCHIVOS:
-        (config.PARQUET_PROCESANDO / _nombre_archivo(base, marca)).unlink(missing_ok=True)
+        (config.PARQUET_T / _nombre_archivo(base, marca)).unlink(missing_ok=True)
 
     return {"marca": marca, "filas": {"agg_paquetes_margen_mes": len(margen)}}
 
@@ -130,8 +130,8 @@ def transformar(extraido: dict) -> dict:
 def cargar(transformado: dict) -> dict:
     marca = transformado["marca"]
     nombre = _nombre_archivo("agg_paquetes_margen_mes", marca)
-    df = pd.read_parquet(config.PARQUET_PROCESANDO / nombre)
+    df = pd.read_parquet(config.PARQUET_T / nombre)
     insertadas = ch.insertar_df("aerotrack_travel.agg_paquetes_margen_mes", df)
-    ch.mover_parquet(nombre, config.PARQUET_PROCESANDO, config.PARQUET_TERMINADO)
+    ch.mover_parquet(nombre, config.PARQUET_T, config.PARQUET_L)
     print(f"[cargar] agg_paquetes_margen_mes: {insertadas} filas insertadas en ClickHouse")
     return {"agg_paquetes_margen_mes": insertadas}

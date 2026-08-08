@@ -3,7 +3,7 @@ AeroTrack Travel — DAG: ETL dims BTS/FAA -> ClickHouse
 =========================================================
 docs/aerotrack-travel-dashboards-spec.md sección 1 — primer DAG del
 pipeline de dashboards (Fase B.1). Patrón de 3 tareas extraer/transformar/
-cargar sobre Parquet/crudo -> procesando -> terminado, igual que los demás
+cargar sobre datos/E -> datos/T -> datos/L, igual que los demás
 DAGs de este proyecto (ver `dag_publicar_catalogo_minio.py`).
 
 Alimenta `agg_otp_aerolinea_mes`, `agg_causas_retraso_mes`,

@@ -1,0 +1,169 @@
+{% extends "layout_app.html" %}
+{% block title %}Cockpit Ejecutivo — AeroTrack Travel{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <h1><span class="heading-icon"><i class="bi bi-speedometer2"></i></span>Cockpit Ejecutivo — Visión General del Negocio</h1>
+    <p>DS-00 — un KPI por objetivo estratégico, consolidado desde ClickHouse y el operacional en vivo.</p>
+</div>
+
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <div id="selector-periodo" class="filter-bar mb-0"></div>
+    <button type="button" class="btn-at-ghost" onclick="window.print()">
+        <i class="bi bi-file-earmark-pdf"></i> Exportar PDF
+    </button>
+</div>
+
+<div id="db-cockpit-cargando" style="text-align:center;padding:50px 0;color:var(--at-muted)">
+    <div class="spinner-border" style="color:var(--at-primary)" role="status"></div>
+</div>
+
+<div id="db-cockpit-contenido" style="display:none">
+    <!-- Fila superior — 1 card por OE. Color-coded con un punto junto al
+         label (no un borde lateral grueso — mismo criterio que el resto de
+         los dashboards tácticos, que nunca usan "side-tab" y sí colorean
+         el valor/ícono puntualmente, ver comercial.html/finanzas.html). -->
+    <div class="row g-3 mb-3">
+        <div class="col-12 col-md-6 col-xl-3">
+            <div class="at-card" style="height:100%">
+                <div class="dash-kpi-label"><span class="dash-oe-dot" style="background:var(--at-primary)"></span>OE-1 · Ingresos totales del período</div>
+                <div class="at-mono dash-kpi-value" id="kpi-oe1-ingresos" style="color:var(--at-text)">—</div>
+                <div id="kpi-oe1-variacion" style="font-size:12px"></div>
+            </div>
+        </div>
+        <div class="col-12 col-md-6 col-xl-3">
+            <div class="at-card" style="height:100%">
+                <div class="dash-kpi-label"><span class="dash-oe-dot" style="background:var(--at-success)"></span>OE-2 · Reservas confirmadas</div>
+                <div class="at-mono dash-kpi-value" id="kpi-oe2-reservas" style="color:var(--at-text)">—</div>
+                <div style="font-size:11.5px;color:var(--at-muted)">Conversión búsqueda→reserva: <span id="kpi-oe2-conversion">—</span>%</div>
+            </div>
+        </div>
+        <div class="col-12 col-md-6 col-xl-3">
+            <div class="at-card" style="height:100%">
+                <div class="dash-kpi-label"><span class="dash-oe-dot" style="background:var(--coral-500)"></span>OE-3 · Efectividad de notificaciones</div>
+                <div class="at-mono dash-kpi-value" id="kpi-oe3-efectividad" style="color:var(--at-text)">—</div>
+                <div style="font-size:11.5px;color:var(--at-muted)">Vuelos monitoreados hoy: <span id="kpi-oe3-vuelos">—</span></div>
+            </div>
+        </div>
+        <div class="col-12 col-md-6 col-xl-3">
+            <div class="at-card" style="height:100%">
+                <div class="dash-kpi-label"><span class="dash-oe-dot" style="background:#6f42c1"></span>OE-4 · Calificación positiva del asistente IA</div>
+                <div class="at-mono dash-kpi-value" id="kpi-oe4-calificacion" style="color:var(--at-text)">—</div>
+                <div style="font-size:11.5px;color:var(--at-muted)">Consultas del período: <span id="kpi-oe4-consultas">—</span></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Centro — tendencia de ingresos -->
+    <div class="at-card mb-3">
+        <div class="dash-chart-title">Tendencia de ingresos — últimos 6 períodos</div>
+        <div id="chart-tendencia-ingresos" style="height:260px"></div>
+        <div id="msg-sin-tendencia" style="display:none;text-align:center;color:var(--at-muted);padding:20px 0">Sin datos para el período seleccionado</div>
+    </div>
+
+    <!-- Fila inferior -->
+    <div class="row g-3">
+        <div class="col-12 col-md-4">
+            <div class="at-card" style="height:100%">
+                <div class="dash-kpi-label">CAC digital <span id="badge-cac-manual" class="badge-status warning" style="font-size:9.5px;vertical-align:middle">Ingresado manualmente</span></div>
+                <div class="at-mono dash-kpi-value" id="kpi-cac" style="color:var(--at-text)">—</div>
+                <div style="font-size:11.5px;color:var(--at-muted)" id="kpi-cac-periodo"></div>
+            </div>
+        </div>
+        <div class="col-12 col-md-4">
+            <div class="at-card" style="height:100%">
+                <div class="dash-kpi-label">Ingreso promedio por reserva</div>
+                <div class="at-mono dash-kpi-value" id="kpi-ingreso-promedio" style="color:var(--at-text)">—</div>
+            </div>
+        </div>
+        <div class="col-12 col-md-4">
+            <div class="at-table-wrapper" style="height:100%">
+                <div class="at-table-header"><span class="at-table-title">Top 3 productos por ingresos</span></div>
+                <table class="table" style="font-size:12.5px;margin-bottom:0">
+                    <thead><tr><th>Producto</th><th class="text-end">Ingresos</th></tr></thead>
+                    <tbody id="tabla-top-3"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Drill-down -->
+    <div class="mt-4 pt-3" style="border-top:1px solid var(--at-border)">
+        <div class="dash-chart-title mb-2"><i class="bi bi-signpost-split"></i> Ver detalle por área</div>
+        <div class="d-flex flex-wrap gap-2">
+            <a class="btn-at-ghost" href="/backoffice/dashboards/comercial"><i class="bi bi-graph-up-arrow"></i> Rendimiento Comercial</a>
+            <a class="btn-at-ghost" href="/backoffice/dashboards/finanzas"><i class="bi bi-cash-stack"></i> Control Financiero</a>
+            <a class="btn-at-ghost" href="/backoffice/dashboards/disrupciones"><i class="bi bi-exclamation-triangle"></i> Monitoreo de Disrupciones</a>
+            <a class="btn-at-ghost" href="/backoffice/dashboards/clientes"><i class="bi bi-person-hearts"></i> Captación y Retención</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+var chartsCockpit = [];
+
+function cargarDatosCockpit(desde, hasta) {
+    document.getElementById('db-cockpit-cargando').style.display = '';
+    document.getElementById('db-cockpit-contenido').style.display = 'none';
+    fetch('/backoffice/estrategico/cockpit/datos?desde=' + desde + '&hasta=' + hasta)
+        .then(function (r) { return r.json(); })
+        .then(renderCockpit);
+}
+
+function _money(v) { return '$' + Number(v).toLocaleString('es', { maximumFractionDigits: 0 }); }
+
+function renderCockpit(d) {
+    document.getElementById('db-cockpit-cargando').style.display = 'none';
+    document.getElementById('db-cockpit-contenido').style.display = '';
+    chartsCockpit.forEach(function (c) { c && c.dispose(); });
+    chartsCockpit = [];
+
+    document.getElementById('kpi-oe1-ingresos').textContent = _money(d.oe1_ingresos_totales);
+    var elVar = document.getElementById('kpi-oe1-variacion');
+    if (d.oe1_variacion_pct === null || d.oe1_variacion_pct === undefined) {
+        elVar.textContent = 'Sin período anterior comparable';
+        elVar.style.color = 'var(--at-muted)';
+    } else {
+        var subio = d.oe1_variacion_pct >= 0;
+        elVar.innerHTML = '<i class="bi ' + (subio ? 'bi-arrow-up-right' : 'bi-arrow-down-right') + '"></i> ' + Math.abs(d.oe1_variacion_pct) + '% vs. período anterior';
+        elVar.style.color = subio ? 'var(--at-success)' : 'var(--at-danger)';
+    }
+
+    document.getElementById('kpi-oe2-reservas').textContent = d.oe2_reservas_confirmadas;
+    document.getElementById('kpi-oe2-conversion').textContent = d.oe2_tasa_conversion;
+
+    document.getElementById('kpi-oe3-efectividad').textContent = d.oe3_tasa_efectividad + '%';
+    document.getElementById('kpi-oe3-vuelos').textContent = d.oe3_vuelos_monitoreados_hoy;
+
+    document.getElementById('kpi-oe4-calificacion').textContent = d.oe4_pct_calificacion_positiva + '%';
+    document.getElementById('kpi-oe4-consultas').textContent = d.oe4_total_consultas;
+
+    var cac = d.cac_digital;
+    document.getElementById('kpi-cac').textContent = cac.valor ? _money(cac.valor) : '—';
+    document.getElementById('kpi-cac-periodo').textContent = cac.periodo ? ('Corresponde a: ' + cac.periodo) : 'Todavía sin cargar por el administrador';
+
+    document.getElementById('kpi-ingreso-promedio').textContent = _money(d.ingreso_promedio_reserva);
+
+    var tbody = document.getElementById('tabla-top-3');
+    tbody.innerHTML = d.top_3_productos.map(function (p) {
+        return '<tr><td>' + p.tipo_producto + '</td><td class="text-end">' + _money(p.ingresos) + '</td></tr>';
+    }).join('') || '<tr><td colspan="2" class="text-center" style="color:var(--at-muted)">Sin datos en el período</td></tr>';
+
+    var hayTendencia = d.tendencia_ingresos && d.tendencia_ingresos.length > 0;
+    document.getElementById('chart-tendencia-ingresos').style.display = hayTendencia ? '' : 'none';
+    document.getElementById('msg-sin-tendencia').style.display = hayTendencia ? 'none' : '';
+    if (hayTendencia) {
+        chartsCockpit.push(initChart('chart-tendencia-ingresos', {
+            xAxis: { type: 'category', data: d.tendencia_ingresos.map(function (p) { return p.periodo.slice(0, 7); }) },
+            yAxis: { type: 'value' },
+            series: [{ type: 'line', smooth: true, data: d.tendencia_ingresos.map(function (p) { return Math.round(p.ingresos_totales); }), areaStyle: {}, itemStyle: { color: AEROTRACK_SEMANTIC.primary } }],
+        }));
+    }
+}
+
+initSelectorPeriodo('selector-periodo', function (periodo) {
+    cargarDatosCockpit(periodo.desde, periodo.hasta);
+}, PRESETS_ESTRATEGICO);
+</script>
+{% endblock %}

@@ -1,0 +1,144 @@
+{% extends "layout_app.html" %}
+{% block title %}Rendimiento de la Oferta — AeroTrack Travel{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <h1><span class="heading-icon"><i class="bi bi-bar-chart-line"></i></span>Rendimiento de la Oferta</h1>
+    <p>DS-01 — cobertura de productos, ingresos y conversión, consolidado desde ClickHouse.</p>
+</div>
+
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <div id="selector-periodo" class="filter-bar mb-0"></div>
+    <button type="button" class="btn-at-ghost" onclick="window.print()">
+        <i class="bi bi-file-earmark-pdf"></i> Exportar PDF
+    </button>
+</div>
+
+<div id="db-oferta-cargando" style="text-align:center;padding:50px 0;color:var(--at-muted)">
+    <div class="spinner-border" style="color:var(--at-primary)" role="status"></div>
+</div>
+
+<div id="db-oferta-contenido" style="display:none">
+    <!-- Fila 1 (Modelo F) -->
+    <div class="row g-3 mb-3">
+        <div class="col-12 col-md-4">
+            <div class="at-card" style="height:100%">
+                <div class="dash-kpi-label">Producto con mayor ingreso</div>
+                <div class="at-mono dash-kpi-value" id="kpi-mayor-ingreso" style="color:var(--at-text);font-size:24px">—</div>
+            </div>
+        </div>
+        <div class="col-12 col-md-4">
+            <div class="at-card" style="height:100%">
+                <div class="dash-kpi-label">Producto con mayor conversión</div>
+                <div class="at-mono dash-kpi-value" id="kpi-mayor-conversion" style="color:var(--at-text);font-size:24px">—</div>
+            </div>
+        </div>
+        <div class="col-12 col-md-4">
+            <div class="at-card" style="height:100%">
+                <div class="dash-kpi-label">Margen promedio de paquetes</div>
+                <div class="at-mono dash-kpi-value" id="kpi-margen-paquetes" style="color:var(--at-text)">—</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Columna vertical F -->
+    <div class="at-card mb-3">
+        <div class="dash-chart-title">Ingresos por tipo de producto</div>
+        <div id="chart-ingresos-producto" style="height:260px"></div>
+    </div>
+    <div class="at-card mb-3">
+        <div class="dash-chart-title">Reservas vs. ingresos por producto</div>
+        <div id="chart-reservas-vs-ingresos" style="height:260px"></div>
+    </div>
+    <div class="at-card mb-3">
+        <div class="dash-chart-title">Tendencia de ingresos — últimos 6 períodos</div>
+        <div id="chart-tendencia-ingresos" style="height:220px"></div>
+        <div id="msg-sin-tendencia" style="display:none;text-align:center;color:var(--at-muted);padding:20px 0">Sin datos para el período seleccionado</div>
+    </div>
+    <div class="at-table-wrapper">
+        <div class="at-table-header"><span class="at-table-title">Métricas por producto</span></div>
+        <table class="table" style="font-size:12.5px;margin-bottom:0">
+            <thead><tr><th>Producto</th><th class="text-end">Reservas</th><th class="text-end">Ingresos</th><th class="text-end">Ticket promedio</th><th class="text-end">Take rate</th></tr></thead>
+            <tbody id="tabla-metricas"></tbody>
+        </table>
+    </div>
+
+    <!-- Drill-down -->
+    <div class="mt-4 pt-3" style="border-top:1px solid var(--at-border)">
+        <div class="dash-chart-title mb-2"><i class="bi bi-signpost-split"></i> Ver detalle por área</div>
+        <div class="d-flex flex-wrap gap-2">
+            <a class="btn-at-ghost" href="/backoffice/dashboards/demanda"><i class="bi bi-bar-chart"></i> Demanda por Producto</a>
+            <a class="btn-at-ghost" href="/backoffice/dashboards/paquetes"><i class="bi bi-box-seam"></i> Paquetes y Carrito</a>
+            <a class="btn-at-ghost" href="/backoffice/dashboards/catalogo-rutas"><i class="bi bi-signpost-split"></i> Catálogo y Rutas</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+var ICONOS_PRODUCTO = { vuelo: 'bi-airplane', hotel: 'bi-building', auto: 'bi-car-front', actividad: 'bi-ticket-perforated', crucero: 'bi-water', paquete: 'bi-box-seam' };
+var chartsOferta = [];
+
+function cargarDatosOferta(desde, hasta) {
+    document.getElementById('db-oferta-cargando').style.display = '';
+    document.getElementById('db-oferta-contenido').style.display = 'none';
+    fetch('/backoffice/estrategico/oferta/datos?desde=' + desde + '&hasta=' + hasta)
+        .then(function (r) { return r.json(); })
+        .then(renderOferta);
+}
+
+function _money(v) { return '$' + Number(v).toLocaleString('es', { maximumFractionDigits: 0 }); }
+
+function renderOferta(d) {
+    document.getElementById('db-oferta-cargando').style.display = 'none';
+    document.getElementById('db-oferta-contenido').style.display = '';
+    chartsOferta.forEach(function (c) { c && c.dispose(); });
+    chartsOferta = [];
+
+    document.getElementById('kpi-mayor-ingreso').textContent = d.producto_mayor_ingreso || '—';
+    document.getElementById('kpi-mayor-conversion').textContent = d.producto_mayor_conversion || '—';
+    document.getElementById('kpi-margen-paquetes').textContent = d.margen_promedio_paquetes + '%';
+
+    chartsOferta.push(initChart('chart-ingresos-producto', {
+        xAxis: { type: 'value' },
+        yAxis: { type: 'category', data: d.ingresos_por_producto.map(function (p) { return p.tipo_producto; }) },
+        series: [{ type: 'bar', data: d.ingresos_por_producto.map(function (p) { return Math.round(p.ingresos_netos); }), label: { show: true, position: 'right' } }],
+    }));
+
+    chartsOferta.push(initChart('chart-reservas-vs-ingresos', {
+        legend: { bottom: 0 },
+        xAxis: { type: 'category', data: d.ingresos_por_producto.map(function (p) { return p.tipo_producto; }) },
+        yAxis: [
+            { type: 'value', name: 'Reservas' },
+            { type: 'value', name: 'Ingresos (USD)' },
+        ],
+        series: [
+            { name: 'Reservas', type: 'bar', yAxisIndex: 0, data: d.ingresos_por_producto.map(function (p) { return p.total_reservas; }) },
+            { name: 'Ingresos', type: 'bar', yAxisIndex: 1, data: d.ingresos_por_producto.map(function (p) { return Math.round(p.ingresos_netos); }) },
+        ],
+    }));
+
+    var hayTendencia = d.tendencia_ingresos && d.tendencia_ingresos.length > 0;
+    document.getElementById('chart-tendencia-ingresos').style.display = hayTendencia ? '' : 'none';
+    document.getElementById('msg-sin-tendencia').style.display = hayTendencia ? 'none' : '';
+    if (hayTendencia) {
+        chartsOferta.push(initChart('chart-tendencia-ingresos', {
+            xAxis: { type: 'category', data: d.tendencia_ingresos.map(function (p) { return p.periodo.slice(0, 7); }) },
+            yAxis: { type: 'value' },
+            series: [{ type: 'line', smooth: true, data: d.tendencia_ingresos.map(function (p) { return Math.round(p.ingresos_totales); }), areaStyle: {}, itemStyle: { color: AEROTRACK_SEMANTIC.primary } }],
+        }));
+    }
+
+    var tbody = document.getElementById('tabla-metricas');
+    tbody.innerHTML = d.metricas_por_producto.map(function (m) {
+        return '<tr><td><i class="bi ' + (ICONOS_PRODUCTO[m.tipo_producto] || 'bi-box') + ' me-1"></i>' + m.tipo_producto + '</td>' +
+               '<td class="text-end">' + m.total_reservas + '</td><td class="text-end">' + _money(m.ingresos_netos) + '</td>' +
+               '<td class="text-end">' + _money(m.ticket_promedio) + '</td><td class="text-end">' + m.take_rate_pct + '%</td></tr>';
+    }).join('') || '<tr><td colspan="5" class="text-center" style="color:var(--at-muted)">Sin datos en el período</td></tr>';
+}
+
+initSelectorPeriodo('selector-periodo', function (periodo) {
+    cargarDatosOferta(periodo.desde, periodo.hasta);
+}, PRESETS_ESTRATEGICO);
+</script>
+{% endblock %}

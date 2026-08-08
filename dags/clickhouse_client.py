@@ -58,8 +58,8 @@ def insertar_df(tabla: str, df: pd.DataFrame) -> int:
 
 def mover_parquet(nombre_archivo: str, origen: Path, destino: Path) -> Path:
     """Mueve `nombre_archivo` de la carpeta `origen` a `destino` del
-    pipeline crudo/procesando/terminado. Crea `destino` si no existe
-    (primera corrida). Devuelve la ruta final."""
+    pipeline E/T/L. Crea `destino` si no existe (primera corrida).
+    Devuelve la ruta final."""
     destino.mkdir(parents=True, exist_ok=True)
     ruta_origen = origen / nombre_archivo
     ruta_destino = destino / nombre_archivo

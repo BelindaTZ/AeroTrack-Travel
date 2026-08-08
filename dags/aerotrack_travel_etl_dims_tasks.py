@@ -61,7 +61,7 @@ def extraer() -> dict:
     """Lee fact_vuelo (solo las FK necesarias, no las ~15 columnas de
     detalle del vuelo que no se usan acá) + las 5 dims que hacen falta para
     resolver periodo/aerolínea/ruta/clasificación de retraso. Escribe cada
-    una como Parquet en `Parquet/crudo/`."""
+    una como Parquet en `datos/E/`."""
     marca = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%d_%H%M%S")
 
     fact = minio_dims_reader.read_parquet("fact_vuelo", COLUMNAS_FACT)
@@ -76,7 +76,7 @@ def extraer() -> dict:
         "dim_ruta": dim_ruta, "dim_clasificacion_retraso": dim_clasif, "dim_retraso_causa": dim_causa,
     }
     for base, df in dataframes.items():
-        ch.escribir_parquet(df, _nombre_archivo(base, marca), config.PARQUET_CRUDO)
+        ch.escribir_parquet(df, _nombre_archivo(base, marca), config.PARQUET_E)
 
     print(f"[extraer] marca={marca} fact_vuelo={len(fact)} filas")
     return {"marca": marca, "filas_fact_vuelo": len(fact)}
@@ -99,8 +99,8 @@ def transformar(extraido: dict) -> dict:
     dataframes = {}
     for base in ARCHIVOS:
         nombre = _nombre_archivo(base, marca)
-        dataframes[base] = pd.read_parquet(config.PARQUET_CRUDO / nombre)
-        ch.mover_parquet(nombre, config.PARQUET_CRUDO, config.PARQUET_PROCESANDO)
+        dataframes[base] = pd.read_parquet(config.PARQUET_E / nombre)
+        ch.mover_parquet(nombre, config.PARQUET_E, config.PARQUET_T)
 
     df = dataframes["fact_vuelo"]
     df = df.merge(dataframes["dim_tiempo"], left_on="fk_tiempo", right_on="pk_tiempo", how="left")
@@ -162,17 +162,17 @@ def transformar(extraido: dict) -> dict:
         "agg_otp_dia_semana": dia_semana,
     }
     for tabla, resultado in salidas.items():
-        ch.escribir_parquet(resultado, _nombre_archivo(tabla, marca), config.PARQUET_PROCESANDO)
+        ch.escribir_parquet(resultado, _nombre_archivo(tabla, marca), config.PARQUET_T)
         print(f"[transformar] {tabla}: {len(resultado)} filas")
 
     # Las 6 copias crudas (fact_vuelo + 5 dims) ya cumplieron su función —
     # el dato original vive permanentemente en `aerotrack-travel-dims`, no
     # hay valor en conservar una copia scratch por corrida. Sin este borrado
-    # se acumulan ~16MB/corrida en `procesando/` sin ningún propósito (la
-    # carpeta nunca las movería a `terminado/` porque `cargar()` solo mueve
+    # se acumulan ~16MB/corrida en `datos/T/` sin ningún propósito (la
+    # carpeta nunca las movería a `datos/L/` porque `cargar()` solo mueve
     # los 3 archivos de salida).
     for base in ARCHIVOS:
-        (config.PARQUET_PROCESANDO / _nombre_archivo(base, marca)).unlink(missing_ok=True)
+        (config.PARQUET_T / _nombre_archivo(base, marca)).unlink(missing_ok=True)
 
     return {"marca": marca, "filas": {t: len(r) for t, r in salidas.items()}}
 
@@ -184,9 +184,9 @@ def cargar(transformado: dict) -> dict:
     resultado: dict[str, int] = {}
     for tabla in tablas:
         nombre = _nombre_archivo(tabla, marca)
-        df = pd.read_parquet(config.PARQUET_PROCESANDO / nombre)
+        df = pd.read_parquet(config.PARQUET_T / nombre)
         insertadas = ch.insertar_df(f"aerotrack_travel.{tabla}", df)
-        ch.mover_parquet(nombre, config.PARQUET_PROCESANDO, config.PARQUET_TERMINADO)
+        ch.mover_parquet(nombre, config.PARQUET_T, config.PARQUET_L)
         resultado[tabla] = insertadas
         print(f"[cargar] {tabla}: {insertadas} filas insertadas en ClickHouse")
 

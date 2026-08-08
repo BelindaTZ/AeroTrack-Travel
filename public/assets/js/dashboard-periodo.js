@@ -28,21 +28,37 @@ function _rangoPreset(clave) {
         desde.setMonth(hoy.getMonth() - 1);
     } else if (clave === '3meses') {
         desde.setMonth(hoy.getMonth() - 3);
+    } else if (clave === '6meses') {
+        desde.setMonth(hoy.getMonth() - 6);
+    } else if (clave === 'anio') {
+        desde = new Date(hoy.getFullYear(), 0, 1);
     }
     return { desde: _isoLocal(desde), hasta: _isoLocal(hoy) };
 }
 
-function initSelectorPeriodo(elementId, onChange) {
+var PRESETS_TACTICO = [
+    { clave: 'hoy', label: 'Hoy' },
+    { clave: 'semana', label: 'Esta semana' },
+    { clave: 'mes', label: 'Este mes', activo: true },
+    { clave: '3meses', label: 'Últimos 3 meses' },
+    { clave: 'custom', label: 'Rango personalizado' },
+];
+
+// Dashboards estratégicos (DS-00 a DS-03) — granularidad mensual en
+// ClickHouse, no tiene sentido "hoy"/"esta semana" ni rango personalizado
+// libre (ver docs/estrategico-auditoria.md Fase C).
+var PRESETS_ESTRATEGICO = [
+    { clave: 'mes', label: 'Este mes', activo: true },
+    { clave: '3meses', label: 'Últimos 3 meses' },
+    { clave: '6meses', label: 'Últimos 6 meses' },
+    { clave: 'anio', label: 'Año actual' },
+];
+
+function initSelectorPeriodo(elementId, onChange, presets) {
     var cont = document.getElementById(elementId);
     if (!cont) return;
 
-    var presets = [
-        { clave: 'hoy', label: 'Hoy' },
-        { clave: 'semana', label: 'Esta semana' },
-        { clave: 'mes', label: 'Este mes', activo: true },
-        { clave: '3meses', label: 'Últimos 3 meses' },
-        { clave: 'custom', label: 'Rango personalizado' },
-    ];
+    presets = presets || PRESETS_TACTICO;
 
     cont.innerHTML = presets.map(function (p) {
         return '<button type="button" class="btn-at-ghost' + (p.activo ? ' active' : '') + '" data-preset="' + p.clave + '">' + p.label + '</button>';

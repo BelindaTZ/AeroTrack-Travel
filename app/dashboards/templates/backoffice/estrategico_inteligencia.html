@@ -1,0 +1,146 @@
+{% extends "layout_app.html" %}
+{% block title %}Inteligencia y Automatización — AeroTrack Travel{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <h1><span class="heading-icon"><i class="bi bi-cpu"></i></span>Inteligencia y Automatización</h1>
+    <p>DS-03 — uso del asistente IA, alertas de precio y segmentación de pasajeros.</p>
+</div>
+
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <div id="selector-periodo" class="filter-bar mb-0"></div>
+    <button type="button" class="btn-at-ghost" onclick="window.print()">
+        <i class="bi bi-file-earmark-pdf"></i> Exportar PDF
+    </button>
+</div>
+
+<div id="db-inteligencia-cargando" style="text-align:center;padding:50px 0;color:var(--at-muted)">
+    <div class="spinner-border" style="color:var(--at-primary)" role="status"></div>
+</div>
+
+<div id="db-inteligencia-contenido" style="display:none">
+    <!-- Fila 1 (Modelo F) -->
+    <div class="row g-3 mb-3">
+        <div class="col-12 col-md-4">
+            <div class="at-card" style="height:100%">
+                <div class="dash-kpi-label">Consultas al asistente IA</div>
+                <div class="at-mono dash-kpi-value" id="kpi-consultas" style="color:var(--at-text)">—</div>
+            </div>
+        </div>
+        <div class="col-12 col-md-4">
+            <div class="at-card" style="height:100%">
+                <div class="dash-kpi-label">Calificación positiva</div>
+                <div class="at-mono dash-kpi-value" id="kpi-calificacion" style="color:var(--at-text)">—</div>
+            </div>
+        </div>
+        <div class="col-12 col-md-4">
+            <div class="at-card" style="height:100%">
+                <div class="dash-kpi-label">Alertas de precio activas</div>
+                <div class="at-mono dash-kpi-value" id="kpi-alertas-activas" style="color:var(--at-text)">—</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Columna vertical F -->
+    <div class="at-card mb-3">
+        <div class="dash-chart-title">Consultas al asistente por semana</div>
+        <div id="chart-consultas-semana" style="height:220px"></div>
+    </div>
+    <div class="at-card mb-3">
+        <div class="dash-chart-title">Tasa de calificación positiva — últimos 6 períodos</div>
+        <div id="chart-tendencia-calificacion" style="height:220px"></div>
+        <div id="msg-sin-tendencia" style="display:none;text-align:center;color:var(--at-muted);padding:20px 0">Sin datos para el período seleccionado</div>
+    </div>
+    <div class="row g-3 mb-3">
+        <div class="col-12 col-md-6">
+            <div class="at-card">
+                <div class="dash-chart-title">Pasajeros por segmento</div>
+                <div id="chart-segmentos" style="height:220px"></div>
+            </div>
+        </div>
+        <div class="col-12 col-md-6">
+            <div class="at-card" style="height:100%">
+                <div class="dash-kpi-label">Tasa de conversión de alertas de precio</div>
+                <div class="at-mono dash-kpi-value" id="kpi-conversion-alertas" style="color:var(--at-text)">—</div>
+            </div>
+        </div>
+    </div>
+    <div class="at-table-wrapper">
+        <div class="at-table-header"><span class="at-table-title">Top 5 destinos en alertas de precio activas</span></div>
+        <table class="table" style="font-size:12.5px;margin-bottom:0">
+            <thead><tr><th>Destino</th><th class="text-end">Alertas</th></tr></thead>
+            <tbody id="tabla-destinos"></tbody>
+        </table>
+    </div>
+
+    <!-- Drill-down -->
+    <div class="mt-4 pt-3" style="border-top:1px solid var(--at-border)">
+        <div class="dash-chart-title mb-2"><i class="bi bi-signpost-split"></i> Ver detalle por área</div>
+        <div class="d-flex flex-wrap gap-2">
+            <a class="btn-at-ghost" href="/backoffice/dashboards/asistente-ia"><i class="bi bi-robot"></i> Asistente IA</a>
+            <a class="btn-at-ghost" href="/backoffice/dashboards/alertas-precio"><i class="bi bi-bell"></i> Alertas de Precio</a>
+            <a class="btn-at-ghost" href="/backoffice/dashboards/clientes"><i class="bi bi-person-hearts"></i> Captación y Retención</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+var chartsInteligencia = [];
+
+function cargarDatosInteligencia(desde, hasta) {
+    document.getElementById('db-inteligencia-cargando').style.display = '';
+    document.getElementById('db-inteligencia-contenido').style.display = 'none';
+    fetch('/backoffice/estrategico/inteligencia/datos?desde=' + desde + '&hasta=' + hasta)
+        .then(function (r) { return r.json(); })
+        .then(renderInteligencia);
+}
+
+function renderInteligencia(d) {
+    document.getElementById('db-inteligencia-cargando').style.display = 'none';
+    document.getElementById('db-inteligencia-contenido').style.display = '';
+    chartsInteligencia.forEach(function (c) { c && c.dispose(); });
+    chartsInteligencia = [];
+
+    document.getElementById('kpi-consultas').textContent = d.total_consultas;
+    document.getElementById('kpi-calificacion').textContent = d.pct_calificacion_positiva + '%';
+    document.getElementById('kpi-alertas-activas').textContent = d.alertas_activas_total;
+    document.getElementById('kpi-conversion-alertas').textContent = d.tasa_conversion_alertas + '%';
+
+    var haySemanas = d.consultas_por_semana && d.consultas_por_semana.length > 0;
+    document.getElementById('chart-consultas-semana').style.display = haySemanas ? '' : 'none';
+    if (haySemanas) {
+        chartsInteligencia.push(initChart('chart-consultas-semana', {
+            xAxis: { type: 'category', data: d.consultas_por_semana.map(function (s) { return s.semana; }) },
+            yAxis: { type: 'value' },
+            series: [{ type: 'bar', data: d.consultas_por_semana.map(function (s) { return s.total; }) }],
+        }));
+    }
+
+    var hayTendencia = d.tendencia_calificacion && d.tendencia_calificacion.length > 0;
+    document.getElementById('chart-tendencia-calificacion').style.display = hayTendencia ? '' : 'none';
+    document.getElementById('msg-sin-tendencia').style.display = hayTendencia ? 'none' : '';
+    if (hayTendencia) {
+        chartsInteligencia.push(initChart('chart-tendencia-calificacion', {
+            xAxis: { type: 'category', data: d.tendencia_calificacion.map(function (p) { return p.periodo.slice(0, 7); }) },
+            yAxis: { type: 'value', max: 100 },
+            series: [{ type: 'line', smooth: true, data: d.tendencia_calificacion.map(function (p) { return p.pct_calificacion_positiva; }), itemStyle: { color: AEROTRACK_SEMANTIC.primary } }],
+        }));
+    }
+
+    chartsInteligencia.push(initChart('chart-segmentos', {
+        legend: { bottom: 0 },
+        series: [{ type: 'pie', radius: ['45%', '70%'], data: d.segmentos.map(function (s) { return { name: s.segmento, value: s.total }; }), label: { formatter: '{b}\n{d}%' } }],
+    }));
+
+    var tbody = document.getElementById('tabla-destinos');
+    tbody.innerHTML = d.top_5_destinos_alertas.map(function (x) {
+        return '<tr><td>' + x.destino + '</td><td class="text-end">' + x.total + '</td></tr>';
+    }).join('') || '<tr><td colspan="2" class="text-center" style="color:var(--at-muted)">Sin alertas activas</td></tr>';
+}
+
+initSelectorPeriodo('selector-periodo', function (periodo) {
+    cargarDatosInteligencia(periodo.desde, periodo.hasta);
+}, PRESETS_ESTRATEGICO);
+</script>
+{% endblock %}

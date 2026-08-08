@@ -69,6 +69,10 @@ def main() -> None:
          "Buzón de la agencia que se monitorea para avisos de aerolíneas (CU-O41)"),
         ("smtp.remitente", "aerotracktravel.demo@gmail.com", "smtp",
          "Correo remitente para el envío de notificaciones (CU-O16) — falta contraseña/app-password, pendiente de configurar en la UI"),
+        ("groq.api_key", os.getenv("GROQ_API_KEY", ""), "asistente_ia",
+         "API key de Groq (modelo primario del asistente IA) — app/asistente_ia/integrations/llm_client.py"),
+        ("gemini.api_key", os.getenv("GEMINI_API_KEY", ""), "asistente_ia",
+         "API key de Gemini (respaldo del asistente IA si Groq no está configurado) — app/asistente_ia/integrations/llm_client.py"),
     ]
 
     creadas = actualizadas_omitidas = 0

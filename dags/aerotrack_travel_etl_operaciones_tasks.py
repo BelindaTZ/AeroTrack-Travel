@@ -60,7 +60,7 @@ def extraer() -> dict:
     conteos = {}
     for base in ARCHIVOS:
         df = _obtener(base)
-        ch.escribir_parquet(df, _nombre_archivo(base, marca), config.PARQUET_CRUDO)
+        ch.escribir_parquet(df, _nombre_archivo(base, marca), config.PARQUET_E)
         conteos[base] = len(df)
 
     # vuelos_catalogo/aerolineas son PocketBase STAGING/CONFIG, no
@@ -68,8 +68,8 @@ def extraer() -> dict:
     # catalogo_minio_publisher.py) no rompe la regla de MinIO operacional.
     vuelos = pd.DataFrame(pocketbase_client.list_all("vuelos_catalogo"))
     aerolineas = pd.DataFrame(pocketbase_client.list_all("aerolineas"))
-    ch.escribir_parquet(vuelos, _nombre_archivo("vuelos_catalogo", marca), config.PARQUET_CRUDO)
-    ch.escribir_parquet(aerolineas, _nombre_archivo("aerolineas", marca), config.PARQUET_CRUDO)
+    ch.escribir_parquet(vuelos, _nombre_archivo("vuelos_catalogo", marca), config.PARQUET_E)
+    ch.escribir_parquet(aerolineas, _nombre_archivo("aerolineas", marca), config.PARQUET_E)
     conteos["vuelos_catalogo"] = len(vuelos)
     conteos["aerolineas"] = len(aerolineas)
 
@@ -88,8 +88,8 @@ def transformar(extraido: dict) -> dict:
     dataframes = {}
     for base in archivos_todos:
         nombre = _nombre_archivo(base, marca)
-        dataframes[base] = pd.read_parquet(config.PARQUET_CRUDO / nombre)
-        ch.mover_parquet(nombre, config.PARQUET_CRUDO, config.PARQUET_PROCESANDO)
+        dataframes[base] = pd.read_parquet(config.PARQUET_E / nombre)
+        ch.mover_parquet(nombre, config.PARQUET_E, config.PARQUET_T)
 
     notificaciones = dataframes["notificaciones"]
     vuelos = dataframes["vuelos_catalogo"]
@@ -232,11 +232,11 @@ def transformar(extraido: dict) -> dict:
 
     salidas = {"agg_disrupciones_aerolinea_ruta": disrup, "agg_satisfaccion_soporte": satisfaccion}
     for tabla, resultado in salidas.items():
-        ch.escribir_parquet(resultado, _nombre_archivo(tabla, marca), config.PARQUET_PROCESANDO)
+        ch.escribir_parquet(resultado, _nombre_archivo(tabla, marca), config.PARQUET_T)
         print(f"[transformar] {tabla}: {len(resultado)} filas")
 
     for base in archivos_todos:
-        (config.PARQUET_PROCESANDO / _nombre_archivo(base, marca)).unlink(missing_ok=True)
+        (config.PARQUET_T / _nombre_archivo(base, marca)).unlink(missing_ok=True)
 
     return {"marca": marca, "filas": {t: len(r) for t, r in salidas.items()}}
 
@@ -248,9 +248,9 @@ def cargar(transformado: dict) -> dict:
     resultado: dict[str, int] = {}
     for tabla in tablas:
         nombre = _nombre_archivo(tabla, marca)
-        df = pd.read_parquet(config.PARQUET_PROCESANDO / nombre)
+        df = pd.read_parquet(config.PARQUET_T / nombre)
         insertadas = ch.insertar_df(f"aerotrack_travel.{tabla}", df)
-        ch.mover_parquet(nombre, config.PARQUET_PROCESANDO, config.PARQUET_TERMINADO)
+        ch.mover_parquet(nombre, config.PARQUET_T, config.PARQUET_L)
         resultado[tabla] = insertadas
         print(f"[cargar] {tabla}: {insertadas} filas insertadas en ClickHouse")
 

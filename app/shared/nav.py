@@ -18,7 +18,7 @@ from app.shared.pocketbase_client import get_pocketbase_client
 _ITEMS_DASHBOARDS = [
     {"tabla": "comercial", "label": "Rendimiento comercial", "href": "/backoffice/dashboards/comercial", "icono": "bi-graph-up-arrow"},
     {"tabla": "finanzas", "label": "Control financiero", "href": "/backoffice/dashboards/finanzas", "icono": "bi-cash-stack"},
-    {"tabla": "operaciones", "label": "Disrupciones", "href": "/backoffice/dashboards/disrupciones", "icono": "bi-exclamation-triangle"},
+    {"tabla": "operaciones", "label": "Monitoreo de disrupciones", "href": "/backoffice/dashboards/disrupciones", "icono": "bi-exclamation-triangle"},
     {"tabla": "clientes", "label": "Captación y retención", "href": "/backoffice/dashboards/clientes", "icono": "bi-person-hearts"},
     {"tabla": "demanda", "label": "Demanda por producto", "href": "/backoffice/dashboards/demanda", "icono": "bi-bar-chart"},
     {"tabla": "paquetes", "label": "Paquetes y carrito", "href": "/backoffice/dashboards/paquetes", "icono": "bi-box-seam"},
@@ -28,6 +28,16 @@ _ITEMS_DASHBOARDS = [
     {"tabla": "asistente_ia", "label": "Asistente IA", "href": "/backoffice/dashboards/asistente-ia", "icono": "bi-robot"},
     {"tabla": "alertas_precio", "label": "Alertas de precio", "href": "/backoffice/dashboards/alertas-precio", "icono": "bi-bell"},
     {"tabla": "agentes", "label": "Productividad del agente", "href": "/backoffice/dashboards/agentes", "icono": "bi-person-workspace"},
+]
+
+# Nivel estratégico (DS-00 a DS-03) — módulo dedicado `estrategico`, acceso
+# uniforme (sin Nivel 2 por dashboard como "dashboards", ver
+# scripts/seed_estrategico_rbac.py: hoy solo `Administrador` tiene "ver").
+_ITEMS_ESTRATEGICO = [
+    {"label": "Cockpit Ejecutivo", "href": "/backoffice/estrategico/cockpit", "icono": "bi-speedometer2"},
+    {"label": "Rendimiento de la Oferta", "href": "/backoffice/estrategico/oferta", "icono": "bi-bar-chart-line"},
+    {"label": "Gestión de Disrupciones", "href": "/backoffice/estrategico/disrupciones", "icono": "bi-exclamation-octagon"},
+    {"label": "Inteligencia y Automatización", "href": "/backoffice/estrategico/inteligencia", "icono": "bi-cpu"},
 ]
 
 MODULOS_CATALOGO = [
@@ -93,7 +103,7 @@ MODULOS_CATALOGO = [
         "nombre": "Disrupciones",
         "icono": "bi-exclamation-triangle",
         "items": [
-            {"label": "Disrupciones", "href": "/backoffice/disrupciones", "icono": "bi-exclamation-triangle"},
+            {"label": "Gestión de disrupciones", "href": "/backoffice/disrupciones", "icono": "bi-exclamation-triangle"},
             {"label": "Notificaciones", "href": "/backoffice/notificaciones", "icono": "bi-bell"},
             {"label": "Umbral de risk score", "href": "/backoffice/disrupciones/config-riesgo", "icono": "bi-speedometer2"},
         ],
@@ -196,7 +206,66 @@ MODULOS_CATALOGO = [
         # usa este valor "de catálogo" tal cual para este módulo particular.
         "items": [],
     },
+    {
+        "clave": "estrategico",
+        "nombre": "Estratégico",
+        "icono": "bi-bullseye",
+        # Sin Nivel 2 por dashboard (a diferencia de "dashboards") — el
+        # rol que tiene "ver" en el módulo ve los 4 de una, así que acá sí
+        # alcanza con la lista estática (ver _ITEMS_ESTRATEGICO arriba).
+        "items": _ITEMS_ESTRATEGICO,
+    },
 ]
+
+
+CATEGORIAS_NAV = [
+    {
+        "clave": "sistema", "nombre": "Sistema", "icono": "bi-gear-wide-connected",
+        "modulos": ["seguridad", "configuracion", "integraciones"],
+    },
+    {
+        "clave": "clientes", "nombre": "Clientes", "icono": "bi-person-hearts",
+        "modulos": ["pasajeros"],
+    },
+    {
+        "clave": "catalogo_operacion", "nombre": "Catálogo y Operación", "icono": "bi-airplane",
+        "modulos": ["vuelos_catalogo", "reservas", "disrupciones", "autos", "proveedores"],
+    },
+    {
+        "clave": "comercial", "nombre": "Comercial", "icono": "bi-cash-coin",
+        "modulos": ["facturacion", "ofertas", "paquetes", "carrito"],
+    },
+    {
+        "clave": "soporte", "nombre": "Soporte", "icono": "bi-headset",
+        "modulos": ["centro_ayuda", "asistente_ia"],
+    },
+]
+# "dashboards" queda deliberadamente fuera de toda categoría — sus 11 ítems
+# ya son en sí una lista plana de analítica (sin sub-módulos propios), así
+# que se mantiene como su propio tab de primer nivel en vez de forzarlo
+# dentro de una categoría paraguas (ver agrupar_por_categoria() más abajo).
+
+
+def agrupar_por_categoria(nav_modulos: list[dict]) -> tuple[list[dict], dict | None, dict | None]:
+    """Agrupa `nav_modulos` (ya filtrado por RBAC en modulos_con_acceso())
+    en categorías "paraguas" para el mega menú del backoffice — agrupación
+    puramente visual/de navegación, no cambia qué puede ver cada rol (eso
+    ya lo decidió modulos_con_acceso(), esta función nunca agrega ni quita
+    accesos). Ningún módulo se pierde: si un rol solo tiene acceso a 1 de
+    los 3 módulos de "Sistema", la categoría igual aparece con esa única
+    columna. Devuelve (categorías_con_al_menos_1_módulo, módulo_dashboards
+    _o_None, módulo_estrategico_o_None) — dashboards/estrategico se manejan
+    aparte porque no tienen sub-módulos, solo ítems (ver comentario arriba
+    de CATEGORIAS_NAV)."""
+    por_clave = {m["clave"]: m for m in nav_modulos}
+    categorias = []
+    for cat in CATEGORIAS_NAV:
+        modulos_cat = [por_clave[clave] for clave in cat["modulos"] if clave in por_clave]
+        if modulos_cat:
+            categorias.append({**cat, "modulos": modulos_cat})
+    dashboards = por_clave.get("dashboards")
+    estrategico = por_clave.get("estrategico")
+    return categorias, dashboards, estrategico
 
 
 async def modulos_con_acceso(usuario: dict) -> list[dict]:
@@ -255,7 +324,15 @@ async def modulos_con_acceso(usuario: dict) -> list[dict]:
 
 
 async def nav_context(usuario: dict) -> dict:
-    return {"usuario": usuario, "nav_modulos": await modulos_con_acceso(usuario)}
+    nav_modulos = await modulos_con_acceso(usuario)
+    nav_categorias, nav_dashboards, nav_estrategico = agrupar_por_categoria(nav_modulos)
+    return {
+        "usuario": usuario,
+        "nav_modulos": nav_modulos,
+        "nav_categorias": nav_categorias,
+        "nav_dashboards": nav_dashboards,
+        "nav_estrategico": nav_estrategico,
+    }
 
 
 async def primer_dashboard_accesible(usuario: dict) -> str | None:

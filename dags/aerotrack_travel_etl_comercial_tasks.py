@@ -65,7 +65,7 @@ def extraer() -> dict:
     conteos = {}
     for base in ARCHIVOS:
         df = _obtener(base)
-        ch.escribir_parquet(df, _nombre_archivo(base, marca), config.PARQUET_CRUDO)
+        ch.escribir_parquet(df, _nombre_archivo(base, marca), config.PARQUET_E)
         conteos[base] = len(df)
     print(f"[extraer] marca={marca} {conteos}")
     return {"marca": marca, "conteos": conteos}
@@ -81,8 +81,8 @@ def transformar(extraido: dict) -> dict:
     dataframes = {}
     for base in ARCHIVOS:
         nombre = _nombre_archivo(base, marca)
-        dataframes[base] = pd.read_parquet(config.PARQUET_CRUDO / nombre)
-        ch.mover_parquet(nombre, config.PARQUET_CRUDO, config.PARQUET_PROCESANDO)
+        dataframes[base] = pd.read_parquet(config.PARQUET_E / nombre)
+        ch.mover_parquet(nombre, config.PARQUET_E, config.PARQUET_T)
 
     reservas = dataframes["reservas"]
     items = dataframes["reserva-items"]
@@ -202,11 +202,11 @@ def transformar(extraido: dict) -> dict:
 
     salidas = {"agg_ingresos_por_producto_mes": ingresos, "agg_conversion_busqueda_reserva": conversion}
     for tabla, resultado in salidas.items():
-        ch.escribir_parquet(resultado, _nombre_archivo(tabla, marca), config.PARQUET_PROCESANDO)
+        ch.escribir_parquet(resultado, _nombre_archivo(tabla, marca), config.PARQUET_T)
         print(f"[transformar] {tabla}: {len(resultado)} filas")
 
     for base in ARCHIVOS:
-        (config.PARQUET_PROCESANDO / _nombre_archivo(base, marca)).unlink(missing_ok=True)
+        (config.PARQUET_T / _nombre_archivo(base, marca)).unlink(missing_ok=True)
 
     return {"marca": marca, "filas": {t: len(r) for t, r in salidas.items()}}
 
@@ -218,9 +218,9 @@ def cargar(transformado: dict) -> dict:
     resultado: dict[str, int] = {}
     for tabla in tablas:
         nombre = _nombre_archivo(tabla, marca)
-        df = pd.read_parquet(config.PARQUET_PROCESANDO / nombre)
+        df = pd.read_parquet(config.PARQUET_T / nombre)
         insertadas = ch.insertar_df(f"aerotrack_travel.{tabla}", df)
-        ch.mover_parquet(nombre, config.PARQUET_PROCESANDO, config.PARQUET_TERMINADO)
+        ch.mover_parquet(nombre, config.PARQUET_T, config.PARQUET_L)
         resultado[tabla] = insertadas
         print(f"[cargar] {tabla}: {insertadas} filas insertadas en ClickHouse")
 

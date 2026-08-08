@@ -61,13 +61,17 @@ CLICKHOUSE_USER = os.getenv("CLICKHOUSE_TRAVEL_USER", "admin")
 CLICKHOUSE_PASSWORD = os.getenv("CLICKHOUSE_TRAVEL_PASSWORD", "admin1234")
 CLICKHOUSE_DB = "aerotrack_travel"
 
-# ── Staging de Parquet crudo/procesando/terminado del pipeline ETL ─────────
-PARQUET_BASE_DIR = (
-    Path("/opt/airflow/datos/parquet") if IN_DOCKER else Path(__file__).parent.parent / "datos" / "parquet"
-)
-PARQUET_CRUDO = PARQUET_BASE_DIR / "crudo"
-PARQUET_PROCESANDO = PARQUET_BASE_DIR / "procesando"
-PARQUET_TERMINADO = PARQUET_BASE_DIR / "terminado"
+# ── Staging de Parquet E/L/T del pipeline ELT (versionado por timestamp,
+#    los archivos nunca se sobrescriben) ─────────────────────────────────
+#    E = Extracción — extraído de MinIO/app vía endpoints internos
+#    T = Transformado — agregado ya calculado, previo a insertar en ClickHouse
+#    L = Cargado — agregado ya insertado en ClickHouse
+#    (reemplaza crudo/procesando/terminado — ver
+#    docs/estrategico-auditoria.md sección Fase A para el mapeo acordado)
+PARQUET_BASE_DIR = Path("/opt/airflow/datos") if IN_DOCKER else Path(__file__).parent.parent / "datos"
+PARQUET_E = PARQUET_BASE_DIR / "E"
+PARQUET_T = PARQUET_BASE_DIR / "T"
+PARQUET_L = PARQUET_BASE_DIR / "L"
 
 # ── Integración puente con AeroTrack Analytics (minio-elt) ─────────────────
 # SOLO la usa el DAG aerotrack_travel_sync_dims para disparar el ELT/cobertura

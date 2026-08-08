@@ -260,10 +260,14 @@ services:
       - ./dags:/opt/airflow/dags
       - ./logs:/opt/airflow/logs
       - ./plugins:/opt/airflow/plugins
-      # Staging de Parquet crudo/procesando/terminado del pipeline ETL a
-      # ClickHouse — SOLO en el scheduler (ejecuta el código de tareas bajo
-      # LocalExecutor); persiste entre reinicios del contenedor.
-      - ./datos/parquet:/opt/airflow/datos/parquet
+      # Staging de Parquet E/L/T del pipeline ELT a ClickHouse — versionado
+      # por timestamp, los archivos nunca se sobrescriben. SOLO en el
+      # scheduler (ejecuta el código de tareas bajo LocalExecutor); persiste
+      # entre reinicios del contenedor. (reemplaza datos/parquet/{crudo,
+      # procesando,terminado} — ver docs/estrategico-auditoria.md Fase A)
+      - ./datos/E:/opt/airflow/datos/E
+      - ./datos/T:/opt/airflow/datos/T
+      - ./datos/L:/opt/airflow/datos/L
       # Socket de Docker del host — SOLO en el scheduler (es el que ejecuta
       # código de tareas bajo LocalExecutor), no en el webserver. Usado
       # únicamente por aerotrack_travel_sync_dims para arrancar los 5
